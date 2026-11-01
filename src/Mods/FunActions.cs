@@ -28,7 +28,7 @@ namespace CascadeMenu.Mods
         internal static string RoomName()
         {
             NetworkSystem system = NetworkSystem.Instance;
-            string room = system != null ? system.RoomName : null;
+            string room = system != null && system.InRoom ? system.RoomName : null;
             return string.IsNullOrEmpty(room) ? "unknown" : room;
         }
 

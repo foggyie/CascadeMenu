@@ -134,7 +134,8 @@ namespace CascadeMenu.Mods
 
             _players.Clear();
             _players.AddRange(PlayerActions.GetPlayers());
-            string room = NetworkSystem.Instance != null ? NetworkSystem.Instance.RoomName : string.Empty;
+            NetworkSystem network = NetworkSystem.Instance;
+            string room = network != null && network.InRoom ? network.RoomName ?? string.Empty : string.Empty;
             if (!string.Equals(room, _roomName, StringComparison.Ordinal))
             {
                 _roomName = room;

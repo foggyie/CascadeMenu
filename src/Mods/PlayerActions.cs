@@ -128,9 +128,18 @@ namespace CascadeMenu.Mods
         {
             var result = new List<NetPlayer>();
             NetworkSystem system = NetworkSystem.Instance;
-            if (system == null) return result;
+            if (system == null || !system.InRoom) return result;
 
-            NetPlayer[] players = system.PlayerListOthers;
+            NetPlayer[] players;
+            try
+            {
+                players = system.PlayerListOthers;
+            }
+            catch (Exception)
+            {
+                // Roster reads can race with a room teardown.
+                return result;
+            }
             if (players == null) return result;
 
             for (int i = 0; i < players.Length; i++)
@@ -265,12 +274,23 @@ namespace CascadeMenu.Mods
         /// <summary>Name of the current master client, with "(you)" for the local host.</summary>
         internal static string MasterName(NetworkSystem system)
         {
-            if (system == null) return "unknown";
-            NetPlayer master = system.MasterClient;
+            if (system == null || !system.InRoom) return "unknown";
+            NetPlayer master;
+            bool isMaster;
+            try
+            {
+                master = system.MasterClient;
+                isMaster = system.IsMasterClient;
+            }
+            catch (Exception)
+            {
+                return "unknown";
+            }
+
             if (master == null)
             {
                 NetPlayer local = LocalPlayer();
-                if (system.IsMasterClient && local != null) return SafeName(local) + " (you)";
+                if (isMaster && local != null) return SafeName(local) + " (you)";
                 return "unknown";
             }
             string name = SafeName(master);
@@ -668,16 +688,39 @@ namespace CascadeMenu.Mods
 
             List<NetPlayer> players = GetPlayers();
             NetworkSystem system = NetworkSystem.Instance;
-            string roomName = system != null && !string.IsNullOrEmpty(system.RoomName)
-                ? system.RoomName
-                : "home";
-            int roomCount = system != null ? system.RoomPlayerCount : 0;
-            if (roomCount < players.Count + 1) roomCount = players.Count + 1;
-            string region = system != null && !string.IsNullOrEmpty(system.CurrentRegion)
-                ? system.CurrentRegion
-                : "unknown";
-            string masterName = MasterName(system);
-            bool localMaster = system != null && system.IsMasterClient;
+            bool inRoom = system != null && system.InRoom;
+
+            // RoomPlayerCount/RoomName/CurrentRegion read Photon's current room
+            // internally and throw while the game is still connecting or after
+            // leaving a room. Only touch them once NetworkSystem says we are in.
+            string roomName = "home";
+            int roomCount = 0;
+            string region = "unknown";
+            string masterName = "unknown";
+            bool localMaster = false;
+            if (inRoom)
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(system.RoomName)) roomName = system.RoomName;
+                    roomCount = system.RoomPlayerCount;
+                    if (!string.IsNullOrEmpty(system.CurrentRegion)) region = system.CurrentRegion;
+                    masterName = MasterName(system);
+                    localMaster = system.IsMasterClient;
+                }
+                catch (Exception)
+                {
+                    // The room can be torn down between the InRoom check and the
+                    // reads above; keep the offline fallbacks instead of crashing.
+                    roomName = "home";
+                    roomCount = 0;
+                    region = "unknown";
+                    masterName = "unknown";
+                    localMaster = false;
+                }
+
+                if (roomCount < players.Count + 1) roomCount = players.Count + 1;
+            }
             string hwid = LocalHardwareId();
             int flaggedCount;
             string flaggedNames = FlaggedPlayersSummary(out flaggedCount);

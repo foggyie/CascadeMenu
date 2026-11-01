@@ -22,7 +22,6 @@ namespace CascadeMenu.Mods
         private MenuConfig _config;
 
         private bool _wasPressed;
-        private bool _wasMaster;
         private bool _active;
         private bool _pendingActivate;
         private int _resetFrames;
@@ -36,6 +35,14 @@ namespace CascadeMenu.Mods
         {
             _config = config;
             _instance = this;
+
+            // A saved "on" value must never arm body rotation at load time. Every
+            // session starts idle; the bind (or the settings toggle) turns it on.
+            _active = false;
+            IsActive = false;
+            _pendingActivate = false;
+            _wasPressed = false;
+            if (config != null) config.Acrobatics.Value = false;
         }
 
         private void Awake()
@@ -48,35 +55,29 @@ namespace CascadeMenu.Mods
         {
             if (_config == null) return;
 
-            bool master = _config.Acrobatics.Value;
-            if (master && !_wasMaster) Activate();
-            if (!master && _wasMaster) Deactivate();
-            _wasMaster = master;
+            // The config mirrors the live state, so an "off" value acts as a
+            // kill switch. It is never used to auto-activate on startup.
+            if (!_config.Acrobatics.Value) Deactivate();
 
-            // Allow the right stick to toggle acrobatics on/off while armed,
-            // but do NOT let it prevent the master config toggle from taking effect.
+            // Pressing the bind flips the mode on/off, exactly like joystick fly.
             HandleToggle();
-
-            if (!master)
-            {
-                Deactivate();
-                ApplyResetFrames();
-                return;
-            }
-
-            // If head was temporarily unavailable but is now ready, activate.
-            if (!_active && _pendingActivate) Activate();
 
             if (!_active)
             {
-                ApplyResetFrames();
-                return;
+                // The head transform can show up a frame or two after the bind
+                // was pressed, so keep retrying while the mode is pending.
+                if (_pendingActivate) Activate();
+                if (!_active)
+                {
+                    ApplyResetFrames();
+                    return;
+                }
             }
 
             Transform head = GetHead();
             if (head == null)
             {
-                // Head not yet available – pend activation for the next frame.
+                // Head not yet available - pend activation for the next frame.
                 _pendingActivate = true;
                 return;
             }
@@ -95,11 +96,15 @@ namespace CascadeMenu.Mods
             bool pressed = RightStickClicked();
             if (pressed && !_wasPressed)
             {
-                // Toggle only if the master config is on; otherwise ignore.
-                if (_config != null && _config.Acrobatics.Value) Toggle();
+                Toggle();
+                // Keep the persisted flag in sync so the settings page shows the
+                // real state, and so the bind alone turns the mode on. A pending
+                // activation (head not ready yet) still counts as "on".
+                _config.Acrobatics.Value = _active || _pendingActivate;
             }
             _wasPressed = pressed;
         }
+
         internal bool Toggle()
         {
             if (_active) Deactivate();
@@ -107,17 +112,27 @@ namespace CascadeMenu.Mods
             return _active;
         }
 
+        /// <summary>Forces acrobatics on or off (used by the settings page).</summary>
+        internal static bool SetActive(bool active)
+        {
+            if (_instance == null || _instance._config == null)
+                return false;
+
+            if (active) _instance.Activate();
+            else _instance.Deactivate();
+
+            _instance._config.Acrobatics.Value = _instance._active || _instance._pendingActivate;
+            return _instance._active;
+        }
+
         /// <summary>Flips acrobatics from the Movement page (same as the stick click).</summary>
         internal static bool ToggleFromMenu()
         {
             if (_instance == null || _instance._config == null)
                 return false;
-            // Always attempt to activate/deactivate respecting the current config.
-            if (_instance._config.Acrobatics.Value)
-                return _instance.Toggle();
-            // If the config is off, turning on from the menu still flips the state
-            // so the user can enable it without going back to the main menu.
-            return _instance.Toggle();
+
+            bool on = _instance._active || _instance._pendingActivate;
+            return SetActive(!on);
         }
 
         private void Activate()
