@@ -464,9 +464,15 @@ namespace CascadeMenu.Mods
                 float radius = AimAssistRadius * scale;
                 Vector3 basePos = rig.transform.position;
 
-                // Three body samples (waist, chest, head) cover short and tall
-                // avatars without needing any rig internals.
-                Vector3 sample = basePos + Vector3.up * (0.55f * scale);
+                // Use the rig's head when available; otherwise estimate it. The
+                // three samples cover feet/torso/head regardless of where the
+                // rig root sits.
+                Vector3 head = rig.headConstraint != null
+                    ? rig.headConstraint.position
+                    : basePos + Vector3.up * (1.5f * scale);
+                Vector3 mid = Vector3.Lerp(basePos, head, 0.5f);
+
+                Vector3 sample = basePos;
                 if (TryRayCorridor(origin, direction, sample, radius, maxDistance, out float along, out Vector3 point) &&
                     along < bestDistance)
                 {
@@ -475,7 +481,7 @@ namespace CascadeMenu.Mods
                     bestPoint = point;
                 }
 
-                sample = basePos + Vector3.up * (1.05f * scale);
+                sample = mid;
                 if (TryRayCorridor(origin, direction, sample, radius, maxDistance, out along, out point) &&
                     along < bestDistance)
                 {
@@ -484,7 +490,7 @@ namespace CascadeMenu.Mods
                     bestPoint = point;
                 }
 
-                sample = basePos + Vector3.up * (1.55f * scale);
+                sample = head;
                 if (TryRayCorridor(origin, direction, sample, radius, maxDistance, out along, out point) &&
                     along < bestDistance)
                 {
