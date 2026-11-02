@@ -166,7 +166,7 @@ namespace CascadeMenu
         private static void BuildAcrobatics(CascadePage page, CascadeMenuBehaviour menu, MenuConfig config)
         {
             page.Section("Body rotation", "VR only - the menu stays level while your body rotates")
-                .Toggle("Acrobatics", "Toggle here or press its bind; it stays off at startup",
+                .Toggle("Acrobatics", "Toggle here or press its bind; then flip with the left stick",
                     () => config.Acrobatics.Value,
                     value => AcrobaticsController.SetActive(value))
                 .Button("Toggle acrobatics now", "Same as pressing the acrobatics bind", "Toggle",
@@ -180,7 +180,12 @@ namespace CascadeMenu
                     1f, 20f,
                     () => config.AcrobaticsSmoothing.Value,
                     value => config.AcrobaticsSmoothing.Value = value,
-                    value => value.ToString("0.0"));
+                    value => value.ToString("0.0"))
+                .Slider("Stick flip speed", "Left stick X = barrel roll, Y = front/back flip",
+                    30f, 720f,
+                    () => config.AcrobaticsFlipSpeed.Value,
+                    value => config.AcrobaticsFlipSpeed.Value = value,
+                    value => value.ToString("0") + " deg/s");
 
             page.Section("Binding", "Change what toggles acrobatics on PC or in VR")
                 .Button("Acrobatics key",

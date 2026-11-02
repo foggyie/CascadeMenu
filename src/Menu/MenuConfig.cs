@@ -28,6 +28,7 @@ namespace CascadeMenu
         // Acrobatics (body rotation)
         public readonly ConfigEntry<bool> Acrobatics;
         public readonly ConfigEntry<float> AcrobaticsSmoothing;
+        public readonly ConfigEntry<float> AcrobaticsFlipSpeed;
 
         // Persistent noclip (collision pass-through)
         public readonly ConfigEntry<bool> Noclip;
@@ -198,7 +199,8 @@ namespace CascadeMenu
                 "Gameplay",
                 "Acrobatics",
                 false,
-                "VR only: click the right joystick to rotate your body with your head. The menu stays level.");
+                "VR only: rotate your body with your head and flip with the left stick. " +
+                "Click the right joystick (or press the bind) to toggle. The menu stays level.");
 
             AcrobaticsSmoothing = config.Bind(
                 "Gameplay",
@@ -207,6 +209,14 @@ namespace CascadeMenu
                 new ConfigDescription(
                     "How quickly the body follows the head rotation (higher = snappier)",
                     new AcceptableValueRange<float>(1f, 20f)));
+
+            AcrobaticsFlipSpeed = config.Bind(
+                "Gameplay",
+                "Acrobatics Flip Speed",
+                240f,
+                new ConfigDescription(
+                    "Degrees per second the left stick spins your body (X = barrel roll, Y = front/back flip)",
+                    new AcceptableValueRange<float>(30f, 720f)));
 
             Noclip = config.Bind(
                 "Gameplay",
@@ -470,6 +480,7 @@ namespace CascadeMenu
             FlyStickLayout.Value = 0;
             Acrobatics.Value = false;
             AcrobaticsSmoothing.Value = 5f;
+            AcrobaticsFlipSpeed.Value = 240f;
             Noclip.Value = false;
             HudEnabled.Value = true;
             HudModName.Value = true;

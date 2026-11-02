@@ -41,6 +41,17 @@ namespace CascadeMenu
 
         private CascadeWindow _window;
 
+        // The window can be dragged by its titlebar. The offset is kept in
+        // canvas units so it survives window rebuilds, and resets on open or
+        // when the menu is re-centered.
+        private Vector2 _windowOffset;
+
+        private bool _windowDragging;
+
+        private Vector3 _windowDragStart;
+
+        private Vector2 _windowDragBase;
+
         // Live first/third person view of another player. The overlay is a
         // sibling of the window so it survives window rebuilds while the player
         // list changes underneath it.
@@ -817,6 +828,7 @@ namespace CascadeMenu
             }
             _pages = DemoApp.Build(this, _config, _demo);
             int page = ResolveSavedPage();
+            _windowOffset = Vector2.zero;
             _open = true;
             BuildWindow(page);
             if (_window == null)
@@ -1105,6 +1117,7 @@ namespace CascadeMenu
             _window.CloseRequested = CloseMenu;
             _window.RecenterRequested = RecenterMenu;
             _window.Initialize(_canvas, _canvasRect, this, _config, _demo, _theme, _pages, page);
+            _window.SetWindowPosition(_windowOffset);
             if (!_open)
             {
                 gameObject.SetActive(false);
@@ -1658,6 +1671,12 @@ namespace CascadeMenu
         public void RecenterMenu()
         {
             _snap = true;
+            _windowOffset = Vector2.zero;
+            _windowDragging = false;
+            if (_window != null)
+            {
+                _window.SetWindowPosition(Vector2.zero);
+            }
             if (_open)
             {
                 UpdateCanvasTransform(forceSnap: true);
@@ -1779,7 +1798,35 @@ namespace CascadeMenu
                 }
             }
             bool flag2 = IsSelectHeld();
-            if (flag2 && !_previousDown)
+            bool downEdge = flag2 && !_previousDown;
+
+            // macOS-style window drag: press the empty part of the titlebar and
+            // move the whole window. Titlebar buttons are interactables, so a
+            // press over them (traffic lights, tabs, search) never starts a drag.
+            if (downEdge && flag && cascadeInteractable == null && _window.IsTitlebarPoint(vector))
+            {
+                _windowDragging = true;
+                _windowDragStart = _canvasRect.InverseTransformPoint(vector);
+                _windowDragBase = _window.WindowPosition;
+            }
+            if (_windowDragging)
+            {
+                if (!flag2)
+                {
+                    _windowDragging = false;
+                }
+                else if (flag)
+                {
+                    Vector3 local = _canvasRect.InverseTransformPoint(vector);
+                    Vector2 delta = new Vector2(
+                        local.x - _windowDragStart.x,
+                        local.y - _windowDragStart.y);
+                    _windowOffset = _windowDragBase + delta;
+                    _window.SetWindowPosition(_windowOffset);
+                }
+            }
+
+            if (downEdge && !_windowDragging)
             {
                 CascadeInteractable cascadeInteractable2 = cascadeInteractable;
                 if (cascadeInteractable2 == null || !_window.IsSearchInteraction(cascadeInteractable2))
@@ -1883,8 +1930,10 @@ namespace CascadeMenu
             if (plane.Raycast(ray, out num) && num > 0f && num < 6f)
             {
                 Vector3 point = ray.GetPoint(num);
-                Vector3 local = _canvasRect.InverseTransformPoint(point);
-                if (Mathf.Abs(local.x) <= 600f && Mathf.Abs(local.y) <= 350f)
+
+                // The window can be dragged, so gate on its actual rect instead
+                // of the old fixed canvas-centre box.
+                if (_window != null && _window.ContainsPoint(point))
                 {
                     hit = SmoothMenuHit(plane, point);
                     flag2 = true;

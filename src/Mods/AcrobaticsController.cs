@@ -11,12 +11,18 @@ namespace CascadeMenu.Mods
     /// be running", off means "body rotation should be stopped". Both the menu
     /// toggle and the bind flip that one value, so they can never disagree.
     ///
+    /// While it is on, the body follows the head (so leaning and turning feel
+    /// natural) and the left stick adds flips on top: X is a barrel roll and Y
+    /// is a front/back flip, like the joystick fly mod's stick control.
+    ///
     /// The Cascade menu never copies the head rotation (see <see cref="MenuAnchor"/>),
     /// so the window stays level even when the body is upside down.
     /// </summary>
     [DefaultExecutionOrder(10001)]
     internal sealed class AcrobaticsController : MonoBehaviour
     {
+        private const float StickDeadzone = 0.18f;
+
         private static AcrobaticsController _instance;
 
         private MenuConfig _config;
@@ -27,6 +33,7 @@ namespace CascadeMenu.Mods
         private int _resetFrames;
 
         private Quaternion _referenceHeadRot = Quaternion.identity;
+        private Quaternion _stickRotation = Quaternion.identity;
         private Quaternion _currentRot = Quaternion.identity;
 
         internal static bool IsActive { get; private set; }
@@ -94,13 +101,60 @@ namespace CascadeMenu.Mods
                 return;
             }
 
-            Quaternion target = head.rotation * Quaternion.Inverse(_referenceHeadRot);
+            ApplyStickFlip();
+
+            Quaternion target = head.rotation * Quaternion.Inverse(_referenceHeadRot) * _stickRotation;
             float smoothing = Mathf.Max(0.01f, _config.AcrobaticsSmoothing.Value);
             float t = 1f - Mathf.Exp(-smoothing * Time.deltaTime);
             _currentRot = Quaternion.Slerp(_currentRot, target, t);
 
             GTPlayerTransform.ApplyRotationOverride(_currentRot, Time.frameCount);
             IsActive = true;
+        }
+
+        /// <summary>
+        /// Left stick drives the extras: X is a barrel roll and Y is a
+        /// front/back flip. Input is applied in the head-relative frame, so it
+        /// stacks with head tracking instead of fighting it. The stick belongs
+        /// to the UI while the menu is open.
+        /// </summary>
+        private void ApplyStickFlip()
+        {
+            if (_config == null || CascadeMenuBehaviour.IsMenuOpen) return;
+
+            float speed = Mathf.Max(0f, _config.AcrobaticsFlipSpeed.Value);
+            if (speed <= 0.01f) return;
+
+            Vector2 stick = VrInput.LeftStick();
+            float x = Deadzone(stick.x);
+            float y = Deadzone(stick.y);
+
+            // Desktop fallback so the flips can be tried without a headset.
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard != null && Mathf.Abs(x) < 0.001f && Mathf.Abs(y) < 0.001f)
+            {
+                if (keyboard.leftArrowKey.isPressed) x = -1f;
+                if (keyboard.rightArrowKey.isPressed) x = 1f;
+                if (keyboard.downArrowKey.isPressed) y = -1f;
+                if (keyboard.upArrowKey.isPressed) y = 1f;
+            }
+
+            if (Mathf.Abs(x) < 0.001f && Mathf.Abs(y) < 0.001f) return;
+
+            float dt = Time.deltaTime;
+            float pitch = y * speed * dt;
+            float roll = -x * speed * dt;
+
+            // Post-multiply: the flip axes follow the body, so repeated input
+            // keeps spinning instead of snapping back to a world axis.
+            _stickRotation = _stickRotation * Quaternion.Euler(pitch, 0f, roll);
+        }
+
+        private static float Deadzone(float value)
+        {
+            float abs = Mathf.Abs(value);
+            if (abs <= StickDeadzone) return 0f;
+            return Mathf.Sign(value) * Mathf.Clamp01((abs - StickDeadzone) / (1f - StickDeadzone));
         }
 
         private void HandleToggle()
@@ -159,6 +213,7 @@ namespace CascadeMenu.Mods
 
             _pendingActivate = false;
             _referenceHeadRot = head.rotation;
+            _stickRotation = Quaternion.identity;
             _currentRot = Quaternion.identity;
             _resetFrames = 0;
             _active = true;
@@ -174,6 +229,7 @@ namespace CascadeMenu.Mods
 
             _active = false;
             IsActive = false;
+            _stickRotation = Quaternion.identity;
             _currentRot = Quaternion.identity;
             _resetFrames = 3;
             Buzz();

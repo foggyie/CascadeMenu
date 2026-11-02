@@ -1649,9 +1649,53 @@ namespace CascadeMenu.UI
             for (int i = 0; i < Interactables.Count; i++) Interactables[i].Order = i;
         }
 
-        public CascadeInteractable HitTest(Vector3 worldPoint)
+        /// <summary>Root rect of the window; the menu moves it when dragged.</summary>
+        public RectTransform RootRect
         {
-            CascadeInteractable best = null;
+            get { return _root; }
+        }
+
+        /// <summary>Moves the window inside the canvas (canvas units).</summary>
+        public void SetWindowPosition(Vector2 anchoredPosition)
+        {
+            if (_root != null) _root.anchoredPosition = anchoredPosition;
+        }
+
+        /// <summary>True when the point is inside the window rectangle.</summary>
+        public bool ContainsPoint(Vector3 worldPoint)
+        {
+            if (_root == null) return false;
+
+            Vector3 local = _root.InverseTransformPoint(worldPoint);
+            return Mathf.Abs(local.z) < 60f && _root.rect.Contains(new Vector2(local.x, local.y));
+        }
+
+        /// <summary>
+        /// True when the point is on the empty part of the titlebar. Titlebar
+        /// buttons are interactables, so a press over them never starts a drag.
+        /// </summary>
+        public bool IsTitlebarPoint(Vector3 worldPoint)
+        {
+            if (_root == null || !_root.gameObject.activeInHierarchy) return false;
+
+            Vector3 local = _root.InverseTransformPoint(worldPoint);
+            Rect rect = _root.rect;
+            float top = rect.yMax;
+            return Mathf.Abs(local.z) < 60f &&
+                   local.y <= top &&
+                   local.y >= top - CascadeTheme.TitlebarHeight &&
+                   local.x >= rect.xMin &&
+                   local.x <= rect.xMax;
+        }
+
+        /// <summary>Centre of the window in canvas units.</summary>
+        public Vector2 WindowPosition
+        {
+            get { return _root != null ? _root.anchoredPosition : Vector2.zero; }
+        }
+
+        public CascadeInteractable HitTest(Vector3 worldPoint)
+        {            CascadeInteractable best = null;
             for (int i = Interactables.Count - 1; i >= 0; i--)
             {
                 CascadeInteractable interactable = Interactables[i];
