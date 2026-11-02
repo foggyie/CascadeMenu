@@ -370,21 +370,70 @@ namespace CascadeMenu.UI
 
         private void PositionCamera()
         {
+            if (_stage == null) return;
+
             Vector3 stagePosition = _stage.transform.position;
-            float headHeight = DefaultHeadHeight;
-            if (_previewHead != null)
+            Vector3 target;
+            float distance;
+
+            // Frame the monkey from its actual rendered bounds. A rig root is
+            // not always at the feet (some are anchored at the head), so using
+            // the stage origin as "ground" pushed the body to the bottom of the
+            // portrait while the camera aimed above it.
+            Bounds bounds;
+            if (TryGetPreviewBounds(out bounds))
             {
-                float measured = _previewHead.position.y - stagePosition.y;
-                if (measured > 0.4f && measured < 2.4f) headHeight = measured;
+                float height = Mathf.Max(0.25f, bounds.size.y);
+                target = new Vector3(
+                    stagePosition.x,
+                    bounds.max.y - height * 0.16f,
+                    stagePosition.z);
+                distance = Mathf.Clamp(height * 1.2f, 0.8f, 2.6f);
+            }
+            else if (_previewHead != null)
+            {
+                target = new Vector3(stagePosition.x, _previewHead.position.y + 0.05f, stagePosition.z);
+                distance = 1.1f;
+            }
+            else
+            {
+                target = stagePosition + Vector3.up * DefaultHeadHeight;
+                distance = DefaultHeadHeight * 1.4f;
             }
 
-            // Frame the head and shoulders. At 112 px the face still reads,
-            // even though the same portrait is shown at 44 px in the list.
-            Vector3 target = stagePosition + Vector3.up * (headHeight * 0.93f);
             Camera camera = SharedCamera();
             camera.fieldOfView = 34f;
-            camera.transform.position = target + Vector3.forward * (headHeight * 1.4f);
+            camera.transform.position = target + Vector3.forward * distance;
             camera.transform.rotation = Quaternion.LookRotation(target - camera.transform.position, Vector3.up);
+        }
+
+        /// <summary>Combined bounds of the cloned renderers, in world space.</summary>
+        private bool TryGetPreviewBounds(out Bounds bounds)
+        {
+            bounds = new Bounds();
+            bool hasBounds = false;
+
+            for (int i = 0; i < _targetRenderers.Count; i++)
+            {
+                Renderer renderer = _targetRenderers[i];
+                if (renderer == null || !renderer.enabled) continue;
+
+                Bounds current = renderer.bounds;
+                if (current.size.x < 0.001f && current.size.y < 0.001f && current.size.z < 0.001f)
+                    continue;
+
+                if (!hasBounds)
+                {
+                    bounds = current;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(current);
+                }
+            }
+
+            return hasBounds;
         }
 
         private static Camera SharedCamera()

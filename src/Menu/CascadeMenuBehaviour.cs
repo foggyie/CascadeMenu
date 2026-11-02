@@ -1402,13 +1402,6 @@ namespace CascadeMenu
 
             if (_spectateOverlay != null) StopSpectating();
 
-            if (_window != null)
-            {
-                _window.CloseDropdown();
-                _window.CloseConfirm();
-                _window.BlurSearch();
-            }
-
             string name = PlayerActions.SafeName(player);
             SpectateController controller = SpectateController.Begin(rig, _canvas);
             if (controller == null)
@@ -1417,15 +1410,22 @@ namespace CascadeMenu
                 return;
             }
 
+            if (_window != null)
+            {
+                _window.CloseDropdown();
+                _window.CloseConfirm();
+                _window.BlurSearch();
+
+                // Hide before registering: OnDisable closes the dropdown, which
+                // also clears every Overlay interactable. Registering first
+                // would lose the spectate buttons immediately.
+                _window.gameObject.SetActive(false);
+            }
+
             _spectateOverlay = CascadeSpectateOverlay.Create(
                 _canvasRect, _theme, controller, name, StopSpectating);
             _spectateOverlay.RegisterWith(_window);
             _spectateOverlay.transform.SetAsLastSibling();
-
-            if (_window != null)
-            {
-                _window.gameObject.SetActive(false);
-            }
 
             _hovered = null;
             _pressed = null;
