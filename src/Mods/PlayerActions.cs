@@ -988,6 +988,79 @@ namespace CascadeMenu.Mods
             return string.IsNullOrEmpty(status) ? subtitle : subtitle + " - " + status;
         }
 
+        /// <summary>Live lobby data shared by the Home room card and the Players tools.</summary>
+        internal sealed class RoomSnapshot
+        {
+            public string Name = "home";
+            public int PlayerCount;
+            public string Region = "unknown";
+            public string MasterName = "unknown";
+            public bool LocalIsMaster;
+            public string HardwareId = "unknown";
+            public string VerifiedSpecials = "None";
+            public string FakeSpecials = "None";
+            public string FlaggedNames = "None";
+            public int FlaggedCount;
+            public string CustomProps = "None";
+        }
+
+        /// <summary>
+        /// Reads the current Photon room. RoomName, RoomPlayerCount and
+        /// CurrentRegion throw while connecting or after leaving, so only touch
+        /// them once NetworkSystem says we are in and keep offline fallbacks.
+        /// </summary>
+        internal static RoomSnapshot ReadRoomSnapshot()
+        {
+            var room = new RoomSnapshot();
+            NetworkSystem system = NetworkSystem.Instance;
+            List<NetPlayer> players = GetPlayers();
+            bool inRoom = system != null && system.InRoom;
+
+            if (inRoom)
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(system.RoomName)) room.Name = system.RoomName;
+                    room.PlayerCount = system.RoomPlayerCount;
+                    if (!string.IsNullOrEmpty(system.CurrentRegion)) room.Region = system.CurrentRegion;
+                    room.MasterName = MasterName(system);
+                    room.LocalIsMaster = system.IsMasterClient;
+                }
+                catch (Exception)
+                {
+                    // The room can be torn down between the InRoom check and the
+                    // reads above; keep the offline fallbacks instead of crashing.
+                    room = new RoomSnapshot();
+                }
+
+                if (room.PlayerCount < players.Count + 1) room.PlayerCount = players.Count + 1;
+            }
+
+            room.HardwareId = LocalHardwareId();
+            room.FlaggedNames = FlaggedPlayersSummary(out room.FlaggedCount);
+            room.CustomProps = RoomCustomPropSummary();
+            SpecialPlayersSummary(out room.VerifiedSpecials, out room.FakeSpecials);
+            return room;
+        }
+
+        /// <summary>Adds the live room card to a page (the Home tab).</summary>
+        internal static void AppendRoomSection(CascadePage page)
+        {
+            RoomSnapshot room = ReadRoomSnapshot();
+            page.Section("Room", "Live lobby information")
+                .Label("Home / room", "Current Photon room", room.Name)
+                .Label("Players", "In this room, including you", room.PlayerCount.ToString())
+                .Label("Master client", room.LocalIsMaster ? "You are hosting this room" : "Current host", room.MasterName)
+                .Label("Region", "Photon cloud region", room.Region)
+                .Label("Server IP", "Photon server address", ServerAddress())
+                .Label("Your HWID", "Local device ID (others are hidden)",
+                    room.HardwareId.Length > 28 ? room.HardwareId.Substring(0, 24) + "..." : room.HardwareId)
+                .Label("Special cosmetics", "Slot-verified staff/creator items (not server ownership)", room.VerifiedSpecials)
+                .Label("Fake specials", "Claims without a matching special item", room.FakeSpecials)
+                .Label("Modders flagged", "Cosmetic spoof flags (local hint)", room.FlaggedNames)
+                .Label("Custom props", "Room custom properties", room.CustomProps);
+        }
+
         internal static CascadePage BuildPlayersPage(CascadeMenuBehaviour menu)
         {
             var page = new CascadePage("Players", "Live room list and player actions", CascadeIcon.Person);
@@ -1000,67 +1073,14 @@ namespace CascadeMenu.Mods
             string localId = local != null && !string.IsNullOrEmpty(local.UserId) ? local.UserId : "unknown";
 
             List<NetPlayer> players = GetPlayers();
-            NetworkSystem system = NetworkSystem.Instance;
-            bool inRoom = system != null && system.InRoom;
-
-            // RoomPlayerCount/RoomName/CurrentRegion read Photon's current room
-            // internally and throw while the game is still connecting or after
-            // leaving a room. Only touch them once NetworkSystem says we are in.
-            string roomName = "home";
-            int roomCount = 0;
-            string region = "unknown";
-            string masterName = "unknown";
-            bool localMaster = false;
-            if (inRoom)
-            {
-                try
-                {
-                    if (!string.IsNullOrEmpty(system.RoomName)) roomName = system.RoomName;
-                    roomCount = system.RoomPlayerCount;
-                    if (!string.IsNullOrEmpty(system.CurrentRegion)) region = system.CurrentRegion;
-                    masterName = MasterName(system);
-                    localMaster = system.IsMasterClient;
-                }
-                catch (Exception)
-                {
-                    // The room can be torn down between the InRoom check and the
-                    // reads above; keep the offline fallbacks instead of crashing.
-                    roomName = "home";
-                    roomCount = 0;
-                    region = "unknown";
-                    masterName = "unknown";
-                    localMaster = false;
-                }
-
-                if (roomCount < players.Count + 1) roomCount = players.Count + 1;
-            }
-            string hwid = LocalHardwareId();
-            int flaggedCount;
-            string flaggedNames = FlaggedPlayersSummary(out flaggedCount);
-            string customProps = RoomCustomPropSummary();
-
-            string verifiedSpecials;
-            string fakeSpecials;
-            SpecialPlayersSummary(out verifiedSpecials, out fakeSpecials);
-
-            page.Section("Room", "Live lobby information")
-                .Label("Home / room", "Current Photon room", roomName)
-                .Label("Players", "In this room, including you", roomCount.ToString())
-                .Label("Master client", localMaster ? "You are hosting this room" : "Current host", masterName)
-                .Label("Region", "Photon cloud region", region)
-                .Label("Server IP", "Photon server address", ServerAddress())
-                .Label("Your HWID", "Local device ID (others are hidden)", hwid.Length > 28 ? hwid.Substring(0, 24) + "..." : hwid)
-                .Label("Special cosmetics", "Slot-verified staff/creator items (not server ownership)", verifiedSpecials)
-                .Label("Fake specials", "Claims without a matching special item", fakeSpecials)
-                .Label("Modders flagged", "Cosmetic spoof flags (local hint)", flaggedNames)
-                .Label("Custom props", "Room custom properties", customProps);
+            RoomSnapshot room = ReadRoomSnapshot();
 
             page.Section("Your identity", "Copied with the room summary")
                 .Label("Player name", "From the local VRRig", localName)
                 .Label("Player ID", "Your unique UserId", localId);
 
             Plugin.Log?.LogInfo("Cascade player list: " + players.Count + " other player(s) in room \"" +
-                                roomName + "\", master " + masterName + ", " + flaggedCount + " flagged.");
+                                room.Name + "\", master " + room.MasterName + ", " + room.FlaggedCount + " flagged.");
             string description = players.Count == 0
                 ? "No other players detected. Join a public room first."
                 : players.Count + (players.Count == 1
@@ -1117,20 +1137,20 @@ namespace CascadeMenu.Mods
                     }, false)
                 .Button("Copy room info", "Clipboard: room, master, region, server and HWID", "Copy",
                     () => Copy(
-                        "Home / room: " + roomName + "\n" +
-                        "Players: " + roomCount + "\n" +
-                        "Master client: " + masterName + "\n" +
-                        "Region: " + region + "\n" +
+                        "Home / room: " + room.Name + "\n" +
+                        "Players: " + room.PlayerCount + "\n" +
+                        "Master client: " + room.MasterName + "\n" +
+                        "Region: " + room.Region + "\n" +
                         "Server IP: " + ServerAddress() + "\n" +
-                        "HWID: " + hwid + "\n" +
-                        "Special cosmetics: " + verifiedSpecials + "\n" +
-                        "Fake specials: " + fakeSpecials + "\n" +
-                        "Modders flagged: " + flaggedNames + "\n" +
-                        "Custom props: " + customProps), false)
+                        "HWID: " + room.HardwareId + "\n" +
+                        "Special cosmetics: " + room.VerifiedSpecials + "\n" +
+                        "Fake specials: " + room.FakeSpecials + "\n" +
+                        "Modders flagged: " + room.FlaggedNames + "\n" +
+                        "Custom props: " + room.CustomProps), false)
                 .Button("Copy your player ID", "Useful when reporting", "Copy",
                     () => Copy(localId), false)
                 .Button("Copy your HWID", "Local device identifier", "Copy",
-                    () => Copy(hwid), false);
+                    () => Copy(room.HardwareId), false);
 
             return page;
         }

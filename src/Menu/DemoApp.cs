@@ -46,6 +46,10 @@ namespace CascadeMenu
                     () => menu.ShowToast("Cascade", "This is a notification."), false)
                 .Label("Inspired by Cascade", "Open-source Luau UI library by cascadeui", "macOS 15");
 
+            // Live lobby details live here now; the Players tab is just the
+            // roster and the per-player actions.
+            PlayerActions.AppendRoomSection(home);
+
             home.Section("Quick appearance")
                 .Dropdown("Theme", "Dark and light appearances are included",
                     new[] { "Dark", "Light" },
