@@ -373,38 +373,60 @@ namespace CascadeMenu.UI
             if (_stage == null) return;
 
             Vector3 stagePosition = _stage.transform.position;
+            float scale = PreviewScale();
             Vector3 target;
-            float distance;
+            float distance = 1.05f * scale;
 
-            // Frame the monkey from its actual rendered bounds. A rig root is
-            // not always at the feet (some are anchored at the head), so using
-            // the stage origin as "ground" pushed the body to the bottom of the
-            // portrait while the camera aimed above it.
-            Bounds bounds;
-            if (TryGetPreviewBounds(out bounds))
+            // Aim from the head bone, not from the stage origin. A rig root is
+            // not always at the feet (some are anchored at the head), so
+            // treating the stage as "ground" aimed above the monkey and left it
+            // sitting low - or completely out of frame.
+            //
+            // The camera looks slightly below the head so the face lands in the
+            // upper part of the portrait with the shoulders and chest below it.
+            if (_previewHead != null)
             {
-                float height = Mathf.Max(0.25f, bounds.size.y);
                 target = new Vector3(
                     stagePosition.x,
-                    bounds.max.y - height * 0.16f,
+                    _previewHead.position.y - 0.1f * scale,
                     stagePosition.z);
-                distance = Mathf.Clamp(height * 1.2f, 0.8f, 2.6f);
-            }
-            else if (_previewHead != null)
-            {
-                target = new Vector3(stagePosition.x, _previewHead.position.y + 0.05f, stagePosition.z);
-                distance = 1.1f;
             }
             else
             {
-                target = stagePosition + Vector3.up * DefaultHeadHeight;
-                distance = DefaultHeadHeight * 1.4f;
+                // No head bone: fall back to the renderer bounds, but only when
+                // they describe a plausible gorilla. Skinned bounds can be
+                // wildly oversized; ignoring them beats aiming at empty sky.
+                Bounds bounds;
+                if (TryGetPreviewBounds(out bounds) && bounds.size.y > 0.1f && bounds.size.y < 4f)
+                {
+                    target = new Vector3(
+                        stagePosition.x,
+                        bounds.max.y - Mathf.Min(0.16f, bounds.size.y * 0.18f),
+                        stagePosition.z);
+                    distance = Mathf.Clamp(bounds.size.y * 0.95f, 0.5f, 2.4f);
+                }
+                else
+                {
+                    target = stagePosition + Vector3.up * DefaultHeadHeight * scale;
+                }
             }
 
             Camera camera = SharedCamera();
             camera.fieldOfView = 34f;
             camera.transform.position = target + Vector3.forward * distance;
             camera.transform.rotation = Quaternion.LookRotation(target - camera.transform.position, Vector3.up);
+        }
+
+        /// <summary>Approximate body scale of the rig (small/large monkeys).</summary>
+        private float PreviewScale()
+        {
+            float scale = 1f;
+            if (_rig != null) scale = _rig.transform.lossyScale.y;
+            else if (_stage != null && _stage.transform.childCount > 0)
+                scale = _stage.transform.GetChild(0).lossyScale.y;
+
+            if (scale < 0.01f) scale = 1f;
+            return Mathf.Clamp(scale, 0.4f, 1.6f);
         }
 
         /// <summary>Combined bounds of the cloned renderers, in world space.</summary>
