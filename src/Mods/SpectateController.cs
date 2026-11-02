@@ -160,25 +160,33 @@ namespace CascadeMenu.Mods
         {
             if (_target == null) return;
 
-            Transform head = _target.headConstraint != null ? _target.headConstraint : _target.transform;
-            if (head == null)
+            Transform rigTransform = _target.transform;
+            if (rigTransform == null)
             {
                 StopFeed();
                 return;
             }
 
+            // The head bone gives a stable aim point. If a rig has not synced
+            // it yet, fall back to roughly eye height instead of the feet.
+            Transform head = _target.headConstraint;
+            Vector3 headPosition = head != null
+                ? head.position
+                : rigTransform.position + Vector3.up * 0.95f;
+            Quaternion headRotation = head != null ? head.rotation : rigTransform.rotation;
+            Vector3 headForward = head != null ? head.forward : rigTransform.forward;
+
             Vector3 targetPosition;
             Quaternion targetRotation;
             if (_firstPerson)
             {
-                targetPosition = head.position + head.forward * FirstPersonForward;
-                targetRotation = head.rotation;
+                targetPosition = headPosition + headForward * FirstPersonForward;
+                targetRotation = headRotation;
             }
             else
             {
-                Vector3 focus = head.position + Vector3.up * 0.08f;
-                Vector3 forward = FlatForward(head);
-                Vector3 back = -forward;
+                Vector3 focus = headPosition + Vector3.up * 0.08f;
+                Vector3 back = -FlatForward(headForward, rigTransform.forward);
                 float distance = WallDistance(focus, back, ThirdPersonDistance);
 
                 targetPosition = focus + back * distance + Vector3.up * ThirdPersonHeight;
@@ -202,13 +210,12 @@ namespace CascadeMenu.Mods
             RenderFeed();
         }
 
-        private Vector3 FlatForward(Transform head)
+        private static Vector3 FlatForward(Vector3 forward, Vector3 fallback)
         {
-            Vector3 forward = head.forward;
             forward.y = 0f;
-            if (forward.sqrMagnitude < 0.0001f && _target != null)
+            if (forward.sqrMagnitude < 0.0001f)
             {
-                forward = _target.transform.forward;
+                forward = fallback;
                 forward.y = 0f;
             }
             if (forward.sqrMagnitude < 0.0001f) forward = Vector3.forward;
