@@ -15,8 +15,9 @@ namespace CascadeMenu.Mods
     /// </summary>
     internal sealed class SpectateController : MonoBehaviour
     {
-        private const int FeedWidth = 1280;
-        private const int FeedHeight = 720;
+        // Close to the on-screen feed size; low enough to stay cheap on Quest.
+        private const int FeedWidth = 1024;
+        private const int FeedHeight = 576;
         private const float ThirdPersonDistance = 2.1f;
         private const float ThirdPersonHeight = 0.18f;
         private const float FirstPersonForward = 0.3f;
