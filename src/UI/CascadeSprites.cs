@@ -47,6 +47,53 @@ namespace CascadeMenu.UI
             });
         }
 
+        /// <summary>
+        /// Small gorilla head silhouette used by the player list. White so the UI
+        /// can tint it with the player's live gorilla color; the eyes are punched
+        /// out so the card background shows through.
+        /// </summary>
+        public static Sprite GorillaFace()
+        {
+            return Cached("gorilla_face", () =>
+            {
+                const int size = 64;
+                var texture = NewTexture(size, size);
+                var pixels = new Color[size * size];
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                    {
+                        float px = x + 0.5f;
+                        float py = y + 0.5f;
+
+                        // Head, ears and muzzle form one solid silhouette.
+                        float alpha = Coverage(EllipseSdf(px, py, 32f, 33f, 17.5f, 16f));
+                        alpha = Mathf.Max(alpha, Coverage(EllipseSdf(px, py, 13f, 34f, 8f, 7f)));
+                        alpha = Mathf.Max(alpha, Coverage(EllipseSdf(px, py, 51f, 34f, 8f, 7f)));
+                        alpha = Mathf.Max(alpha, Coverage(EllipseSdf(px, py, 32f, 22f, 10.5f, 8.5f)));
+
+                        // Punch out two eyes so the silhouette reads as a face.
+                        float eyes = Mathf.Max(
+                            Coverage(EllipseSdf(px, py, 25f, 37f, 2.6f, 3.2f)),
+                            Coverage(EllipseSdf(px, py, 39f, 37f, 2.6f, 3.2f)));
+                        alpha = Mathf.Clamp01(alpha - eyes);
+
+                        pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
+                    }
+                }
+                texture.SetPixels(pixels);
+                texture.Apply(false, true);
+                return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            });
+        }
+
+        private static float EllipseSdf(float x, float y, float centerX, float centerY, float radiusX, float radiusY)
+        {
+            float dx = (x - centerX) / radiusX;
+            float dy = (y - centerY) / radiusY;
+            return (Mathf.Sqrt(dx * dx + dy * dy) - 1f) * Mathf.Min(radiusX, radiusY);
+        }
+
         public static Sprite CircleRing(float thickness = 1.5f)
         {
             return Cached("circle_ring_" + thickness.ToString("0.##"), () =>

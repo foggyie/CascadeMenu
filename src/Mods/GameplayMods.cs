@@ -39,6 +39,9 @@ namespace CascadeMenu.Mods
             AcrobaticsController acrobatics = host.AddComponent<AcrobaticsController>();
             acrobatics.Initialize(config);
 
+            NoclipController noclip = host.AddComponent<NoclipController>();
+            noclip.Initialize(config);
+
             GunLibController gun = host.AddComponent<GunLibController>();
             gun.Initialize(config);
             Plugin.Log?.LogInfo("Cascade gun library created (thin beam + target ring).");

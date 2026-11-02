@@ -1029,6 +1029,22 @@ namespace CascadeMenu.UI
             Image hover = CascadeUI.Panel(hoverRect, Theme.RowHover, 8);
             hover.gameObject.SetActive(false);
 
+            // --- Live gorilla color swatch --------------------------------
+            // The face is tinted with the rig's current playerColor. A faint
+            // circular plate keeps dark colors readable on both themes.
+            Color avatarColor = row.GetColor != null ? row.GetColor() : Color.white;
+            RectTransform avatarRect = CascadeUI.Rect("Avatar", root);
+            avatarRect.anchorMin = avatarRect.anchorMax = new Vector2(0f, 0.5f);
+            avatarRect.pivot = new Vector2(0f, 0.5f);
+            avatarRect.anchoredPosition = new Vector2(12f, 0f);
+            avatarRect.sizeDelta = new Vector2(30f, 30f);
+            CascadeUI.Image(avatarRect, CascadeSprites.Circle(),
+                Theme.IsDark ? new Color(1f, 1f, 1f, 0.09f) : new Color(0f, 0f, 0f, 0.07f),
+                Image.Type.Simple);
+            RectTransform faceRect = CascadeUI.Rect("Face", avatarRect);
+            CascadeUI.Stretch(faceRect, 2f, 2f, 2f, 2f);
+            Image avatar = CascadeUI.Image(faceRect, CascadeSprites.GorillaFace(), avatarColor, Image.Type.Simple);
+
             // --- Buttons, laid out from the right edge ---------------------
             float right = 8f;
 
@@ -1052,12 +1068,13 @@ namespace CascadeMenu.UI
             right += 46f;
 
             // --- Name and ID -------------------------------------------------
-            RectTransform nameRect = LineRect("Name", root, 14f, right, 9f, 22f);
+            const float textLeft = 50f;
+            RectTransform nameRect = LineRect("Name", root, textLeft, right, 9f, 22f);
             TMP_Text nameLabel = CascadeUI.Text(
                 nameRect, row.Title, 12.5f, Theme.TextPrimary, TextAlignmentOptions.Left, true);
             nameLabel.overflowMode = TextOverflowModes.Ellipsis;
 
-            RectTransform idRect = LineRect("Id", root, 14f, right, 33f, 18f);
+            RectTransform idRect = LineRect("Id", root, textLeft, right, 33f, 18f);
             TMP_Text idLabel = CascadeUI.Text(
                 idRect, row.IdDisplay, 9.5f, Theme.TextSecondary, TextAlignmentOptions.Left);
             idLabel.overflowMode = TextOverflowModes.Ellipsis;
@@ -1072,6 +1089,8 @@ namespace CascadeMenu.UI
             var view = root.gameObject.AddComponent<CascadePlayerView>();
             view.Background = background;
             view.SelectionBar = bar;
+            view.Avatar = avatar;
+            view.GetColor = row.GetColor;
             view.TapBadge = tapRect.gameObject;
             view.NameLabel = nameLabel;
             view.MuteLabel = muteButton != null ? muteButton.Label : null;

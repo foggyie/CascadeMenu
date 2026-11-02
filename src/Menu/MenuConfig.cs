@@ -29,6 +29,9 @@ namespace CascadeMenu
         public readonly ConfigEntry<bool> Acrobatics;
         public readonly ConfigEntry<float> AcrobaticsSmoothing;
 
+        // Persistent noclip (collision pass-through)
+        public readonly ConfigEntry<bool> Noclip;
+
         // Cosmetic spoof checker
         public readonly ConfigEntry<bool> CosmeticCheck;
 
@@ -204,6 +207,12 @@ namespace CascadeMenu
                 new ConfigDescription(
                     "How quickly the body follows the head rotation (higher = snappier)",
                     new AcceptableValueRange<float>(1f, 20f)));
+
+            Noclip = config.Bind(
+                "Gameplay",
+                "Noclip",
+                false,
+                "Walk through walls and props. Collisions are restored when it is turned off.");
 
             HudEnabled = config.Bind(
                 "Visual",
@@ -461,6 +470,7 @@ namespace CascadeMenu
             FlyStickLayout.Value = 0;
             Acrobatics.Value = false;
             AcrobaticsSmoothing.Value = 5f;
+            Noclip.Value = false;
             HudEnabled.Value = true;
             HudModName.Value = true;
             HudPlayerName.Value = true;

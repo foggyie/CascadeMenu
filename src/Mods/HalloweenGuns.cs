@@ -405,12 +405,10 @@ namespace CascadeMenu.Mods.Halloween
         {
             GunLib.Update((hit, rig, player) =>
             {
-                if (hit.collider != null && GorillaTagger.Instance != null)
+                if (hit.collider != null)
                 {
-                    Vector3 targetPos = hit.point + Vector3.up * 0.5f;
-                    if (GorillaTagger.Instance.rigidbody != null)
-                        GorillaTagger.Instance.rigidbody.linearVelocity = Vector3.zero;
-                    GorillaTagger.Instance.transform.position = targetPos;
+                    Vector3 targetPos = hit.point + Vector3.up * 0.35f;
+                    PlayerActions.TeleportToPosition(targetPos);
                 }
             }, cooldown: 0.25f);
         }

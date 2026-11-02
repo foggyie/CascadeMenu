@@ -7,9 +7,9 @@ namespace CascadeMenu.Mods
     /// <summary>
     /// Body-rotation ("acrobatics") mode, ported from GorillaAcrobatics.
     ///
-    /// Click the right joystick to start tracking the head. While active the body
-    /// rotation follows the difference between the current head rotation and the
-    /// rotation that was recorded when the mode was armed.
+    /// The config entry is the source of truth: on means "body rotation should
+    /// be running", off means "body rotation should be stopped". Both the menu
+    /// toggle and the bind flip that one value, so they can never disagree.
     ///
     /// The Cascade menu never copies the head rotation (see <see cref="MenuAnchor"/>),
     /// so the window stays level even when the body is upside down.
@@ -37,11 +37,12 @@ namespace CascadeMenu.Mods
             _instance = this;
 
             // A saved "on" value must never arm body rotation at load time. Every
-            // session starts idle; the bind (or the settings toggle) turns it on.
+            // session starts idle; the bind (or a menu toggle) turns it on.
             _active = false;
             IsActive = false;
             _pendingActivate = false;
             _wasPressed = false;
+            _resetFrames = 0;
             if (config != null) config.Acrobatics.Value = false;
         }
 
@@ -55,20 +56,27 @@ namespace CascadeMenu.Mods
         {
             if (_config == null) return;
 
-            // The config mirrors the live state, so an "off" value acts as a
-            // kill switch. It is never used to auto-activate on startup.
-            if (!_config.Acrobatics.Value) Deactivate();
-
-            // Pressing the bind flips the mode on/off, exactly like joystick fly.
+            // The bind is just another way to flip the same on/off intent.
             HandleToggle();
 
+            if (!_config.Acrobatics.Value)
+            {
+                // Config off = kill switch. This also stops a mode that was left
+                // pending because the head transform was not ready yet.
+                if (_active || _pendingActivate) Deactivate();
+                ApplyResetFrames();
+                return;
+            }
+
+            // Config on = activate. This is the path the menu toggle uses, so
+            // flipping the switch is enough - the bind is not required.
             if (!_active)
             {
-                // The head transform can show up a frame or two after the bind
-                // was pressed, so keep retrying while the mode is pending.
-                if (_pendingActivate) Activate();
+                Activate();
                 if (!_active)
                 {
+                    // Head not ready yet; Activate() set the pending flag and the
+                    // next frame will try again.
                     ApplyResetFrames();
                     return;
                 }
@@ -77,8 +85,12 @@ namespace CascadeMenu.Mods
             Transform head = GetHead();
             if (head == null)
             {
-                // Head not yet available - pend activation for the next frame.
+                // Head transform disappeared (respawn / map load). Go back to
+                // pending so the mode re-arms as soon as the rig is back.
+                _active = false;
                 _pendingActivate = true;
+                IsActive = false;
+                ApplyResetFrames();
                 return;
             }
 
@@ -96,33 +108,33 @@ namespace CascadeMenu.Mods
             bool pressed = RightStickClicked();
             if (pressed && !_wasPressed)
             {
-                Toggle();
-                // Keep the persisted flag in sync so the settings page shows the
-                // real state, and so the bind alone turns the mode on. A pending
-                // activation (head not ready yet) still counts as "on".
-                _config.Acrobatics.Value = _active || _pendingActivate;
+                bool next = !_config.Acrobatics.Value;
+                _config.Acrobatics.Value = next;
+                if (next) Activate();
+                else Deactivate();
             }
             _wasPressed = pressed;
         }
 
         internal bool Toggle()
         {
-            if (_active) Deactivate();
-            else Activate();
-            return _active;
+            bool next = _config != null && _config.Acrobatics.Value;
+            return SetActive(!next);
         }
 
-        /// <summary>Forces acrobatics on or off (used by the settings page).</summary>
+        /// <summary>Forces acrobatics on or off (used by the menu and settings page).</summary>
         internal static bool SetActive(bool active)
         {
             if (_instance == null || _instance._config == null)
                 return false;
 
+            _instance._config.Acrobatics.Value = active;
             if (active) _instance.Activate();
             else _instance.Deactivate();
 
-            _instance._config.Acrobatics.Value = _instance._active || _instance._pendingActivate;
-            return _instance._active;
+            // Report the intent, not just the instantaneous head state, so the
+            // settings switch stays on while a pending activation waits for the rig.
+            return _instance._config.Acrobatics.Value;
         }
 
         /// <summary>Flips acrobatics from the Movement page (same as the stick click).</summary>
@@ -131,12 +143,13 @@ namespace CascadeMenu.Mods
             if (_instance == null || _instance._config == null)
                 return false;
 
-            bool on = _instance._active || _instance._pendingActivate;
-            return SetActive(!on);
+            return SetActive(!_instance._config.Acrobatics.Value);
         }
 
         private void Activate()
         {
+            if (_config == null) return;
+
             Transform head = GetHead();
             if (head == null)
             {
@@ -171,7 +184,14 @@ namespace CascadeMenu.Mods
         {
             if (_resetFrames <= 0) return;
 
-            GTPlayerTransform.ApplyRotationOverride(Quaternion.identity, Time.frameCount);
+            // Put the body back upright while keeping the current yaw. Applying
+            // identity here would face the body along world-forward instead.
+            Transform head = GetHead();
+            Quaternion upright = head != null
+                ? Quaternion.Euler(0f, head.eulerAngles.y, 0f)
+                : Quaternion.identity;
+
+            GTPlayerTransform.ApplyRotationOverride(upright, Time.frameCount);
             _resetFrames--;
         }
 

@@ -189,6 +189,32 @@ namespace CascadeMenu.Mods
             }
         }
 
+        /// <summary>Look up a discovered mod by its display name (case-insensitive).</summary>
+        internal static Mod Find(string name)
+        {
+            EnsureLoaded();
+            if (string.IsNullOrEmpty(name)) return null;
+            for (int i = 0; i < All.Count; i++)
+            {
+                if (string.Equals(All[i].Name, name, StringComparison.OrdinalIgnoreCase))
+                    return All[i];
+            }
+            return null;
+        }
+
+        internal static bool IsEnabledByName(string name)
+        {
+            Mod mod = Find(name);
+            return mod != null && mod.Enabled;
+        }
+
+        internal static void SetEnabledByName(string name, bool value)
+        {
+            Mod mod = Find(name);
+            if (mod == null) return;
+            SetEnabled(mod, value);
+        }
+
         /// <summary>Turns a mod on or off, reporting failures instead of throwing into the UI.</summary>
         private static void SetEnabled(Mod mod, bool value)
         {

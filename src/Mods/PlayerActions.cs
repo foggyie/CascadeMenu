@@ -207,7 +207,98 @@ namespace CascadeMenu.Mods
         internal static VRRig FindRigObject(NetPlayer player)
         {
             RigContainer container = FindRig(player != null ? player.UserId : null);
-            return container != null ? container.Rig : null;
+            if (container != null && container.Rig != null) return container.Rig;
+
+            // Fallback for the short window where the cache has not caught up
+            // with the game manager's roster entry. Called through reflection
+            // because GorillaGameManager inherits a Photon type that this project
+            // deliberately does not reference.
+            if (player != null)
+            {
+                try
+                {
+                    ResolveGameModeApi();
+                    if (_staticFindRigMethod != null)
+                    {
+                        VRRig rig = _staticFindRigMethod.Invoke(null, new object[] { player }) as VRRig;
+                        if (rig != null) return rig;
+                    }
+                }
+                catch (Exception)
+                {
+                    // The game manager can be torn down with the room.
+                }
+            }
+
+            return null;
+        }
+
+        // -----------------------------------------------------------------
+        // Appearance
+        // -----------------------------------------------------------------
+
+        private static FieldInfo _playerColorField;
+        private static PropertyInfo _playerColorProperty;
+        private static bool _playerColorResolved;
+
+        private static void ResolvePlayerColor()
+        {
+            if (_playerColorResolved) return;
+            _playerColorResolved = true;
+
+            Type type = typeof(VRRig);
+            _playerColorField = type.GetField(
+                "playerColor",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (_playerColorField != null && _playerColorField.FieldType != typeof(Color))
+                _playerColorField = null;
+
+            _playerColorProperty = type.GetProperty(
+                "playerColor",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (_playerColorProperty != null && _playerColorProperty.PropertyType != typeof(Color))
+                _playerColorProperty = null;
+        }
+
+        /// <summary>Live gorilla color for a remote rig, with safe fallbacks.</summary>
+        internal static Color GetRigColor(VRRig rig)
+        {
+            if (rig == null) return Color.white;
+
+            ResolvePlayerColor();
+            try
+            {
+                if (_playerColorField != null)
+                    return (Color)_playerColorField.GetValue(rig);
+                if (_playerColorProperty != null)
+                    return (Color)_playerColorProperty.GetValue(rig, null);
+            }
+            catch (Exception)
+            {
+                // Fall through to the material color below.
+            }
+
+            try
+            {
+                if (rig.mainSkin != null && rig.mainSkin.material != null)
+                    return rig.mainSkin.material.color;
+            }
+            catch (Exception)
+            {
+                // A rig can be destroyed between the null check and the read.
+            }
+
+            return Color.white;
+        }
+
+        internal static Color GetPlayerColor(NetPlayer player)
+        {
+            return GetRigColor(FindRigObject(player));
+        }
+
+        internal static string ColorHex(Color color)
+        {
+            return "#" + ColorUtility.ToHtmlStringRGB(color);
         }
 
         private static float DistanceTo(NetPlayer player)
@@ -529,22 +620,164 @@ namespace CascadeMenu.Mods
             return true;
         }
 
-        /// <summary>Plays the game's tag effect on the target and locks the gun onto them.</summary>
+        /// <summary>
+        /// Sends a real tag through the game mode. The master client applies it,
+        /// so the tag survives after the menu closes (unlike the old local-only
+        /// <c>PlayTaggedEffect</c> call).
+        ///
+        /// A master client can call <c>HitPlayer</c> directly, which tags without
+        /// a distance check. Other clients use the same RPC a hand tag uses, so
+        /// the server still validates range.
+        ///
+        /// The game-mode API is reached through reflection because
+        /// GorillaGameManager inherits a Photon type that this project does not
+        /// reference directly.
+        /// </summary>
         internal static bool TagPlayer(NetPlayer player)
         {
-            VRRig rig = FindRigObject(player);
-            if (rig == null) return false;
+            if (player == null) return false;
+
+            NetworkSystem system = NetworkSystem.Instance;
+            NetPlayer local = system != null ? system.LocalPlayer : null;
+            if (system == null || !system.InRoom || local == null || player.UserId == local.UserId)
+                return false;
+
+            ResolveGameModeApi();
+            if (_gameManagerInstanceProperty == null) return false;
+
+            object manager;
             try
             {
-                rig.PlayTaggedEffect();
+                manager = _gameManagerInstanceProperty.GetValue(null, null);
             }
             catch (Exception)
             {
                 return false;
             }
-            GunLibController.MarkTarget(rig);
+            if (manager == null) return false;
+
+            VRRig targetRig = FindRigObject(player);
+
+            // Non-master tags go through the game's RPC, and the master's
+            // anti-cheat check reports tags sent from far away. Only send when
+            // the server will accept it; the master path is unrestricted.
+            if (!system.IsMasterClient)
+            {
+                VRRig localRig = VRRig.LocalRig;
+                if (localRig == null || targetRig == null) return false;
+                if (Vector3.Distance(localRig.transform.position, targetRig.transform.position) > 5.5f)
+                {
+                    Plugin.Log?.LogInfo("Cascade tag skipped: " + SafeName(player) + " is outside the server tag range.");
+                    return false;
+                }
+            }
+
+            try
+            {
+                // Keep the local game-mode event/cooldown in sync with a hand tag.
+                if (_localTagMethod != null)
+                    _localTagMethod.Invoke(manager, new object[] { player, local, false, false });
+
+                if (system.IsMasterClient)
+                {
+                    // Direct, server-authoritative tag that ignores range.
+                    if (_hitPlayerMethod != null)
+                        _hitPlayerMethod.Invoke(manager, new object[] { player });
+                }
+                else
+                {
+                    // Same RPC the game sends for a hand tag. The master validates
+                    // that the tagger is actually near the target.
+                    if (_reportTagMethod != null)
+                        _reportTagMethod.Invoke(null, new object[] { player });
+                }
+            }
+            catch (Exception exception)
+            {
+                Plugin.Log?.LogWarning("Cascade tag failed for " + SafeName(player) + ": " + exception.Message);
+                return false;
+            }
+
+            if (targetRig != null) GunLibController.MarkTarget(targetRig);
             Select(player.UserId);
             return true;
+        }
+
+        /// <summary>
+        /// Tags everyone else in the room through the same real game-mode path.
+        /// Returns how many players the request was sent for.
+        /// </summary>
+        internal static int TagAll()
+        {
+            List<NetPlayer> players = GetPlayers();
+            int tagged = 0;
+            for (int i = 0; i < players.Count; i++)
+            {
+                if (TagPlayer(players[i])) tagged++;
+            }
+            return tagged;
+        }
+
+        // -----------------------------------------------------------------
+        // Game-mode API (reflection)
+        // -----------------------------------------------------------------
+
+        private static PropertyInfo _gameManagerInstanceProperty;
+        private static MethodInfo _localTagMethod;
+        private static MethodInfo _hitPlayerMethod;
+        private static MethodInfo _reportTagMethod;
+        private static MethodInfo _staticFindRigMethod;
+        private static bool _gameModeApiResolved;
+
+        private static void ResolveGameModeApi()
+        {
+            if (_gameModeApiResolved) return;
+            _gameModeApiResolved = true;
+
+            try
+            {
+                Assembly assembly = typeof(GorillaTagger).Assembly;
+                Type managerType = assembly.GetType("GorillaGameManager");
+                if (managerType != null)
+                {
+                    _gameManagerInstanceProperty = managerType.GetProperty(
+                        "instance",
+                        BindingFlags.Public | BindingFlags.Static);
+                    _localTagMethod = managerType.GetMethod(
+                        "LocalTag",
+                        BindingFlags.Public | BindingFlags.Instance,
+                        null,
+                        new[] { typeof(NetPlayer), typeof(NetPlayer), typeof(bool), typeof(bool) },
+                        null);
+                    _hitPlayerMethod = managerType.GetMethod(
+                        "HitPlayer",
+                        BindingFlags.Public | BindingFlags.Instance,
+                        null,
+                        new[] { typeof(NetPlayer) },
+                        null);
+                    _staticFindRigMethod = managerType.GetMethod(
+                        "StaticFindRigForPlayer",
+                        BindingFlags.Public | BindingFlags.Static,
+                        null,
+                        new[] { typeof(NetPlayer) },
+                        null);
+                }
+
+                Type gameModeType = assembly.GetType("GorillaGameModes.GameMode");
+                if (gameModeType != null)
+                {
+                    _reportTagMethod = gameModeType.GetMethod(
+                        "ReportTag",
+                        BindingFlags.Public | BindingFlags.Static,
+                        null,
+                        new[] { typeof(NetPlayer) },
+                        null);
+                }
+            }
+            catch (Exception exception)
+            {
+                Plugin.Log?.LogWarning("Cascade could not resolve the game-mode tag API: " + exception.Message);
+            }
         }
 
         /// <summary>
@@ -553,15 +786,12 @@ namespace CascadeMenu.Mods
         /// </summary>
         internal static bool NoclipTo(NetPlayer player)
         {
-            RigContainer container = FindRig(player != null ? player.UserId : null);
+            VRRig rig = FindRigObject(player);
             GTPlayer local = GTPlayer.Instance;
-            if (container == null || local == null) return false;
+            if (rig == null || local == null) return false;
 
-            Vector3 target = container.transform.position;
-            Vector3 offset = local.transform.position - target;
-            offset.y = 0f;
-            if (offset.sqrMagnitude < 0.01f) offset = -local.transform.forward;
-            target += offset.normalized * 1.2f;
+            Vector3 target;
+            if (!FindStandPosition(rig, local, out target)) return false;
 
             Collider body = local.bodyCollider;
             Collider head = local.headCollider;
@@ -574,7 +804,8 @@ namespace CascadeMenu.Mods
                 if (body != null) body.enabled = false;
                 if (head != null) head.enabled = false;
                 if (rigidbody != null) rigidbody.detectCollisions = false;
-                local.TeleportTo(target, local.transform.rotation, false, false);
+
+                TeleportLocal(local, target);
             }
             finally
             {
@@ -642,18 +873,97 @@ namespace CascadeMenu.Mods
 
         internal static bool TeleportTo(NetPlayer player)
         {
-            RigContainer container = FindRig(player != null ? player.UserId : null);
+            VRRig rig = FindRigObject(player);
             GTPlayer local = GTPlayer.Instance;
-            if (container == null || container.Rig == null || local == null) return false;
+            if (rig == null || local == null) return false;
 
-            Vector3 target = container.transform.position;
-            Vector3 offset = local.transform.position - target;
+            Vector3 target;
+            if (!FindStandPosition(rig, local, out target)) return false;
+
+            TeleportLocal(local, target);
+            return true;
+        }
+
+        /// <summary>Teleports the local player to a world position (used by guns).</summary>
+        internal static bool TeleportToPosition(Vector3 position)
+        {
+            GTPlayer local = GTPlayer.Instance;
+            if (local == null) return false;
+            TeleportLocal(local, position);
+            return true;
+        }
+
+        /// <summary>
+        /// Picks a walkable spot next to a remote rig: one body-width toward the
+        /// local player, then snapped down to the floor.
+        /// </summary>
+        private static bool FindStandPosition(VRRig rig, GTPlayer local, out Vector3 target)
+        {
+            target = Vector3.zero;
+            if (rig == null || local == null) return false;
+
+            Vector3 origin = rig.transform.position;
+            Vector3 offset = local.transform.position - origin;
             offset.y = 0f;
-            if (offset.sqrMagnitude < 0.01f) offset = -local.transform.forward;
-            target += offset.normalized * 1.2f;
+
+            // Standing exactly on the target would push both bodies apart; if we
+            // are already close, use the local forward direction instead.
+            if (offset.sqrMagnitude < 0.04f) offset = local.transform.forward;
+
+            target = origin + offset.normalized * 1.35f;
+            target.y = origin.y;
+
+            // Snap to the floor so the teleport does not leave us hovering.
+            RaycastHit hit;
+            if (Physics.Raycast(target + Vector3.up * 2f, Vector3.down, out hit, 6f,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                target.y = hit.point.y + 0.02f;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Applies a teleport with velocity cleared and verifies that the player
+        /// actually moved. Some game states ignore <c>TeleportTo</c> (attached to
+        /// a train, mid-respawn), so a direct transform fallback is included.
+        /// </summary>
+        private static void TeleportLocal(GTPlayer local, Vector3 target)
+        {
+            if (local == null) return;
+
+            Rigidbody rigidbody = local.playerRigidBody;
+            if (rigidbody != null)
+            {
+                rigidbody.linearVelocity = Vector3.zero;
+                rigidbody.angularVelocity = Vector3.zero;
+            }
 
             local.TeleportTo(target, local.transform.rotation, false, false);
-            return true;
+
+            if (rigidbody != null)
+            {
+                rigidbody.linearVelocity = Vector3.zero;
+                rigidbody.angularVelocity = Vector3.zero;
+            }
+
+            // Verify the move. If the game refused it, write the transform
+            // directly and sync the visual rig as well.
+            if ((local.transform.position - target).sqrMagnitude > 4f)
+            {
+                local.transform.position = target;
+                if (rigidbody != null) rigidbody.position = target;
+
+                if (GorillaTagger.Instance != null)
+                {
+                    GorillaTagger.Instance.transform.position = target;
+                    if (GorillaTagger.Instance.offlineVRRig != null)
+                        GorillaTagger.Instance.offlineVRRig.transform.position = target;
+                }
+
+                Physics.SyncTransforms();
+            }
         }
 
         // -----------------------------------------------------------------
@@ -785,13 +1095,22 @@ namespace CascadeMenu.Mods
                         },
                         () => menu.OpenReportPage(player),
                         () => Copy(id),
-                        () => Copy(name)));
+                        () => Copy(name),
+                        () => GetPlayerColor(player)));
                 }
             }
 
             page.Section("Tools", "Refresh the list or copy session data")
                 .Button("Refresh player list", "Re-scan the current room", "Refresh",
                     menu.RefreshPlayerList, false)
+                .Button("Tag all players", "Send a real tag for everyone in the room", "Tag all",
+                    () =>
+                    {
+                        int tagged = TagAll();
+                        menu.ShowToast("Tag all", tagged == 0
+                            ? "No tags sent - no players or outside tag range."
+                            : "Sent tags for " + tagged + " player(s).");
+                    }, false)
                 .Button("Copy room info", "Clipboard: room, master, region, server and HWID", "Copy",
                     () => Copy(
                         "Home / room: " + roomName + "\n" +
@@ -830,6 +1149,7 @@ namespace CascadeMenu.Mods
             string modderSummary;
             bool flagged = IsFlaggedModder(player, out modderSummary);
             string propStatus = CustomPropStatus(player);
+            Color rigColor = GetPlayerColor(player);
 
             var page = new CascadePage(name, "Player actions", CascadeIcon.Person);
             page.Tag = PlayerTag(id);
@@ -841,6 +1161,7 @@ namespace CascadeMenu.Mods
                 .Label("Platform", "Report platform", SafePlatform(player))
                 .Label("Distance", "From your position", distance >= 0f ? distance.ToString("0.0") + " m" : "unknown")
                 .Label("Master client", "Current room host", master ? "Yes" : "No")
+                .Label("Gorilla color", "Live tint shown next to them in the list", ColorHex(rigColor))
                 .Label("Modder check", "Cosmetic spoof flags (local hint)", flagged ? modderSummary : "Clean / unknown")
                 .Label("HWID", "Only your own device ID is exposed", "hidden")
                 .Label("Muted", "Local manual mute", muted ? "Yes" : "No")
@@ -848,12 +1169,20 @@ namespace CascadeMenu.Mods
                 .Label("Selected", "Highlighted in the player list", IsSelected(player) ? "Yes" : "No");
 
             CascadeSection actions = page.Section("Player actions", "Client-side tools aimed at this player");
-            actions.Button("Tag with tag gun", "Play the tag effect and lock the gun onto them", "Tag",
+            actions.Button("Tag with tag gun", "Send a real tag through the game mode", "Tag",
                 () =>
                 {
                     bool ok = TagPlayer(player);
-                    menu.ShowToast("Tag gun", ok ? name + " tagged." : "That player's rig is not ready.");
+                    menu.ShowToast("Tag gun", ok
+                        ? name + " tagged."
+                        : "Rig not ready, or they are outside tag range.");
                 }, true);
+            actions.Button("Teleport to player", "Move next to them without disabling collisions", "Teleport",
+                () =>
+                {
+                    bool ok = TeleportTo(player);
+                    menu.ShowToast("Teleport", ok ? "Moved next to " + name : "That player's rig is not ready.");
+                }, false);
             actions.Button("Noclip to player", "Ghost-teleport through walls to their position", "Noclip",
                 () =>
                 {

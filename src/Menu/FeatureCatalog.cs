@@ -61,10 +61,13 @@ namespace CascadeMenu
                 // ---------------------------------------------------------
                 FeatureOf("Movement", "Joystick fly", "Joystick fly (master)", "Arms double-tap A / F5 flight", config.JoystickFly, settings: "fly"),
                 FeatureOf("Movement", "Gravity", "Block hand link", "Stop other players pulling you around", config.HandLinkBlock),
-                new Feature("Movement", "Acrobatics", "Body rotation", "Press its bind to turn it on; it starts off",
+                new Feature("Movement", "Acrobatics", "Body rotation", "Toggle here or press its bind; it starts off",
                     () => config.Acrobatics.Value,
                     value => CascadeMenu.Mods.AcrobaticsController.SetActive(value),
                     settingsKey: "acrobatics"),
+                new Feature("Movement", "Noclip", "Noclip", "Walk through walls and props",
+                    () => config.Noclip.Value,
+                    value => CascadeMenu.Mods.NoclipController.SetActive(value)),
 
                 // ---------------------------------------------------------
                 // Visual (switches only; tuning lives in the gear pages)

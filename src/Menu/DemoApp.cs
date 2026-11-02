@@ -141,6 +141,20 @@ namespace CascadeMenu
                         FunActions.ClearSelection();
                         menu.ShowToast("Selection", "Cleared.");
                     }, false)
+                .Toggle("Tag gun", "Aim at a gorilla and pull the trigger to really tag them",
+                    () => ModRegistry.IsEnabledByName("Tag gun"),
+                    value => ModRegistry.SetEnabledByName("Tag gun", value))
+                .Toggle("Teleport gun", "Aim anywhere and pull the trigger to teleport there",
+                    () => ModRegistry.IsEnabledByName("Teleport (Gun)"),
+                    value => ModRegistry.SetEnabledByName("Teleport (Gun)", value))
+                .Button("Tag all players", "Send a real tag for everyone in the room", "Tag all",
+                    () =>
+                    {
+                        int tagged = PlayerActions.TagAll();
+                        menu.ShowToast("Tag all", tagged == 0
+                            ? "No tags sent - no players or outside tag range."
+                            : "Sent tags for " + tagged + " player(s).");
+                    }, false)
                 .Button("Teleport to random player", "Move next to someone (client-side)", "Go",
                     () =>
                     {

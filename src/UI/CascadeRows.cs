@@ -372,6 +372,9 @@ namespace CascadeMenu.UI
         public readonly Action CopyId;
         public readonly Action CopyName;
 
+        /// <summary>Live gorilla tint used by the avatar swatch in the list.</summary>
+        public readonly Func<Color> GetColor;
+
         public CascadePlayerRow(
             string title,
             string subtitle,
@@ -384,7 +387,8 @@ namespace CascadeMenu.UI
             Action toggleMute,
             Action report,
             Action copyId,
-            Action copyName) : base(title, subtitle)
+            Action copyName,
+            Func<Color> getColor = null) : base(title, subtitle)
         {
             UserId = userId ?? string.Empty;
             IdDisplay = idDisplay ?? string.Empty;
@@ -396,6 +400,7 @@ namespace CascadeMenu.UI
             Report = report;
             CopyId = copyId;
             CopyName = copyName;
+            GetColor = getColor;
         }
 
         public override float Height

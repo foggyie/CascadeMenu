@@ -166,8 +166,8 @@ namespace CascadeMenu
         private static void BuildAcrobatics(CascadePage page, CascadeMenuBehaviour menu, MenuConfig config)
         {
             page.Section("Body rotation", "VR only - the menu stays level while your body rotates")
-                .Toggle("Acrobatics", "Press its bind to turn body rotation on; it stays off at startup",
-                    () => AcrobaticsController.IsActive,
+                .Toggle("Acrobatics", "Toggle here or press its bind; it stays off at startup",
+                    () => config.Acrobatics.Value,
                     value => AcrobaticsController.SetActive(value))
                 .Button("Toggle acrobatics now", "Same as pressing the acrobatics bind", "Toggle",
                     () =>

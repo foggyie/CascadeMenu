@@ -14,6 +14,7 @@ namespace CascadeMenu.UI
     {
         public Image Background;
         public Image SelectionBar;
+        public Image Avatar;
         public GameObject TapBadge;
         public TMP_Text NameLabel;
         public TMP_Text MuteLabel;
@@ -21,11 +22,13 @@ namespace CascadeMenu.UI
         public Func<bool> IsSelected;
         public Func<bool> IsTapping;
         public Func<bool> IsMuted;
+        public Func<Color> GetColor;
 
         private CascadeTheme _theme;
         private bool _selected;
         private bool _tapping;
         private bool _muted;
+        private Color _avatarColor = new Color(-1f, -1f, -1f, -1f);
         private float _nextPoll;
 
         public void Configure(
@@ -50,6 +53,16 @@ namespace CascadeMenu.UI
 
         private void Apply(bool force)
         {
+            if (Avatar != null && GetColor != null)
+            {
+                Color color = GetColor();
+                if (force || color != _avatarColor)
+                {
+                    _avatarColor = color;
+                    Avatar.color = color;
+                }
+            }
+
             bool selected = IsSelected != null && IsSelected();
             bool tapping = IsTapping != null && IsTapping();
             bool muted = IsMuted != null && IsMuted();
