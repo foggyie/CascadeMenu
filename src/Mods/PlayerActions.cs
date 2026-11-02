@@ -940,7 +940,10 @@ namespace CascadeMenu.Mods
                 rigidbody.angularVelocity = Vector3.zero;
             }
 
-            local.TeleportTo(target, local.transform.rotation, false, false);
+            // Keep the heading but drop any acrobatics roll/pitch so the body
+            // arrives upright and the physics update cannot snap it back.
+            Quaternion rotation = Quaternion.Euler(0f, local.transform.eulerAngles.y, 0f);
+            local.TeleportTo(target, rotation, false, false);
 
             if (rigidbody != null)
             {
