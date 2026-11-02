@@ -96,6 +96,13 @@ namespace CascadeMenu.UI
             return this;
         }
 
+        /// <summary>Large live 3D portrait of a player, used on their page.</summary>
+        public CascadeSection Portrait(string title, string subtitle, Func<VRRig> getRig, Func<Color> getColor)
+        {
+            Rows.Add(new CascadePortraitRow(title, subtitle, getRig, getColor));
+            return this;
+        }
+
         /// <summary>One row with two compact actions (shop try-on + cart).</summary>
         public CascadeSection AddDual(
             string title,
@@ -375,6 +382,9 @@ namespace CascadeMenu.UI
         /// <summary>Live gorilla tint used by the avatar swatch in the list.</summary>
         public readonly Func<Color> GetColor;
 
+        /// <summary>Live rig used by the 3D portrait (null until the rig spawns).</summary>
+        public readonly Func<VRRig> GetRig;
+
         public CascadePlayerRow(
             string title,
             string subtitle,
@@ -388,7 +398,8 @@ namespace CascadeMenu.UI
             Action report,
             Action copyId,
             Action copyName,
-            Func<Color> getColor = null) : base(title, subtitle)
+            Func<Color> getColor = null,
+            Func<VRRig> getRig = null) : base(title, subtitle)
         {
             UserId = userId ?? string.Empty;
             IdDisplay = idDisplay ?? string.Empty;
@@ -401,6 +412,7 @@ namespace CascadeMenu.UI
             CopyId = copyId;
             CopyName = copyName;
             GetColor = getColor;
+            GetRig = getRig;
         }
 
         public override float Height
@@ -411,6 +423,31 @@ namespace CascadeMenu.UI
         public override string SearchText
         {
             get { return base.SearchText + " " + IdDisplay; }
+        }
+    }
+
+    /// <summary>
+    /// Large live portrait of one player's actual gorilla, shown at the top of
+    /// their page. Rendered by <see cref="CascadeRigPortrait"/>.
+    /// </summary>
+    internal sealed class CascadePortraitRow : CascadeRow
+    {
+        public readonly Func<VRRig> GetRig;
+        public readonly Func<Color> GetColor;
+
+        public CascadePortraitRow(
+            string title,
+            string subtitle,
+            Func<VRRig> getRig,
+            Func<Color> getColor) : base(title, subtitle)
+        {
+            GetRig = getRig;
+            GetColor = getColor;
+        }
+
+        public override float Height
+        {
+            get { return 156f; }
         }
     }
 

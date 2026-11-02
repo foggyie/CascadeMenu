@@ -1099,7 +1099,8 @@ namespace CascadeMenu.Mods
                         () => menu.OpenReportPage(player),
                         () => Copy(id),
                         () => Copy(name),
-                        () => GetPlayerColor(player)));
+                        () => GetPlayerColor(player),
+                        () => FindRigObject(player)));
                 }
             }
 
@@ -1158,13 +1159,16 @@ namespace CascadeMenu.Mods
             page.Tag = PlayerTag(id);
             page.HiddenFromSidebar = true;
 
+            page.Section("Live preview", "Their actual gorilla, rendered from the live rig")
+                .Portrait(name, SafePlatform(player), () => FindRigObject(player), () => GetPlayerColor(player));
+
             page.Section("Player", "Session information")
                 .Label("Name", "Nickname", name)
                 .Label("Player ID", "Tap Copy for the full UserId", id)
                 .Label("Platform", "Report platform", SafePlatform(player))
                 .Label("Distance", "From your position", distance >= 0f ? distance.ToString("0.0") + " m" : "unknown")
                 .Label("Master client", "Current room host", master ? "Yes" : "No")
-                .Label("Gorilla color", "Live tint shown next to them in the list", ColorHex(rigColor))
+                .Label("Gorilla color", "Live tint used by their rig and portrait", ColorHex(rigColor))
                 .Label("Modder check", "Cosmetic spoof flags (local hint)", flagged ? modderSummary : "Clean / unknown")
                 .Label("HWID", "Only your own device ID is exposed", "hidden")
                 .Label("Muted", "Local manual mute", muted ? "Yes" : "No")

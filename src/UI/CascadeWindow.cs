@@ -786,6 +786,12 @@ namespace CascadeMenu.UI
                 return;
             }
 
+            if (row is CascadePortraitRow portraitRow)
+            {
+                BuildPortraitRow(card, portraitRow);
+                return;
+            }
+
             RectTransform root = CascadeUI.Rect("Row", card);
             var layoutElement = root.gameObject.AddComponent<LayoutElement>();
             layoutElement.preferredHeight = row.Height;
@@ -1029,21 +1035,31 @@ namespace CascadeMenu.UI
             Image hover = CascadeUI.Panel(hoverRect, Theme.RowHover, 8);
             hover.gameObject.SetActive(false);
 
-            // --- Live gorilla color swatch --------------------------------
-            // The face is tinted with the rig's current playerColor. A faint
-            // circular plate keeps dark colors readable on both themes.
+            // --- Live 3D portrait of the real rig ----------------------------
+            // The tinted face is only a placeholder until the first rendered
+            // frame lands (or while the player's rig is not spawned).
             Color avatarColor = row.GetColor != null ? row.GetColor() : Color.white;
             RectTransform avatarRect = CascadeUI.Rect("Avatar", root);
             avatarRect.anchorMin = avatarRect.anchorMax = new Vector2(0f, 0.5f);
             avatarRect.pivot = new Vector2(0f, 0.5f);
-            avatarRect.anchoredPosition = new Vector2(12f, 0f);
-            avatarRect.sizeDelta = new Vector2(30f, 30f);
+            avatarRect.anchoredPosition = new Vector2(9f, 0f);
+            avatarRect.sizeDelta = new Vector2(44f, 44f);
             CascadeUI.Image(avatarRect, CascadeSprites.Circle(),
-                Theme.IsDark ? new Color(1f, 1f, 1f, 0.09f) : new Color(0f, 0f, 0f, 0.07f),
+                Theme.IsDark ? new Color(1f, 1f, 1f, 0.11f) : new Color(0f, 0f, 0f, 0.08f),
                 Image.Type.Simple);
+
             RectTransform faceRect = CascadeUI.Rect("Face", avatarRect);
-            CascadeUI.Stretch(faceRect, 2f, 2f, 2f, 2f);
+            CascadeUI.Stretch(faceRect, 4f, 4f, 4f, 4f);
             Image avatar = CascadeUI.Image(faceRect, CascadeSprites.GorillaFace(), avatarColor, Image.Type.Simple);
+
+            RectTransform liveRect = CascadeUI.Rect("Live", avatarRect);
+            CascadeUI.Stretch(liveRect, 1f, 1f, 1f, 1f);
+            var liveImage = liveRect.gameObject.AddComponent<RawImage>();
+            liveImage.raycastTarget = false;
+            liveImage.color = Color.white;
+
+            var portrait = avatarRect.gameObject.AddComponent<CascadeRigPortrait>();
+            portrait.Configure(liveImage, avatar, row.GetRig, row.GetColor);
 
             // --- Buttons, laid out from the right edge ---------------------
             float right = 8f;
@@ -1068,7 +1084,7 @@ namespace CascadeMenu.UI
             right += 46f;
 
             // --- Name and ID -------------------------------------------------
-            const float textLeft = 50f;
+            const float textLeft = 62f;
             RectTransform nameRect = LineRect("Name", root, textLeft, right, 9f, 22f);
             TMP_Text nameLabel = CascadeUI.Text(
                 nameRect, row.Title, 12.5f, Theme.TextPrimary, TextAlignmentOptions.Left, true);
@@ -1095,6 +1111,52 @@ namespace CascadeMenu.UI
             view.NameLabel = nameLabel;
             view.MuteLabel = muteButton != null ? muteButton.Label : null;
             view.Configure(Theme, row.IsSelected, row.IsTapping, row.IsMuted);
+        }
+
+        /// <summary>
+        /// Large live portrait (the player's actual rig) beside their name, shown
+        /// at the top of a player's page.
+        /// </summary>
+        private void BuildPortraitRow(RectTransform card, CascadePortraitRow row)
+        {
+            RectTransform root = CascadeUI.Rect("Portrait", card);
+            var layoutElement = root.gameObject.AddComponent<LayoutElement>();
+            layoutElement.preferredHeight = row.Height;
+            layoutElement.minHeight = row.Height;
+
+            RectTransform backgroundRect = CascadeUI.Rect("Background", root);
+            CascadeUI.Stretch(backgroundRect, 2f, 2f, 0f, 0f);
+            CascadeUI.Panel(backgroundRect, Theme.RowHover, 8);
+
+            RectTransform frameRect = CascadeUI.Rect("Live", root);
+            frameRect.anchorMin = frameRect.anchorMax = new Vector2(0f, 0.5f);
+            frameRect.pivot = new Vector2(0f, 0.5f);
+            frameRect.anchoredPosition = new Vector2(16f, 0f);
+            frameRect.sizeDelta = new Vector2(128f, 128f);
+            CascadeUI.Panel(frameRect, Theme.FieldBg, 14);
+
+            RectTransform viewRect = CascadeUI.Rect("View", frameRect);
+            CascadeUI.Stretch(viewRect, 4f, 4f, 4f, 4f);
+            var view = viewRect.gameObject.AddComponent<RawImage>();
+            view.raycastTarget = false;
+            view.color = Color.white;
+
+            var portrait = frameRect.gameObject.AddComponent<CascadeRigPortrait>();
+            portrait.Configure(view, null, row.GetRig, row.GetColor);
+
+            RectTransform titleRect = LineRect("Name", root, 164f, 16f, 30f, 30f);
+            TMP_Text title = CascadeUI.Text(
+                titleRect, row.Title, 17f, Theme.TextPrimary, TextAlignmentOptions.Left, true);
+            title.overflowMode = TextOverflowModes.Ellipsis;
+
+            RectTransform subtitleRect = LineRect("Subtitle", root, 164f, 16f, 66f, 24f);
+            TMP_Text subtitle = CascadeUI.Text(
+                subtitleRect, row.Subtitle, 10.5f, Theme.TextSecondary, TextAlignmentOptions.Left);
+            subtitle.overflowMode = TextOverflowModes.Ellipsis;
+
+            RectTransform hintRect = LineRect("Hint", root, 164f, 16f, 100f, 20f);
+            CascadeUI.Text(hintRect, "Live rig - moves as they move", 9.5f, Theme.TextTertiary,
+                TextAlignmentOptions.Left);
         }
 
         /// <summary>
