@@ -32,6 +32,8 @@ namespace CascadeMenu.UI
         private Image _closeHover;
         private Image _firstBackground;
         private Image _thirdBackground;
+        private Image _firstHover;
+        private Image _thirdHover;
         private TMP_Text _firstLabel;
         private TMP_Text _thirdLabel;
 
@@ -137,6 +139,10 @@ namespace CascadeMenu.UI
 
             _firstRect = LeftIn("First", modeRect, 0f, ModeButtonWidth);
             _firstBackground = CascadeUI.Panel(_firstRect, _theme.FieldBg, 7);
+            RectTransform firstHoverRect = CascadeUI.Rect("Hover", _firstRect);
+            CascadeUI.Stretch(firstHoverRect);
+            _firstHover = CascadeUI.Panel(firstHoverRect, _theme.RowHover, 7);
+            _firstHover.gameObject.SetActive(false);
             RectTransform firstText = CascadeUI.Rect("Text", _firstRect);
             CascadeUI.Stretch(firstText, 2f, 2f, 0f, 0f);
             _firstLabel = CascadeUI.Text(firstText, "1st person", 9.5f,
@@ -144,6 +150,10 @@ namespace CascadeMenu.UI
 
             _thirdRect = LeftIn("Third", modeRect, ModeButtonWidth + 8f, ModeButtonWidth);
             _thirdBackground = CascadeUI.Panel(_thirdRect, _theme.FieldBg, 7);
+            RectTransform thirdHoverRect = CascadeUI.Rect("Hover", _thirdRect);
+            CascadeUI.Stretch(thirdHoverRect);
+            _thirdHover = CascadeUI.Panel(thirdHoverRect, _theme.RowHover, 7);
+            _thirdHover.gameObject.SetActive(false);
             RectTransform thirdText = CascadeUI.Rect("Text", _thirdRect);
             CascadeUI.Stretch(thirdText, 2f, 2f, 0f, 0f);
             _thirdLabel = CascadeUI.Text(thirdText, "3rd person", 9.5f,
@@ -218,12 +228,14 @@ namespace CascadeMenu.UI
             _firstInteractable = _window.Register(
                 _firstRect,
                 CascadeLayerGroup.Overlay,
-                () => _controller.SetFirstPerson(true));
+                () => _controller.SetFirstPerson(true),
+                hover: hovered => _firstHover.gameObject.SetActive(hovered));
 
             _thirdInteractable = _window.Register(
                 _thirdRect,
                 CascadeLayerGroup.Overlay,
-                () => _controller.SetFirstPerson(false));
+                () => _controller.SetFirstPerson(false),
+                hover: hovered => _thirdHover.gameObject.SetActive(hovered));
 
             ApplyModeVisuals();
         }
