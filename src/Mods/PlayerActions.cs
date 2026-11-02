@@ -1184,6 +1184,8 @@ namespace CascadeMenu.Mods
                         ? name + " tagged."
                         : "Rig not ready, or they are outside tag range.");
                 }, true);
+            actions.Button("Spectate player", "Live first- or third-person view of their gorilla", "Spectate",
+                () => menu.StartSpectating(player), false);
             actions.Button("Teleport to player", "Move next to them without disabling collisions", "Teleport",
                 () =>
                 {

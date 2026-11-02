@@ -1638,6 +1638,17 @@ namespace CascadeMenu.UI
             return interactable;
         }
 
+        /// <summary>
+        /// Removes an interactable registered from outside the window (the
+        /// spectate overlay does this when the window is rebuilt or closed).
+        /// </summary>
+        public void Unregister(CascadeInteractable interactable)
+        {
+            if (interactable == null) return;
+            Interactables.Remove(interactable);
+            for (int i = 0; i < Interactables.Count; i++) Interactables[i].Order = i;
+        }
+
         public CascadeInteractable HitTest(Vector3 worldPoint)
         {
             CascadeInteractable best = null;

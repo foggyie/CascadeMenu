@@ -41,6 +41,11 @@ namespace CascadeMenu
 
         private CascadeWindow _window;
 
+        // Live first/third person view of another player. The overlay is a
+        // sibling of the window so it survives window rebuilds while the player
+        // list changes underneath it.
+        private CascadeSpectateOverlay _spectateOverlay;
+
         private CanvasGroup _windowGroup;
 
         private LineRenderer _pointerLine;
@@ -522,6 +527,15 @@ namespace CascadeMenu
                 CloseMenu();
                 return;
             }
+
+            // The rig is destroyed when its owner leaves the room. Close the
+            // feed and put the menu back instead of showing a frozen frame.
+            if (_spectateOverlay != null && !SpectateController.IsActive)
+            {
+                StopSpectating();
+                ShowToast("Spectate ended", "That player's rig is no longer available.");
+            }
+
             if (_rebindTarget == null)
             {
                 HandleKeyboardShortcuts();
@@ -922,6 +936,13 @@ namespace CascadeMenu
             {
                 return;
             }
+
+            // Never leave a feed running behind a closed menu.
+            if (_spectateOverlay != null)
+            {
+                StopSpectating();
+            }
+
             _open = false;
             Plugin.Log.LogInfo("Cascade menu closed.");
             if (_window != null)
@@ -1121,6 +1142,7 @@ namespace CascadeMenu
                     _window.ScrollTo(normalized);
                 }
             }
+            ApplySpectateVisibility();
             if (_pendingToastTitle != null && _open && _window != null)
             {
                 _window.ShowToast(_pendingToastTitle, _pendingToastMessage);
@@ -1335,6 +1357,7 @@ namespace CascadeMenu
                 }
                 _window.ScrollTo(normalized);
             }
+            ApplySpectateVisibility();
             _playerListSignature = PlayerActions.PlayerSignature();
             _playerListDirty = false;
             if (!silent)
@@ -1354,6 +1377,97 @@ namespace CascadeMenu
                     _window.NavigateTo(num, recordHistory: false);
                 }
             }
+        }
+
+        /// <summary>
+        /// Opens the live spectate window for one player.
+        ///
+        /// Only the feed camera moves: the local player, hands and game camera
+        /// stay exactly where they are, so this is safe in VR and nothing about
+        /// the local position is sent to the server.
+        /// </summary>
+        internal void StartSpectating(NetPlayer player)
+        {
+            if (!_open || _window == null || _canvasRect == null || _theme == null || player == null)
+            {
+                return;
+            }
+
+            VRRig rig = PlayerActions.FindRigObject(player);
+            if (rig == null)
+            {
+                ShowToast("Spectate", "That player's rig is not ready yet.");
+                return;
+            }
+
+            if (_spectateOverlay != null) StopSpectating();
+
+            if (_window != null)
+            {
+                _window.CloseDropdown();
+                _window.CloseConfirm();
+                _window.BlurSearch();
+            }
+
+            string name = PlayerActions.SafeName(player);
+            SpectateController controller = SpectateController.Begin(rig, _canvas);
+            if (controller == null)
+            {
+                ShowToast("Spectate", "Could not start the spectate camera.");
+                return;
+            }
+
+            _spectateOverlay = CascadeSpectateOverlay.Create(
+                _canvasRect, _theme, controller, name, StopSpectating);
+            _spectateOverlay.RegisterWith(_window);
+            _spectateOverlay.transform.SetAsLastSibling();
+
+            if (_window != null)
+            {
+                _window.gameObject.SetActive(false);
+            }
+
+            _hovered = null;
+            _pressed = null;
+            _draggingSlider = null;
+            Plugin.Log.LogInfo("Spectating " + name + ".");
+        }
+
+        /// <summary>Closes the spectate feed and restores the menu window.</summary>
+        internal void StopSpectating()
+        {
+            if (_spectateOverlay != null)
+            {
+                _spectateOverlay.Dispose();
+                Object.Destroy(_spectateOverlay.gameObject);
+                _spectateOverlay = null;
+            }
+
+            SpectateController.StopActive();
+
+            if (_window != null && _open)
+            {
+                _window.gameObject.SetActive(true);
+                _window.transform.localScale = Vector3.one;
+            }
+
+            _hovered = null;
+            _pressed = null;
+            _draggingSlider = null;
+        }
+
+        /// <summary>
+        /// A rebuild replaces the window (and its interactable list), so the
+        /// spectate buttons must attach to the new window and the new window
+        /// must be hidden again.
+        /// </summary>
+        private void ApplySpectateVisibility()
+        {
+            if (_spectateOverlay == null || _window == null) return;
+
+            _window.gameObject.SetActive(false);
+            _spectateOverlay.RegisterWith(_window);
+            _spectateOverlay.transform.SetAsLastSibling();
         }
 
         public void OpenPlayerPage(NetPlayer player)
