@@ -208,7 +208,7 @@ namespace CascadeMenu
             movement.Section("Module settings", "Speed, direction, smoothing and keybinds")
                 .Button("Flight settings", "Speed, stick mapping and direction", "Open",
                     () => menu.OpenModuleSettings("fly"), false)
-                .Button("Acrobatics settings", "Body rotation, smoothing and its key", "Open",
+                .Button("Acrobatics settings", "Arming, smoothing and the double-tap gesture", "Open",
                     () => menu.OpenModuleSettings("acrobatics"), false);
 
             return movement;
@@ -355,7 +355,7 @@ namespace CascadeMenu
             settings.Section("Module settings", "Every tuning control lives on its module's own page")
                 .Button("Flight settings", "Speed, direction and stick mapping", "Open",
                     () => menu.OpenModuleSettings("fly"), false)
-                .Button("Acrobatics settings", "Body rotation, smoothing and its key", "Open",
+                .Button("Acrobatics settings", "Arming, smoothing and the double-tap gesture", "Open",
                     () => menu.OpenModuleSettings("acrobatics"), false)
                 .Button("ESP settings", "Boxes, names, tracers and range", "Open",
                     () => menu.OpenModuleSettings("esp"), false)
@@ -389,7 +389,7 @@ namespace CascadeMenu
                     "Keyboard or controller bind (currently " +
                     Keybinds.Name(Keybinds.Parse(config.AcrobaticsKey.Value, UnityEngine.InputSystem.Key.Delete)) + ")",
                     "Rebind", () => menu.BeginRebind("acrobatics"), false)
-                .Dropdown("Acrobatics button", "VR button that toggles acrobatics",
+                .Dropdown("Acrobatics button", "VR button that arms acrobatics",
                     VrInput.ButtonNames,
                     () => VrInput.IndexOf(config.AcrobaticsButton.Value),
                     index => config.AcrobaticsButton.Value = VrInput.Format(VrInput.FromIndex(index)))
@@ -427,6 +427,7 @@ namespace CascadeMenu
                 .Label("Fly axes", "Keyboard", "F6 / F7 / F8 / F9")
                 .Label("Bindable VR buttons", "Settings > Input", "A/X, B/Y, trigger, grip, stick")
                 .Label("Acrobatics", "Default", "right stick click")
+                .Label("Acrobatics engage", "Double-tap A while armed", "2x A")
                 .Label("VR keyboard", "Shown while the search field is focused", "tap keys");
 
             return about;

@@ -166,37 +166,35 @@ namespace CascadeMenu
         private static void BuildAcrobatics(CascadePage page, CascadeMenuBehaviour menu, MenuConfig config)
         {
             page.Section("Body rotation", "VR only - the menu stays level while your body rotates")
-                .Toggle("Acrobatics", "Toggle here or press its bind; then flip with the left stick",
+                .Toggle("Acrobatics", "Arm it here, then double-tap A in game to engage",
                     () => config.Acrobatics.Value,
                     value => AcrobaticsController.SetActive(value))
-                .Button("Toggle acrobatics now", "Same as pressing the acrobatics bind", "Toggle",
+                .Button("Toggle acrobatics now", "Arm or disarm the in-game double-tap gesture", "Toggle",
                     () =>
                     {
                         bool active = AcrobaticsController.ToggleFromMenu();
-                        menu.ShowToast("Acrobatics", active ? "Body rotation on." : "Body rotation off.");
+                        menu.ShowToast("Acrobatics", active
+                            ? "Armed - double-tap A in game."
+                            : "Off.");
                         menu.QueueRebuild();
                     }, false)
                 .Slider("Rotation smoothing", "How quickly the body follows the head",
                     1f, 20f,
                     () => config.AcrobaticsSmoothing.Value,
                     value => config.AcrobaticsSmoothing.Value = value,
-                    value => value.ToString("0.0"))
-                .Slider("Stick flip speed", "Left stick X = barrel roll, Y = front/back flip",
-                    30f, 720f,
-                    () => config.AcrobaticsFlipSpeed.Value,
-                    value => config.AcrobaticsFlipSpeed.Value = value,
-                    value => value.ToString("0") + " deg/s");
+                    value => value.ToString("0.0"));
 
-            page.Section("Binding", "Change what toggles acrobatics on PC or in VR")
+            page.Section("Binding", "Change what arms acrobatics on PC or in VR")
                 .Button("Acrobatics key",
                     "Keyboard or controller bind (currently " +
                     Keybinds.Name(Keybinds.Parse(config.AcrobaticsKey.Value, Key.Delete)) + ")",
                     "Rebind", () => menu.BeginRebind("acrobatics"), false)
-                .Dropdown("Acrobatics button", "VR button that also toggles acrobatics",
+                .Dropdown("Acrobatics button", "VR button that arms acrobatics",
                     VrInput.ButtonNames,
                     () => VrInput.IndexOf(config.AcrobaticsButton.Value),
                     index => config.AcrobaticsButton.Value = VrInput.Format(VrInput.FromIndex(index)))
                 .Label("Default", "Right stick click", "Right Stick")
+                .Label("Engage", "Double-tap A in game while armed", "2x A")
                 .Label("Menu behaviour", "The window never copies head roll", "stays upright");
 
             AddBack(page, menu, "Movement");

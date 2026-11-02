@@ -158,6 +158,15 @@ namespace CascadeMenu.Mods
                 return;
             }
 
+            // Acrobatics uses the same gesture while it is armed, so it gets the
+            // double tap first; toggling flight then needs acrobatics disarmed.
+            if (AcrobaticsController.IsArmed)
+            {
+                _wasPrimaryButton = pressed;
+                _lastTapTime = -10f;
+                return;
+            }
+
             if (pressed && !_wasPrimaryButton)
             {
                 float now = Time.unscaledTime;

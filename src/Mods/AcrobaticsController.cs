@@ -7,48 +7,64 @@ namespace CascadeMenu.Mods
     /// <summary>
     /// Body-rotation ("acrobatics") mode, ported from GorillaAcrobatics.
     ///
-    /// The config entry is the source of truth: on means "body rotation should
-    /// be running", off means "body rotation should be stopped". Both the menu
-    /// toggle and the bind flip that one value, so they can never disagree.
+    /// It follows the same flow as the joystick fly mod: the menu switch (or
+    /// its bind) arms the mod, and double-tapping A in game engages or
+    /// disengages it. Arming alone never rotates the body.
     ///
-    /// While it is on, the body follows the head (so leaning and turning feel
-    /// natural) and the left stick adds flips on top: X is a barrel roll and Y
-    /// is a front/back flip, like the joystick fly mod's stick control.
-    ///
-    /// The Cascade menu never copies the head rotation (see <see cref="MenuAnchor"/>),
-    /// so the window stays level even when the body is upside down.
+    /// While engaged, the body follows the head so leaning, spinning and
+    /// flipping with your own movement feel natural. The Cascade menu never
+    /// copies the head rotation (see <see cref="MenuAnchor"/>), so the window
+    /// stays level even when the body is upside down.
     /// </summary>
     [DefaultExecutionOrder(10001)]
     internal sealed class AcrobaticsController : MonoBehaviour
     {
-        private const float StickDeadzone = 0.18f;
+        private const float DoubleTapWindow = 0.5f;
 
         private static AcrobaticsController _instance;
 
         private MenuConfig _config;
 
         private bool _wasPressed;
+        private bool _wasPrimaryButton;
+        private float _lastTapTime = -10f;
+        private bool _engaged;
         private bool _active;
         private bool _pendingActivate;
         private int _resetFrames;
 
         private Quaternion _referenceHeadRot = Quaternion.identity;
-        private Quaternion _stickRotation = Quaternion.identity;
         private Quaternion _currentRot = Quaternion.identity;
 
         internal static bool IsActive { get; private set; }
+
+        /// <summary>True when the menu switch is on (armed, waiting for the double tap).</summary>
+        internal static bool IsArmed
+        {
+            get { return _instance != null && _instance._config != null && _instance._config.Acrobatics.Value; }
+        }
+
+        /// <summary>True while body rotation is actually running.</summary>
+        internal static bool IsEngaged
+        {
+            get { return _instance != null && _instance._engaged; }
+        }
 
         internal void Initialize(MenuConfig config)
         {
             _config = config;
             _instance = this;
 
-            // A saved "on" value must never arm body rotation at load time. Every
-            // session starts idle; the bind (or a menu toggle) turns it on.
+            // A saved "on" value must never rotate the body at load time. Every
+            // session starts disarmed and disengaged; the menu switch or the
+            // bind arms it, and the in-game double tap engages it.
+            _engaged = false;
             _active = false;
             IsActive = false;
             _pendingActivate = false;
             _wasPressed = false;
+            _wasPrimaryButton = false;
+            _lastTapTime = -10f;
             _resetFrames = 0;
             if (config != null) config.Acrobatics.Value = false;
         }
@@ -63,20 +79,30 @@ namespace CascadeMenu.Mods
         {
             if (_config == null) return;
 
-            // The bind is just another way to flip the same on/off intent.
+            // The bind flips the same armed value the menu switch uses.
             HandleToggle();
+
+            // Same gesture as joystick fly: double-tap A in game to engage.
+            HandleDoubleTap();
 
             if (!_config.Acrobatics.Value)
             {
-                // Config off = kill switch. This also stops a mode that was left
-                // pending because the head transform was not ready yet.
+                // Kill switch. This also stops a mode that was left pending
+                // because the head transform was not ready yet.
+                _engaged = false;
                 if (_active || _pendingActivate) Deactivate();
                 ApplyResetFrames();
                 return;
             }
 
-            // Config on = activate. This is the path the menu toggle uses, so
-            // flipping the switch is enough - the bind is not required.
+            // Armed is not engaged. Wait for the double tap.
+            if (!_engaged)
+            {
+                if (_active || _pendingActivate) Deactivate();
+                ApplyResetFrames();
+                return;
+            }
+
             if (!_active)
             {
                 Activate();
@@ -101,9 +127,7 @@ namespace CascadeMenu.Mods
                 return;
             }
 
-            ApplyStickFlip();
-
-            Quaternion target = head.rotation * Quaternion.Inverse(_referenceHeadRot) * _stickRotation;
+            Quaternion target = head.rotation * Quaternion.Inverse(_referenceHeadRot);
             float smoothing = Mathf.Max(0.01f, _config.AcrobaticsSmoothing.Value);
             float t = 1f - Mathf.Exp(-smoothing * Time.deltaTime);
             _currentRot = Quaternion.Slerp(_currentRot, target, t);
@@ -113,48 +137,47 @@ namespace CascadeMenu.Mods
         }
 
         /// <summary>
-        /// Left stick drives the extras: X is a barrel roll and Y is a
-        /// front/back flip. Input is applied in the head-relative frame, so it
-        /// stacks with head tracking instead of fighting it. The stick belongs
-        /// to the UI while the menu is open.
+        /// Mirrors the fly mod's activation: two quick presses of A while the
+        /// menu is closed. The gesture is ignored while acrobatics is disarmed,
+        /// so it can never engage by accident.
         /// </summary>
-        private void ApplyStickFlip()
+        private void HandleDoubleTap()
         {
-            if (_config == null || CascadeMenuBehaviour.IsMenuOpen) return;
+            ControllerInputPoller poller = ControllerInputPoller.instance;
+            bool pressed = poller != null && poller.rightControllerPrimaryButton;
 
-            float speed = Mathf.Max(0f, _config.AcrobaticsFlipSpeed.Value);
-            if (speed <= 0.01f) return;
-
-            Vector2 stick = VrInput.LeftStick();
-            float x = Deadzone(stick.x);
-            float y = Deadzone(stick.y);
-
-            // Desktop fallback so the flips can be tried without a headset.
-            Keyboard keyboard = Keyboard.current;
-            if (keyboard != null && Mathf.Abs(x) < 0.001f && Mathf.Abs(y) < 0.001f)
+            // A is the menu's select button. Do not treat menu clicks as a
+            // double-tap gesture while Cascade is open.
+            if (CascadeMenuBehaviour.IsMenuOpen || _config == null || !_config.Acrobatics.Value)
             {
-                if (keyboard.leftArrowKey.isPressed) x = -1f;
-                if (keyboard.rightArrowKey.isPressed) x = 1f;
-                if (keyboard.downArrowKey.isPressed) y = -1f;
-                if (keyboard.upArrowKey.isPressed) y = 1f;
+                _wasPrimaryButton = pressed;
+                _lastTapTime = -10f;
+                return;
             }
 
-            if (Mathf.Abs(x) < 0.001f && Mathf.Abs(y) < 0.001f) return;
+            if (pressed && !_wasPrimaryButton)
+            {
+                float now = Time.unscaledTime;
+                if (now - _lastTapTime <= DoubleTapWindow)
+                {
+                    _lastTapTime = -10f;
+                    ToggleEngaged();
+                }
+                else
+                {
+                    _lastTapTime = now;
+                }
+            }
 
-            float dt = Time.deltaTime;
-            float pitch = y * speed * dt;
-            float roll = -x * speed * dt;
-
-            // Post-multiply: the flip axes follow the body, so repeated input
-            // keeps spinning instead of snapping back to a world axis.
-            _stickRotation = _stickRotation * Quaternion.Euler(pitch, 0f, roll);
+            _wasPrimaryButton = pressed;
         }
 
-        private static float Deadzone(float value)
+        /// <summary>Engages or disengages body rotation without disarming it.</summary>
+        private void ToggleEngaged()
         {
-            float abs = Mathf.Abs(value);
-            if (abs <= StickDeadzone) return 0f;
-            return Mathf.Sign(value) * Mathf.Clamp01((abs - StickDeadzone) / (1f - StickDeadzone));
+            _engaged = !_engaged;
+            if (_engaged) Activate();
+            else Deactivate();
         }
 
         private void HandleToggle()
@@ -163,9 +186,9 @@ namespace CascadeMenu.Mods
             if (pressed && !_wasPressed)
             {
                 bool next = !_config.Acrobatics.Value;
-                _config.Acrobatics.Value = next;
-                if (next) Activate();
-                else Deactivate();
+                SetActive(next);
+                CascadeMenuBehaviour.Instance?.ShowToast("Acrobatics",
+                    next ? "Armed - double-tap A in game." : "Off.");
             }
             _wasPressed = pressed;
         }
@@ -176,22 +199,27 @@ namespace CascadeMenu.Mods
             return SetActive(!next);
         }
 
-        /// <summary>Forces acrobatics on or off (used by the menu and settings page).</summary>
+        /// <summary>
+        /// Arms or disarms acrobatics (used by the menu and settings page).
+        /// Arming never engages: the in-game double tap does, exactly like the
+        /// joystick fly mod.
+        /// </summary>
         internal static bool SetActive(bool active)
         {
             if (_instance == null || _instance._config == null)
                 return false;
 
             _instance._config.Acrobatics.Value = active;
-            if (active) _instance.Activate();
-            else _instance.Deactivate();
+            if (!active)
+            {
+                _instance._engaged = false;
+                _instance.Deactivate();
+            }
 
-            // Report the intent, not just the instantaneous head state, so the
-            // settings switch stays on while a pending activation waits for the rig.
             return _instance._config.Acrobatics.Value;
         }
 
-        /// <summary>Flips acrobatics from the Movement page (same as the stick click).</summary>
+        /// <summary>Flips the armed value from the Movement page (same as the bind).</summary>
         internal static bool ToggleFromMenu()
         {
             if (_instance == null || _instance._config == null)
@@ -213,13 +241,12 @@ namespace CascadeMenu.Mods
 
             _pendingActivate = false;
             _referenceHeadRot = head.rotation;
-            _stickRotation = Quaternion.identity;
             _currentRot = Quaternion.identity;
             _resetFrames = 0;
             _active = true;
             IsActive = true;
             Buzz();
-            Plugin.Log?.LogInfo("Cascade acrobatics enabled.");
+            Plugin.Log?.LogInfo("Cascade acrobatics engaged.");
         }
 
         private void Deactivate()
@@ -229,11 +256,10 @@ namespace CascadeMenu.Mods
 
             _active = false;
             IsActive = false;
-            _stickRotation = Quaternion.identity;
             _currentRot = Quaternion.identity;
             _resetFrames = 3;
             Buzz();
-            Plugin.Log?.LogInfo("Cascade acrobatics disabled.");
+            Plugin.Log?.LogInfo("Cascade acrobatics disengaged.");
         }
 
         private void ApplyResetFrames()

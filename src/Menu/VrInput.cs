@@ -130,31 +130,6 @@ namespace CascadeMenu
             return Vector2.zero;
         }
 
-        /// <summary>Left stick, preferring the Input System XR device.</summary>
-        internal static Vector2 LeftStick()
-        {
-            XRController left = XRController.leftHand;
-            if (left != null)
-            {
-                Vector2Control axis = left.TryGetChildControl<Vector2Control>("primary2DAxis");
-                if (axis != null)
-                {
-                    Vector2 value = axis.ReadValue();
-                    if (value.sqrMagnitude > 0.0001f)
-                    {
-                        return value;
-                    }
-                }
-            }
-
-            ControllerInputPoller poller = ControllerInputPoller.instance;
-            if (poller != null)
-            {
-                return poller.leftControllerPrimary2DAxis;
-            }
-            return Vector2.zero;
-        }
-
         // -----------------------------------------------------------------
         // Buttons
         // -----------------------------------------------------------------

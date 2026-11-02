@@ -61,7 +61,7 @@ namespace CascadeMenu
                 // ---------------------------------------------------------
                 FeatureOf("Movement", "Joystick fly", "Joystick fly (master)", "Arms double-tap A / F5 flight", config.JoystickFly, settings: "fly"),
                 FeatureOf("Movement", "Gravity", "Block hand link", "Stop other players pulling you around", config.HandLinkBlock),
-                new Feature("Movement", "Acrobatics", "Body rotation", "Body follows your head; left stick flips",
+                new Feature("Movement", "Acrobatics", "Body rotation", "Arm it, then double-tap A in game",
                     () => config.Acrobatics.Value,
                     value => CascadeMenu.Mods.AcrobaticsController.SetActive(value),
                     settingsKey: "acrobatics"),
