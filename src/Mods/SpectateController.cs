@@ -24,6 +24,8 @@ namespace CascadeMenu.Mods
 
         private static SpectateController _instance;
 
+        private readonly RaycastHit[] _wallHits = new RaycastHit[24];
+
         private VRRig _target;
         private Camera _camera;
         private RenderTexture _texture;
@@ -228,21 +230,21 @@ namespace CascadeMenu.Mods
         /// </summary>
         private float WallDistance(Vector3 focus, Vector3 back, float desired)
         {
-            float distance = desired;
-            RaycastHit[] hits = Physics.RaycastAll(
-                focus, back, desired, ~0, QueryTriggerInteraction.Ignore);
+            int count = Physics.RaycastNonAlloc(
+                focus, back, _wallHits, desired, ~0, QueryTriggerInteraction.Ignore);
 
-            for (int i = 0; i < hits.Length; i++)
+            float distance = desired;
+            for (int i = 0; i < count; i++)
             {
-                Collider collider = hits[i].collider;
+                Collider collider = _wallHits[i].collider;
                 if (collider == null) continue;
 
                 // Ignore the monkey's own colliders.
-                if (_target != null && hits[i].transform != null &&
-                    hits[i].transform.IsChildOf(_target.transform))
+                if (_target != null && _wallHits[i].transform != null &&
+                    _wallHits[i].transform.IsChildOf(_target.transform))
                     continue;
 
-                distance = Mathf.Min(distance, Mathf.Max(MinWallDistance, hits[i].distance - 0.2f));
+                distance = Mathf.Min(distance, Mathf.Max(MinWallDistance, _wallHits[i].distance - 0.2f));
             }
 
             return distance;

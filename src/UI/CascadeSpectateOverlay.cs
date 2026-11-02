@@ -44,6 +44,8 @@ namespace CascadeMenu.UI
         private CascadeInteractable _thirdInteractable;
 
         private float _appear;
+        private bool _modeKnown;
+        private bool _modeFirst;
         private bool _disposed;
 
         /// <summary>Builds the window under the menu canvas and returns it.</summary>
@@ -258,6 +260,10 @@ namespace CascadeMenu.UI
             if (_controller == null || _theme == null) return;
 
             bool first = _controller.FirstPerson;
+            if (_modeKnown && _modeFirst == first) return;
+
+            _modeKnown = true;
+            _modeFirst = first;
 
             if (_firstBackground != null)
                 _firstBackground.color = first ? _theme.Accent : _theme.FieldBg;
