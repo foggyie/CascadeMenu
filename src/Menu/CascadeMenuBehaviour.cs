@@ -1437,6 +1437,7 @@ namespace CascadeMenu
 
             _spectateOverlay = CascadeSpectateOverlay.Create(
                 _canvasRect, _theme, controller, name, StopSpectating);
+            _spectateOverlay.SetPosition(_windowOffset);
             _spectateOverlay.RegisterWith(_window);
             _spectateOverlay.transform.SetAsLastSibling();
 
@@ -1932,8 +1933,11 @@ namespace CascadeMenu
                 Vector3 point = ray.GetPoint(num);
 
                 // The window can be dragged, so gate on its actual rect instead
-                // of the old fixed canvas-centre box.
-                if (_window != null && _window.ContainsPoint(point))
+                // of the old fixed canvas-centre box. While spectating the menu
+                // window is hidden, so its feed window counts too.
+                bool insideMenu = _window != null && _window.ContainsPoint(point);
+                bool insideFeed = _spectateOverlay != null && _spectateOverlay.ContainsPoint(point);
+                if (insideMenu || insideFeed)
                 {
                     hit = SmoothMenuHit(plane, point);
                     flag2 = true;

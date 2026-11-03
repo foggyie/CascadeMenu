@@ -210,6 +210,21 @@ namespace CascadeMenu.UI
                 TextAlignmentOptions.Left);
         }
 
+        /// <summary>Places the window at the same offset as the menu it replaces.</summary>
+        internal void SetPosition(Vector2 anchoredPosition)
+        {
+            RectTransform rect = (RectTransform)transform;
+            rect.anchoredPosition = anchoredPosition;
+        }
+
+        /// <summary>True when the point is inside the spectate window.</summary>
+        internal bool ContainsPoint(Vector3 worldPoint)
+        {
+            RectTransform rect = (RectTransform)transform;
+            Vector3 local = rect.InverseTransformPoint(worldPoint);
+            return Mathf.Abs(local.z) < 60f && rect.rect.Contains(new Vector2(local.x, local.y));
+        }
+
         /// <summary>Registers the window buttons with the current menu window.</summary>
         internal void RegisterWith(CascadeWindow window)
         {
