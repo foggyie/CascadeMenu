@@ -46,11 +46,25 @@ namespace CascadeMenu
         // when the menu is re-centered.
         private Vector2 _windowOffset;
 
+        private Quaternion _windowRotation = Quaternion.identity;
+
         private bool _windowDragging;
 
-        private Vector3 _windowDragStart;
+        private Vector3 _windowDragGrab;
 
-        private Vector2 _windowDragBase;
+        private Quaternion _windowDragStartRotation;
+
+        private Quaternion _windowHandStart;
+
+        private bool _windowDragWithHand;
+
+        private bool _wasRightDown;
+
+        private bool _windowRolling;
+
+        private Quaternion _windowRollStart;
+
+        private float _windowRollMouseX;
 
         // Live first/third person view of another player. The overlay is a
         // sibling of the window so it survives window rebuilds while the player
@@ -829,6 +843,7 @@ namespace CascadeMenu
             _pages = DemoApp.Build(this, _config, _demo);
             int page = ResolveSavedPage();
             _windowOffset = Vector2.zero;
+            _windowRotation = Quaternion.identity;
             _open = true;
             BuildWindow(page);
             if (_window == null)
@@ -1118,6 +1133,7 @@ namespace CascadeMenu
             _window.RecenterRequested = RecenterMenu;
             _window.Initialize(_canvas, _canvasRect, this, _config, _demo, _theme, _pages, page);
             _window.SetWindowPosition(_windowOffset);
+            _window.SetWindowRotation(_windowRotation);
             if (!_open)
             {
                 gameObject.SetActive(false);
@@ -1673,10 +1689,13 @@ namespace CascadeMenu
         {
             _snap = true;
             _windowOffset = Vector2.zero;
+            _windowRotation = Quaternion.identity;
             _windowDragging = false;
+            _windowRolling = false;
             if (_window != null)
             {
                 _window.SetWindowPosition(Vector2.zero);
+                _window.SetWindowRotation(Quaternion.identity);
             }
             if (_open)
             {
@@ -1801,30 +1820,77 @@ namespace CascadeMenu
             bool flag2 = IsSelectHeld();
             bool downEdge = flag2 && !_previousDown;
 
-            // macOS-style window drag: press the empty part of the titlebar and
-            // move the whole window. Titlebar buttons are interactables, so a
-            // press over them (traffic lights, tabs, search) never starts a drag.
+            // macOS-style window grab: press the empty part of the titlebar to
+            // move it. In VR the window also follows the controller's rotation,
+            // like holding a tablet. Titlebar buttons stay interactables, so a
+            // press over them never starts a drag.
+            Transform hand = GorillaTagger.Instance != null ? GorillaTagger.Instance.rightHandTransform : null;
             if (downEdge && flag && cascadeInteractable == null && _window.IsTitlebarPoint(vector))
             {
                 _windowDragging = true;
-                _windowDragStart = _canvasRect.InverseTransformPoint(vector);
-                _windowDragBase = _window.WindowPosition;
+                _windowDragGrab = _window.RootRect.InverseTransformPoint(vector);
+                _windowDragStartRotation = _window.RootRect.rotation;
+                _windowHandStart = hand != null ? hand.rotation : Quaternion.identity;
+                _windowDragWithHand = !_desktopPointer && hand != null;
             }
             if (_windowDragging)
             {
                 if (!flag2)
                 {
                     _windowDragging = false;
+                    _windowDragWithHand = false;
+                    _windowRotation = _window.WindowRotation;
                 }
                 else if (flag)
                 {
-                    Vector3 local = _canvasRect.InverseTransformPoint(vector);
-                    Vector2 delta = new Vector2(
-                        local.x - _windowDragStart.x,
-                        local.y - _windowDragStart.y);
-                    _windowOffset = _windowDragBase + delta;
-                    _window.SetWindowPosition(_windowOffset);
+                    if (_windowDragWithHand && hand != null)
+                    {
+                        Quaternion delta = hand.rotation * Quaternion.Inverse(_windowHandStart);
+                        Quaternion wanted = delta * _windowDragStartRotation;
+
+                        // A little smoothing keeps controller jitter out of the
+                        // window without making it feel laggy.
+                        _window.RootRect.rotation = Quaternion.Slerp(
+                            _window.RootRect.rotation, wanted, 0.5f);
+                    }
+
+                    // Put the window where the grabbed point sits under the
+                    // pointer. The grab offset rotates with the window, so this
+                    // also holds while it is tilted.
+                    Vector3 desired = vector - _window.RootRect.TransformVector(_windowDragGrab);
+                    _window.RootRect.position = desired;
+                    _windowOffset = _window.WindowPosition;
+                    _windowRotation = _window.WindowRotation;
                 }
+            }
+
+            // PC alternative for the same idea: right-drag the titlebar to roll
+            // the window in its own plane.
+            if (_desktopPointer && Mouse.current != null)
+            {
+                bool rightDown = Mouse.current.rightButton.isPressed;
+                if (rightDown && !_wasRightDown && cascadeInteractable == null &&
+                    _window.IsTitlebarPoint(vector))
+                {
+                    _windowRolling = true;
+                    _windowRollStart = _window.WindowRotation;
+                    _windowRollMouseX = Mouse.current.position.ReadValue().x;
+                }
+                if (_windowRolling)
+                {
+                    if (!rightDown)
+                    {
+                        _windowRolling = false;
+                        _windowRotation = _window.WindowRotation;
+                    }
+                    else
+                    {
+                        float dx = Mouse.current.position.ReadValue().x - _windowRollMouseX;
+                        _window.SetWindowRotation(_windowRollStart * Quaternion.Euler(0f, 0f, -dx * 0.3f));
+                        _windowRotation = _window.WindowRotation;
+                    }
+                }
+                _wasRightDown = rightDown;
             }
 
             if (downEdge && !_windowDragging)
@@ -1925,7 +1991,14 @@ namespace CascadeMenu
                 _hitSmoothed = false;
             }
             bool flag2 = false;
-            Plane plane = new Plane(-_canvasRect.forward, _canvasRect.position);
+
+            // Use the plane the visible window actually lies on. The menu
+            // window can be tilted by dragging it, and while spectating the
+            // feed window is the one on screen.
+            Transform planeTransform = _spectateOverlay != null
+                ? _spectateOverlay.transform
+                : (_window != null ? (Transform)_window.RootRect : (Transform)_canvasRect);
+            Plane plane = new Plane(-planeTransform.forward, planeTransform.position);
             Ray ray = new Ray(vector, vector2);
             float num;
             if (plane.Raycast(ray, out num) && num > 0f && num < 6f)
@@ -1947,7 +2020,7 @@ namespace CascadeMenu
             {
                 _hitSmoothed = false;
             }
-            Vector3 front = -_canvasRect.forward;
+            Vector3 front = -planeTransform.forward;
             Vector3 cursorPoint = flag2 ? (hit + front * 0.012f) : Vector3.zero;
             if (_pointerLine != null)
             {
@@ -1981,8 +2054,8 @@ namespace CascadeMenu
             {
                 float distanceScale = Mathf.Clamp(_config.Distance.Value / 0.95f, 0.7f, 1.55f);
                 float radius = 0.015f * distanceScale;
-                Vector3 right = _canvasRect.right;
-                Vector3 up = _canvasRect.up;
+                Vector3 right = planeTransform.right;
+                Vector3 up = planeTransform.up;
                 UpdatePointerRing(_pointerRingShadow, cursorPoint, right, up, radius + 0.004f);
                 UpdatePointerRing(_pointerRing, cursorPoint, right, up, radius);
             }
@@ -2009,13 +2082,7 @@ namespace CascadeMenu
 
         private Vector3 SmoothMenuHit(Plane plane, Vector3 point)
         {
-            if (_desktopPointer)
-            {
-                _smoothHit = point;
-                _hitSmoothed = true;
-                return point;
-            }
-            if (!_hitSmoothed)
+            if (_desktopPointer || !_hitSmoothed)
             {
                 _smoothHit = point;
                 _hitSmoothed = true;
@@ -2023,14 +2090,12 @@ namespace CascadeMenu
             }
             float num = _draggingSlider != null ? 32f : 22f;
             float t = 1f - Mathf.Exp(-num * Time.unscaledDeltaTime);
-            Vector3 vector = _canvasRect.InverseTransformPoint(point);
-            Vector3 vector2 = _canvasRect.InverseTransformPoint(_smoothHit);
-            vector2.x = Mathf.Lerp(vector2.x, vector.x, t);
-            vector2.y = Mathf.Lerp(vector2.y, vector.y, t);
-            vector2.z = 0f;
-            Vector3 point2 = _canvasRect.TransformPoint(vector2);
-            _smoothHit = plane.ClosestPointOnPlane(point2);
-            return _smoothHit;
+
+            // Interpolating in world space keeps the point on the window plane
+            // even when the window is tilted; a plain Lerp on a plane stays on
+            // that plane.
+            _smoothHit = Vector3.Lerp(_smoothHit, point, t);
+            return plane.ClosestPointOnPlane(_smoothHit);
         }
 
         private static void UpdatePointerRing(LineRenderer ring, Vector3 center, Vector3 right, Vector3 up, float radius)
@@ -2143,9 +2208,9 @@ namespace CascadeMenu
                 // In VR the stick scrolls whichever pane the beam is over:
                 // the tab list on the left edge, otherwise the page body.
                 bool overSidebar = false;
-                if (_window.SidebarScrollable && _canvasRect != null)
+                if (_window.SidebarScrollable && _window.RootRect != null)
                 {
-                    Vector3 local = _canvasRect.InverseTransformPoint(_hitPoint);
+                    Vector3 local = _window.RootRect.InverseTransformPoint(_hitPoint);
                     overSidebar = Mathf.Abs(local.z) < 40f && local.x < -215f;
                 }
                 if (overSidebar)

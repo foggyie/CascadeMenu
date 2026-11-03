@@ -1661,6 +1661,18 @@ namespace CascadeMenu.UI
             if (_root != null) _root.anchoredPosition = anchoredPosition;
         }
 
+        /// <summary>Local rotation of the window (relative to the canvas).</summary>
+        public Quaternion WindowRotation
+        {
+            get { return _root != null ? _root.localRotation : Quaternion.identity; }
+        }
+
+        /// <summary>Rotates the window in place.</summary>
+        public void SetWindowRotation(Quaternion localRotation)
+        {
+            if (_root != null) _root.localRotation = localRotation;
+        }
+
         /// <summary>True when the point is inside the window rectangle.</summary>
         public bool ContainsPoint(Vector3 worldPoint)
         {
