@@ -58,7 +58,6 @@ namespace CascadeMenu.Mods
 
         private bool _active;
         private bool _effectRunning;
-        private bool _cleanupRan;
 
         public virtual void OnEnable() { }
         public virtual void OnDisable() { }
@@ -76,29 +75,17 @@ namespace CascadeMenu.Mods
         /// <summary>
         /// Enables or disables the mod. Enabling only arms the mod; the effect
         /// starts when the keybind or the menu's Activate button is used.
-        /// Disabling always clears Active and runs the cleanup path.
+        /// Disabling clears Active and runs the cleanup path exactly when an
+        /// effect was running.
         /// </summary>
         public void SetEnabled(bool value)
         {
             if (Enabled == value) return;
 
             Enabled = value;
-            if (Enabled)
-            {
-                _cleanupRan = false;
-                return;
-            }
-
-            if (_active)
+            if (!Enabled && _active)
             {
                 SetActive(false);
-            }
-
-            // A mod that was armed but never activated still gets one cleanup
-            // pass, so resources it grabbed while arming are released.
-            if (!_cleanupRan)
-            {
-                RunCleanup();
             }
         }
 
@@ -124,7 +111,6 @@ namespace CascadeMenu.Mods
             {
                 _active = true;
                 _effectRunning = true;
-                _cleanupRan = false;
                 Invoke("activate", OnActivate);
                 Invoke("enable", OnEnable);
             }
@@ -135,7 +121,7 @@ namespace CascadeMenu.Mods
 
                 _effectRunning = false;
                 Invoke("deactivate", OnDeactivate);
-                RunCleanup();
+                Invoke("disable", OnDisable);
             }
         }
 
@@ -157,12 +143,6 @@ namespace CascadeMenu.Mods
         public void Toggle()
         {
             SetEnabled(!Enabled);
-        }
-
-        private void RunCleanup()
-        {
-            _cleanupRan = true;
-            Invoke("disable", OnDisable);
         }
 
         private void Invoke(string phase, Action action)
