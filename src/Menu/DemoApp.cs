@@ -24,7 +24,7 @@ namespace CascadeMenu
             pages.Add(CosmeticShop.BuildPage(menu));
 
             // One page for every discovered Mod subclass, grouped by module.
-            pages.Add(ModRegistry.BuildAllPage());
+            pages.Add(ModRegistry.BuildAllPage(menu));
 
             pages.Add(Buildutilities(menu, config));
             pages.Add(BuildSettings(menu, config));
@@ -393,6 +393,12 @@ namespace CascadeMenu
                     VrInput.ButtonNames,
                     () => VrInput.IndexOf(config.AcrobaticsButton.Value),
                     index => config.AcrobaticsButton.Value = VrInput.Format(VrInput.FromIndex(index)))
+                .Slider("Double-press window",
+                    "Maximum gap between taps for a mod set to Double press",
+                    0.1f, 1f,
+                    () => config.DoublePressWindow.Value,
+                    value => config.DoublePressWindow.Value = value,
+                    value => value.ToString("0.00") + " s")
                 .Label("Always available", "Insert also opens the menu", "F1 / Insert");
 
             return settings;
@@ -428,6 +434,8 @@ namespace CascadeMenu
                 .Label("Bindable VR buttons", "Settings > Input", "A/X, B/Y, trigger, grip, stick")
                 .Label("Acrobatics", "Default", "right stick click")
                 .Label("Acrobatics engage", "Double-tap A while armed", "2x A")
+                .Label("Mod keybinds", "Mods tab: enable, then Bind", "Single / Double")
+                .Label("Double-press window", "Settings > Input", "0.30 s default")
                 .Label("VR keyboard", "Shown while the search field is focused", "tap keys");
 
             return about;

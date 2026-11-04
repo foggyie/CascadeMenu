@@ -792,6 +792,12 @@ namespace CascadeMenu.UI
                 return;
             }
 
+            if (row is CascadeModRow modRow)
+            {
+                BuildModRow(card, modRow);
+                return;
+            }
+
             RectTransform root = CascadeUI.Rect("Row", card);
             var layoutElement = root.gameObject.AddComponent<LayoutElement>();
             layoutElement.preferredHeight = row.Height;
@@ -1004,6 +1010,89 @@ namespace CascadeMenu.UI
             {
                 hover.gameObject.SetActive(false);
             }
+        }
+
+        /// <summary>
+        /// One auto-generated mod: name, live Active dot/status, Enabled switch,
+        /// action button, Single/Double selector and keybind button.
+        /// </summary>
+        private void BuildModRow(RectTransform card, CascadeModRow row)
+        {
+            RectTransform root = CascadeUI.Rect("Mod", card);
+            var layoutElement = root.gameObject.AddComponent<LayoutElement>();
+            layoutElement.preferredHeight = row.Height;
+            layoutElement.minHeight = row.Height;
+
+            RectTransform backgroundRect = CascadeUI.Rect("Background", root);
+            CascadeUI.Stretch(backgroundRect, 3f, 3f, 2f, 2f);
+            Image background = CascadeUI.Panel(backgroundRect, Color.clear, 6);
+
+            RectTransform hoverRect = CascadeUI.Rect("Hover", root);
+            CascadeUI.Stretch(hoverRect, 3f, 3f, 2f, 2f);
+            Image hover = CascadeUI.Panel(hoverRect, Theme.RowHover, 6);
+            hover.gameObject.SetActive(false);
+
+            RectTransform dotRect = CascadeUI.Rect("ActiveDot", root);
+            dotRect.anchorMin = dotRect.anchorMax = new Vector2(0f, 1f);
+            dotRect.pivot = new Vector2(0.5f, 0.5f);
+            dotRect.anchoredPosition = new Vector2(17f, -19f);
+            dotRect.sizeDelta = new Vector2(8f, 8f);
+            Image dot = CascadeUI.Panel(dotRect, Theme.TextTertiary, 4);
+
+            const float textLeft = 28f;
+            const float rightOffset = 270f;
+
+            RectTransform titleRect = LineRect("Title", root, textLeft, rightOffset, 6f, 24f);
+            TMP_Text title = CascadeUI.Text(
+                titleRect, row.Title, 12.5f, Theme.TextPrimary, TextAlignmentOptions.Left, true);
+            title.overflowMode = TextOverflowModes.Ellipsis;
+
+            RectTransform statusRect = LineRect("Status", root, textLeft, rightOffset, 30f, 20f);
+            TMP_Text status = CascadeUI.Text(
+                statusRect, string.Empty, 10f, Theme.TextSecondary, TextAlignmentOptions.Left);
+            status.overflowMode = TextOverflowModes.Ellipsis;
+
+            CascadeToggleView toggle = CascadeWidgets.Toggle(Theme, root, row.GetEnabled());
+            toggle.Get = row.GetEnabled;
+            AnchorRightCenter(toggle.Root, 14f, 28f, 16f);
+
+            // A larger invisible hit area makes the tiny switch easy to press
+            // with a VR trigger.
+            RectTransform toggleHit = CascadeUI.Rect("ToggleHit", root);
+            AnchorRightCenter(toggleHit, 6f, 46f, 32f);
+            Register(toggleHit, CascadeLayerGroup.Content, () =>
+                {
+                    bool next = !row.GetEnabled();
+                    row.SetEnabled(next);
+                    toggle.Set(next);
+                },
+                hover: hovered => hover.gameObject.SetActive(hovered));
+
+            CascadeButtonView action = CascadeWidgets.Button(
+                this, root, row.GetActionLabel(), false, row.Activate);
+            AnchorRightCenter(action.Root, 52f, 64f, 24f);
+
+            CascadeButtonView press = CascadeWidgets.Button(
+                this, root, row.GetPressLabel(), false, row.CyclePress);
+            AnchorRightCenter(press.Root, 122f, 64f, 24f);
+
+            CascadeButtonView bind = CascadeWidgets.Button(
+                this, root, "Bind", false, row.Rebind);
+            AnchorRightCenter(bind.Root, 192f, 58f, 24f);
+
+            var view = root.gameObject.AddComponent<CascadeModView>();
+            view.Dot = dot;
+            view.Background = background;
+            view.StatusLabel = status;
+            view.ActionLabel = action.Label;
+            view.PressLabel = press.Label;
+            view.GetEnabled = row.GetEnabled;
+            view.GetActive = row.GetActive;
+            view.GetKeyLabel = row.GetKeyLabel;
+            view.GetPressLabel = row.GetPressLabel;
+            view.GetActionLabel = row.GetActionLabel;
+            view.IsToggle = row.IsToggle;
+            view.Configure(Theme);
         }
 
         /// <summary>

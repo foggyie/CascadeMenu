@@ -51,7 +51,7 @@ namespace CascadeMenu.Mods
 
             // Drives every Mod subclass found by ModRegistry (Halloween, Super, ...).
             host.AddComponent<ModHost>();
-            ModRegistry.EnsureLoaded();
+            ModRegistry.Initialize(config);
         }
 
         internal static void Shutdown()

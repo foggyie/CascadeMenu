@@ -209,6 +209,21 @@ namespace CascadeMenu
 
         internal MenuConfig Config => _config;
 
+        /// <summary>
+        /// True while the search field is focused. Mod keybinds pause so typing
+        /// a query cannot toggle effects.
+        /// </summary>
+        internal bool IsTyping
+        {
+            get { return _open && _window != null && _window.SearchFocused; }
+        }
+
+        /// <summary>True while a settings row is waiting for the next key press.</summary>
+        internal bool IsRebinding
+        {
+            get { return _rebindTarget != null; }
+        }
+
         private void Start()
         {
             _instance = this;
@@ -1200,8 +1215,8 @@ namespace CascadeMenu
 
         /// <summary>
         /// Starts listening for the next keyboard key or controller button so a
-        /// settings row can change a bind. <paramref name="target"/> is "menu" or
-        /// "acrobatics".
+        /// settings row can change a bind. <paramref name="target"/> is "menu",
+        /// "acrobatics", or "mod:TypeName" for an auto-generated mod row.
         /// </summary>
         internal void BeginRebind(string target)
         {
@@ -1222,11 +1237,30 @@ namespace CascadeMenu
 
             _rebindTarget = target;
             _rebindDeadline = Time.unscaledTime + 6f;
-            ShowToast("Rebind", "Press a key or controller button for " + RebindLabel(target) + ".");
+
+            if (IsModTarget(target))
+            {
+                ShowToast("Rebind", "Press a keyboard key for " + RebindLabel(target) + ". Escape clears it.");
+            }
+            else
+            {
+                ShowToast("Rebind", "Press a key or controller button for " + RebindLabel(target) + ".");
+            }
+        }
+
+        private static bool IsModTarget(string target)
+        {
+            return !string.IsNullOrEmpty(target) &&
+                   target.StartsWith("mod:", StringComparison.Ordinal);
         }
 
         private static string RebindLabel(string target)
         {
+            if (IsModTarget(target))
+            {
+                Mod mod = ModRegistry.FindByTypeName(target.Substring(4));
+                return mod != null ? mod.Name : "this mod";
+            }
             return target == "acrobatics" ? "acrobatics" : "the menu";
         }
 
@@ -1245,15 +1279,44 @@ namespace CascadeMenu
             }
 
             Key pressed = Keybinds.CapturePressed();
+            bool modTarget = IsModTarget(_rebindTarget);
+            Mod mod = modTarget ? ModRegistry.FindByTypeName(_rebindTarget.Substring(4)) : null;
+
             if (pressed == Key.Escape)
             {
+                string clearedLabel = RebindLabel(_rebindTarget);
                 _rebindTarget = null;
-                ShowToast("Rebind cancelled", "The old bind is unchanged.");
+
+                if (modTarget && mod != null)
+                {
+                    // Mod binds use Escape to clear instead of cancel.
+                    ModRegistry.SetKey(mod, Key.None);
+                    ShowToast("Bind cleared", clearedLabel + " is now unbound.");
+                    RefreshPlayerList(true);
+                }
+                else
+                {
+                    ShowToast("Rebind cancelled", "The old bind is unchanged.");
+                }
                 return;
             }
 
             if (pressed != Key.None)
             {
+                if (modTarget)
+                {
+                    if (mod != null)
+                    {
+                        ModRegistry.SetKey(mod, pressed);
+                    }
+
+                    string modLabel = RebindLabel(_rebindTarget);
+                    _rebindTarget = null;
+                    ShowToast("Rebind saved", modLabel + " is now " + Keybinds.Name(pressed) + ".");
+                    RefreshPlayerList(true);
+                    return;
+                }
+
                 if (_rebindTarget == "acrobatics")
                 {
                     _config.AcrobaticsKey.Value = pressed.ToString();
@@ -1270,6 +1333,13 @@ namespace CascadeMenu
                 // Rebuild the page list so the settings row shows the new key
                 // straight away (not just after the next menu close/open).
                 RefreshPlayerList(true);
+                return;
+            }
+
+            // Mod binds are keyboard only; a VR trigger is used to click the
+            // Bind button and must not become the bind itself.
+            if (modTarget)
+            {
                 return;
             }
 

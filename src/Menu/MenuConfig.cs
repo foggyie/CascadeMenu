@@ -5,6 +5,10 @@ namespace CascadeMenu
 {
     internal sealed class MenuConfig
     {
+        // The underlying file is shared with the mod registry, which binds one
+        // key and one press type per discovered mod under its own section.
+        public readonly ConfigFile File;
+
         public readonly ConfigEntry<int> ThemeIndex;
         public readonly ConfigEntry<int> AccentIndex;
         public readonly ConfigEntry<int> UiMode;
@@ -41,6 +45,9 @@ namespace CascadeMenu
         public readonly ConfigEntry<string> MenuButton;
         public readonly ConfigEntry<string> AcrobaticsKey;
         public readonly ConfigEntry<string> AcrobaticsButton;
+
+        // Global double-press window for every mod keybind.
+        public readonly ConfigEntry<float> DoublePressWindow;
 
         // Notifications (join / leave / master / room events)
         public readonly ConfigEntry<bool> NotifyJoins;
@@ -85,6 +92,8 @@ namespace CascadeMenu
 
         public MenuConfig(ConfigFile config)
         {
+            File = config;
+
             ThemeIndex = config.Bind(
                 "Appearance",
                 "Theme",
@@ -380,6 +389,15 @@ namespace CascadeMenu
                 "Controller button that toggles acrobatics: None, LeftPrimary, LeftSecondary, " +
                 "LeftTrigger, LeftGrip, LeftStick, RightPrimary, RightSecondary, RightTrigger, RightGrip, RightStick.");
 
+            DoublePressWindow = config.Bind(
+                "Input",
+                "Double Press Window",
+                0.3f,
+                new ConfigDescription(
+                    "Maximum time between two presses for a mod set to Double press. " +
+                    "A single tap outside this window does nothing.",
+                    new AcceptableValueRange<float>(0.1f, 1f)));
+
             // -----------------------------------------------------------------
             // Notifications: a visible list of events, shown even when the menu
             // is closed. Bottom-right by default so the card is easy to see
@@ -500,6 +518,7 @@ namespace CascadeMenu
             MenuButton.Value = "None";
             AcrobaticsKey.Value = "Delete";
             AcrobaticsButton.Value = "RightStick";
+            DoublePressWindow.Value = 0.3f;
             NotifyJoins.Value = true;
             NotifyLeaves.Value = true;
             NotifyMaster.Value = true;

@@ -160,6 +160,40 @@ namespace CascadeMenu.UI
             Rows.Add(new CascadeDropdownRow(title, subtitle, options, get, set));
             return this;
         }
+
+        /// <summary>
+        /// One auto-generated mod row: Enabled toggle, keybind, Single/Double
+        /// press selector, Active indicator and an action button.
+        /// </summary>
+        public CascadeSection Mod(
+            string title,
+            string subtitle,
+            Func<bool> getEnabled,
+            Action<bool> setEnabled,
+            Func<bool> getActive,
+            Func<string> getKeyLabel,
+            Action rebind,
+            Func<string> getPressLabel,
+            Action cyclePress,
+            Func<string> getActionLabel,
+            Action activate,
+            bool isToggle)
+        {
+            Rows.Add(new CascadeModRow(
+                title,
+                subtitle,
+                getEnabled,
+                setEnabled,
+                getActive,
+                getKeyLabel,
+                rebind,
+                getPressLabel,
+                cyclePress,
+                getActionLabel,
+                activate,
+                isToggle));
+            return this;
+        }
     }
 
     internal abstract class CascadeRow
@@ -516,6 +550,66 @@ namespace CascadeMenu.UI
         public override float Height
         {
             get { return string.IsNullOrEmpty(Subtitle) ? 48f : 54f; }
+        }
+    }
+
+    /// <summary>
+    /// The generated row for one <c>Mod</c>. All live values are polled by
+    /// <see cref="CascadeModView"/>, so pressing a keybind updates the Active
+    /// indicator without rebuilding the page.
+    /// </summary>
+    internal sealed class CascadeModRow : CascadeRow
+    {
+        public readonly Func<bool> GetEnabled;
+        public readonly Action<bool> SetEnabled;
+        public readonly Func<bool> GetActive;
+        public readonly Func<string> GetKeyLabel;
+        public readonly Action Rebind;
+        public readonly Func<string> GetPressLabel;
+        public readonly Action CyclePress;
+        public readonly Func<string> GetActionLabel;
+        public readonly Action Activate;
+        public readonly bool IsToggle;
+
+        public CascadeModRow(
+            string title,
+            string subtitle,
+            Func<bool> getEnabled,
+            Action<bool> setEnabled,
+            Func<bool> getActive,
+            Func<string> getKeyLabel,
+            Action rebind,
+            Func<string> getPressLabel,
+            Action cyclePress,
+            Func<string> getActionLabel,
+            Action activate,
+            bool isToggle) : base(title, subtitle)
+        {
+            GetEnabled = getEnabled;
+            SetEnabled = setEnabled;
+            GetActive = getActive;
+            GetKeyLabel = getKeyLabel;
+            Rebind = rebind;
+            GetPressLabel = getPressLabel;
+            CyclePress = cyclePress;
+            GetActionLabel = getActionLabel;
+            Activate = activate;
+            IsToggle = isToggle;
+        }
+
+        public override float Height
+        {
+            get { return 70f; }
+        }
+
+        public override string SearchText
+        {
+            get
+            {
+                string key = GetKeyLabel != null ? GetKeyLabel() : string.Empty;
+                string press = GetPressLabel != null ? GetPressLabel() : string.Empty;
+                return base.SearchText + " keybind " + key + " " + press + " active";
+            }
         }
     }
 }
