@@ -233,7 +233,7 @@ namespace CascadeMenu.UI
 
             _sidebarViewport = CascadeUI.Rect("Viewport", sidebarScrollRoot);
             CascadeUI.Stretch(_sidebarViewport);
-            _sidebarViewport.gameObject.AddComponent<RectMask2D>();
+            CascadeUI.Clip(_sidebarViewport);
             _sidebarScroll.viewport = _sidebarViewport;
 
             _sidebarList = CascadeUI.Rect("List", _sidebarViewport);
@@ -543,7 +543,7 @@ namespace CascadeMenu.UI
 
             _viewport = CascadeUI.Rect("Viewport", _scrollRoot);
             CascadeUI.Stretch(_viewport);
-            _viewport.gameObject.AddComponent<RectMask2D>();
+            CascadeUI.Clip(_viewport);
             _scroll.viewport = _viewport;
 
             _content = CreateContent();

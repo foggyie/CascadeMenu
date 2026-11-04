@@ -238,6 +238,24 @@ namespace CascadeMenu.UI
             return Image(rect, CascadeSprites.Outline(radius, thickness), color, UnityEngine.UI.Image.Type.Sliced);
         }
 
+        /// <summary>
+        /// Clips the children of a viewport with a stencil mask.
+        ///
+        /// <see cref="RectMask2D"/> clips to an axis-aligned rectangle in canvas
+        /// space, so as soon as the window is rotated its masked contents (the
+        /// page rows and the sidebar tabs) disappear. A stencil mask is
+        /// rasterised from the viewport's real, transformed shape, so clipping
+        /// and scrolling keep working at any angle.
+        /// </summary>
+        public static void Clip(RectTransform rect)
+        {
+            Image image = Image(rect, CascadeSprites.White(), Color.white, UnityEngine.UI.Image.Type.Simple);
+            image.raycastTarget = false;
+
+            var mask = rect.gameObject.AddComponent<Mask>();
+            mask.showMaskGraphic = false;
+        }
+
         public static TextMeshProUGUI Text(
             RectTransform rect,
             string text,

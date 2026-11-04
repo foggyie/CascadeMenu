@@ -58,6 +58,12 @@ namespace CascadeMenu
 
         private bool _windowDragWithHand;
 
+        // Smoothed targets while dragging, so the window glides after the hand
+        // instead of snapping to it frame by frame.
+        private Vector3 _windowDragTarget;
+
+        private Quaternion _windowRotationTarget = Quaternion.identity;
+
         private bool _wasRightDown;
 
         private bool _windowRolling;
@@ -1830,6 +1836,8 @@ namespace CascadeMenu
                 _windowDragging = true;
                 _windowDragGrab = _window.RootRect.InverseTransformPoint(vector);
                 _windowDragStartRotation = _window.RootRect.rotation;
+                _windowDragTarget = _window.RootRect.position;
+                _windowRotationTarget = _window.RootRect.rotation;
                 _windowHandStart = hand != null ? hand.rotation : Quaternion.identity;
                 _windowDragWithHand = !_desktopPointer && hand != null;
             }
@@ -1839,26 +1847,35 @@ namespace CascadeMenu
                 {
                     _windowDragging = false;
                     _windowDragWithHand = false;
+                    _windowOffset = _window.WindowPosition;
                     _windowRotation = _window.WindowRotation;
                 }
                 else if (flag)
                 {
+                    float dt = Time.unscaledDeltaTime;
+                    float rotationT = 1f - Mathf.Exp(-18f * dt);
+                    float moveT = 1f - Mathf.Exp(-22f * dt);
+
+                    // Follow the grabbing hand's rotation, like holding a tablet.
+                    // The wanted rotation is eased every frame so hand jitter and
+                    // tracking ticks never snap the window around.
                     if (_windowDragWithHand && hand != null)
                     {
                         Quaternion delta = hand.rotation * Quaternion.Inverse(_windowHandStart);
-                        Quaternion wanted = delta * _windowDragStartRotation;
-
-                        // A little smoothing keeps controller jitter out of the
-                        // window without making it feel laggy.
-                        _window.RootRect.rotation = Quaternion.Slerp(
-                            _window.RootRect.rotation, wanted, 0.5f);
+                        _windowRotationTarget = delta * _windowDragStartRotation;
                     }
+                    _window.RootRect.rotation = Quaternion.Slerp(
+                        _window.RootRect.rotation, _windowRotationTarget, rotationT);
 
                     // Put the window where the grabbed point sits under the
-                    // pointer. The grab offset rotates with the window, so this
-                    // also holds while it is tilted.
-                    Vector3 desired = vector - _window.RootRect.TransformVector(_windowDragGrab);
-                    _window.RootRect.position = desired;
+                    // pointer, then ease toward it. The grab offset uses the
+                    // current rotation so it holds while the window is tilted.
+                    Vector3 grabOffset = _window.RootRect.rotation *
+                        Vector3.Scale(_windowDragGrab, _window.RootRect.lossyScale);
+                    _windowDragTarget = vector - grabOffset;
+                    _window.RootRect.position = Vector3.Lerp(
+                        _window.RootRect.position, _windowDragTarget, moveT);
+
                     _windowOffset = _window.WindowPosition;
                     _windowRotation = _window.WindowRotation;
                 }
@@ -1874,6 +1891,7 @@ namespace CascadeMenu
                 {
                     _windowRolling = true;
                     _windowRollStart = _window.WindowRotation;
+                    _windowRotationTarget = _windowRollStart;
                     _windowRollMouseX = Mouse.current.position.ReadValue().x;
                 }
                 if (_windowRolling)
@@ -1881,12 +1899,16 @@ namespace CascadeMenu
                     if (!rightDown)
                     {
                         _windowRolling = false;
+                        _windowOffset = _window.WindowPosition;
                         _windowRotation = _window.WindowRotation;
                     }
                     else
                     {
                         float dx = Mouse.current.position.ReadValue().x - _windowRollMouseX;
-                        _window.SetWindowRotation(_windowRollStart * Quaternion.Euler(0f, 0f, -dx * 0.3f));
+                        _windowRotationTarget = _windowRollStart * Quaternion.Euler(0f, 0f, -dx * 0.3f);
+                        float t = 1f - Mathf.Exp(-20f * Time.unscaledDeltaTime);
+                        _window.SetWindowRotation(Quaternion.Slerp(
+                            _window.WindowRotation, _windowRotationTarget, t));
                         _windowRotation = _window.WindowRotation;
                     }
                 }
