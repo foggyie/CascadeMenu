@@ -47,8 +47,10 @@ namespace CascadeMenu
 
         private float _nextModeCheck;
 
-        public static readonly Vector2 DefaultWindowOffset = new Vector2(260f, 0f);
-        public const float MenuWindowScale = 0.75f;
+        // The window opens centered, at its authored size. Move these if the
+        // menu should open somewhere else (the offset is in canvas units).
+        public static readonly Vector2 DefaultWindowOffset = Vector2.zero;
+        public const float MenuWindowScale = 1f;
 
         private CascadeWindow _window;
 
@@ -892,7 +894,6 @@ namespace CascadeMenu
             EnsureTheme();
             RefreshAutoTheme();
             int page = ResolveSavedPage();
-            // Position on the right side of the screen
             _windowOffset = DefaultWindowOffset;
             _windowRotation = Quaternion.identity;
             _open = true;

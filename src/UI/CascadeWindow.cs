@@ -86,9 +86,9 @@ namespace CascadeMenu.UI
         private readonly List<int> _history = new List<int>();
         private int _historyIndex;
 
-        private bool _sidebarExpanded = false;
-        private float _sidebarCurrent = 0f;
-        private float _sidebarTarget = 0f;
+        private bool _sidebarExpanded = true;
+        private float _sidebarCurrent = CascadeTheme.SidebarWidth;
+        private float _sidebarTarget = CascadeTheme.SidebarWidth;
 
         private string _searchQuery = string.Empty;
         private bool _searchFocused;
@@ -125,7 +125,7 @@ namespace CascadeMenu.UI
             _root.pivot = new Vector2(0.5f, 0.5f);
             _root.anchoredPosition = Vector2.zero;
             _root.sizeDelta = new Vector2(CascadeTheme.WindowWidth, CascadeTheme.WindowHeight);
-            _root.localScale = Vector3.one * 0.75f;
+            _root.localScale = Vector3.one;
 
             BuildFrame();
             BuildSidebar();
@@ -153,12 +153,11 @@ namespace CascadeMenu.UI
             RectTransform shadow = CascadeUI.Rect("Shadow", _root);
             CascadeUI.Stretch(shadow, -30f, -30f, -26f, -30f);
             CascadeUI.Image(shadow, CascadeSprites.Shadow(22, 28), Theme.ShadowColor, Image.Type.Sliced);
-            shadow.gameObject.SetActive(false);
 
             _body = CascadeUI.Rect("Body", _root);
             CascadeUI.Stretch(_body);
             Image bodyImage = CascadeUI.Panel(_body, Theme.SidebarBg, 10);
-            if (bodyImage != null) { bodyImage.raycastTarget = false; bodyImage.enabled = false; }
+            if (bodyImage != null) bodyImage.raycastTarget = false;
 
             _sidebar = CascadeUI.Rect("Sidebar", _body);
             _sidebar.anchorMin = new Vector2(0f, 0f);
@@ -166,8 +165,7 @@ namespace CascadeMenu.UI
             _sidebar.pivot = new Vector2(0f, 0.5f);
             _sidebar.anchoredPosition = Vector2.zero;
             _sidebar.sizeDelta = new Vector2(CascadeTheme.SidebarWidth, 0f);
-            Image sidebarImg = CascadeUI.Panel(_sidebar, Theme.SidebarBg, 10);
-            if (sidebarImg != null) sidebarImg.enabled = false;
+            CascadeUI.Panel(_sidebar, Theme.SidebarBg, 10);
             _sidebarGroup = _sidebar.gameObject.AddComponent<CanvasGroup>();
 
             _separator = CascadeUI.Rect("SidebarSeparator", _body);
@@ -175,8 +173,7 @@ namespace CascadeMenu.UI
             _separator.pivot = new Vector2(0f, 0.5f);
             _separator.anchoredPosition = new Vector2(CascadeTheme.SidebarWidth, 0f);
             _separator.sizeDelta = new Vector2(1f, CascadeTheme.WindowHeight - 2f);
-            Image sepImg = CascadeUI.Solid(_separator, Theme.Separator);
-            if (sepImg != null) sepImg.enabled = false;
+            CascadeUI.Solid(_separator, Theme.Separator);
 
             _contentBody = CascadeUI.Rect("ContentBody", _body);
             _contentBody.anchorMin = Vector2.zero;
@@ -184,13 +181,11 @@ namespace CascadeMenu.UI
             _contentBody.pivot = new Vector2(0.5f, 0.5f);
             _contentBody.offsetMin = new Vector2(CascadeTheme.SidebarWidth + 1f, 0f);
             _contentBody.offsetMax = Vector2.zero;
-            Image contentImg = CascadeUI.Panel(_contentBody, Theme.ContentBg, 10);
-            if (contentImg != null) contentImg.enabled = false;
+            CascadeUI.Panel(_contentBody, Theme.ContentBg, 10);
 
             RectTransform contentBorder = CascadeUI.Rect("Border", _contentBody);
             CascadeUI.Stretch(contentBorder);
             CascadeUI.Outline(contentBorder, Theme.ViewBorder, 10);
-            contentBorder.gameObject.SetActive(false);
 
             // The content area meets the sidebar with a straight edge. Cover the
             // rounded left corners so the 10px radius only appears on the window's
@@ -201,17 +196,14 @@ namespace CascadeMenu.UI
             contentFlatLeft.pivot = new Vector2(0f, 0.5f);
             contentFlatLeft.anchoredPosition = Vector2.zero;
             contentFlatLeft.sizeDelta = new Vector2(12f, 0f);
-            Image flatLeftImg = CascadeUI.Image(contentFlatLeft, CascadeSprites.White(), Theme.ContentBg, Image.Type.Simple);
-            if (flatLeftImg != null) flatLeftImg.enabled = false;
+            CascadeUI.Image(contentFlatLeft, CascadeSprites.White(), Theme.ContentBg, Image.Type.Simple);
             _contentFlatLeft = contentFlatLeft;
-            contentFlatLeft.gameObject.SetActive(false);
 
             RectTransform windowBorder = CascadeUI.Rect("WindowBorder", _body);
             CascadeUI.Stretch(windowBorder);
             CascadeUI.Outline(windowBorder, Theme.WindowBorder, 10);
             windowBorder.SetAsLastSibling();
             _windowBorder = windowBorder;
-            if (_windowBorder != null) _windowBorder.gameObject.SetActive(false);
         }
 
         // -----------------------------------------------------------------
@@ -457,7 +449,6 @@ namespace CascadeMenu.UI
             _titlebar.offsetMax = Vector2.zero;
             Image titlebarImage = CascadeUI.Image(_titlebar, CascadeSprites.RoundedTop(10), Theme.TitlebarBg, Image.Type.Sliced);
             titlebarImage.raycastTarget = false;
-            titlebarImage.enabled = false;
 
             RectTransform titleFlatLeft = CascadeUI.Rect("FlatLeft", _titlebar);
             titleFlatLeft.anchorMin = new Vector2(0f, 0f);
@@ -465,10 +456,8 @@ namespace CascadeMenu.UI
             titleFlatLeft.pivot = new Vector2(0f, 0.5f);
             titleFlatLeft.anchoredPosition = Vector2.zero;
             titleFlatLeft.sizeDelta = new Vector2(12f, 0f);
-            Image titleFlatImg = CascadeUI.Image(titleFlatLeft, CascadeSprites.White(), Theme.TitlebarBg, Image.Type.Simple);
-            if (titleFlatImg != null) titleFlatImg.enabled = false;
+            CascadeUI.Image(titleFlatLeft, CascadeSprites.White(), Theme.TitlebarBg, Image.Type.Simple);
             _titlebarFlatLeft = titleFlatLeft;
-            titleFlatLeft.gameObject.SetActive(false);
 
             RectTransform hairline = CascadeUI.Rect("Hairline", _titlebar);
             hairline.anchorMin = new Vector2(0f, 0f);
@@ -476,9 +465,7 @@ namespace CascadeMenu.UI
             hairline.pivot = new Vector2(0.5f, 0f);
             hairline.offsetMin = Vector2.zero;
             hairline.offsetMax = new Vector2(0f, 1f);
-            Image hairImg = CascadeUI.Solid(hairline, Theme.TitlebarHairline);
-            if (hairImg != null) hairImg.enabled = false;
-            hairline.gameObject.SetActive(false);
+            CascadeUI.Solid(hairline, Theme.TitlebarHairline);
 
             RectTransform sidebarButton = CascadeUI.TopLeft("SidebarButton", _titlebar, 10f, 12f, 26f, 28f);
             Image sidebarHover = AddHover(sidebarButton, 5, 0.07f);
@@ -771,7 +758,6 @@ namespace CascadeMenu.UI
             RectTransform border = CascadeUI.Rect("Border", card);
             CascadeUI.Stretch(border);
             CascadeUI.Outline(border, Theme.ViewBorder, 8);
-            border.gameObject.SetActive(false);
             var borderLayout = border.gameObject.AddComponent<LayoutElement>();
             borderLayout.ignoreLayout = true;
 
