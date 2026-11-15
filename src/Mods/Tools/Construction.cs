@@ -153,6 +153,7 @@ namespace CascadeMenu.Mods
         private int _rotation;
         private bool _autoWeld = true;
         private bool _fixedPieces = true;
+        private bool _textured = true;
         private float _weldRadius = 0.4f;
         private float _weldStrength = 3500f;
         private float _weldRange = 4f;
@@ -183,9 +184,10 @@ namespace CascadeMenu.Mods
         private LineRenderer _ring;
         private Material _beamMaterial;
         private Material _ghostMaterial;
-        private Material _pieceMaterial;
+        private Material _flatMaterial;
         private Material _projectileMaterial;
-        private Texture2D _blockTexture;
+        private readonly Material[] _pieceMaterials = new Material[Specs.Length];
+        private readonly Texture2D[] _pieceTextures = new Texture2D[Specs.Length];
 
         private ConstructionPiece _selected;
         private ConstructionPiece _hover;
@@ -251,6 +253,15 @@ namespace CascadeMenu.Mods
                     _colorStyle = Mathf.Clamp(value, 0, ColorNames.Length - 1);
                     _colorsDirty = true;
                     _previewDirty = true;
+                }));
+
+            AddSetting(ModSetting.Toggle("textures", "Textures",
+                "Give bricks, planks, beams, logs and balls their own block texture instead of flat color",
+                () => _textured,
+                value =>
+                {
+                    _textured = value;
+                    RefreshPieceMaterials();
                 }));
 
             AddSetting(ModSetting.Dropdown("snap", "Grid snap",
@@ -432,16 +443,24 @@ namespace CascadeMenu.Mods
             _ring = null;
             DisposeMaterial(_beamMaterial);
             DisposeMaterial(_ghostMaterial);
-            DisposeMaterial(_pieceMaterial);
+            DisposeMaterial(_flatMaterial);
             DisposeMaterial(_projectileMaterial);
-            if (_blockTexture != null)
+
+            for (int i = 0; i < _pieceMaterials.Length; i++)
             {
-                UnityEngine.Object.Destroy(_blockTexture);
-                _blockTexture = null;
+                DisposeMaterial(_pieceMaterials[i]);
+                _pieceMaterials[i] = null;
+
+                if (_pieceTextures[i] != null)
+                {
+                    UnityEngine.Object.Destroy(_pieceTextures[i]);
+                    _pieceTextures[i] = null;
+                }
             }
+
             _beamMaterial = null;
             _ghostMaterial = null;
-            _pieceMaterial = null;
+            _flatMaterial = null;
             _projectileMaterial = null;
             _selected = null;
             _hover = null;
@@ -908,17 +927,17 @@ namespace CascadeMenu.Mods
             ConstructionPiece piece = go.AddComponent<ConstructionPiece>();
             piece.Kind = pieceIndex;
             piece.Body = body;
+            // The collider stays enabled: a placed block is solid to stand on,
+            // climb and bump into. The kinematic body is what keeps it in place.
             piece.Col = go.GetComponent<Collider>();
-            // No physics collisions with players; the piece stays in place via kinematic rigidbody
-            if (piece.Col != null) piece.Col.enabled = false;
-            body.isKinematic = true;
             piece.Render = go.GetComponent<Renderer>();
             piece.Block = new MaterialPropertyBlock();
             piece.BaseColor = BaseColorFor(pieceIndex);
 
-            if (piece.Render != null && _pieceMaterial != null)
+            if (piece.Render != null)
             {
-                piece.Render.sharedMaterial = _pieceMaterial;
+                Material material = PieceMaterialFor(pieceIndex);
+                if (material != null) piece.Render.sharedMaterial = material;
             }
 
             ApplyPieceColor(piece);
@@ -1384,86 +1403,271 @@ namespace CascadeMenu.Mods
             _ghostMaterial = NewUnlitMaterial(new Color(0.35f, 0.75f, 1f, 0.34f), 3000);
             _projectileMaterial = NewUnlitMaterial(new Color(1f, 0.6f, 0.2f, 1f), 4100);
 
-            if (_blockTexture == null)
+            Shader pieceShader = FindPieceShader();
+            if (pieceShader == null) return;
+
+            _flatMaterial = new Material(pieceShader) { color = Color.white };
+            MakeMatte(_flatMaterial);
+
+            for (int i = 0; i < Specs.Length; i++)
             {
-                _blockTexture = CreateBlockTexture();
+                if (_pieceTextures[i] == null)
+                {
+                    _pieceTextures[i] = CreatePieceTexture(i);
+                }
+
+                Material material = new Material(pieceShader) { color = Color.white };
+                MakeMatte(material);
+                ApplyPieceTexture(material, _pieceTextures[i]);
+                _pieceMaterials[i] = material;
+            }
+        }
+
+        /// <summary>The material for one piece kind, textured or flat.</summary>
+        private Material PieceMaterialFor(int kind)
+        {
+            if (!_textured && _flatMaterial != null) return _flatMaterial;
+
+            int index = Mathf.Clamp(kind, 0, _pieceMaterials.Length - 1);
+            Material material = _pieceMaterials[index];
+            return material != null ? material : _flatMaterial;
+        }
+
+        /// <summary>Re-applies materials after the Textures toggle or a respawn.</summary>
+        private void RefreshPieceMaterials()
+        {
+            for (int i = 0; i < _pieces.Count; i++)
+            {
+                ConstructionPiece piece = _pieces[i];
+                if (piece == null || piece.Render == null) continue;
+
+                Material material = PieceMaterialFor(piece.Kind);
+                if (material != null) piece.Render.sharedMaterial = material;
             }
 
-            Shader pieceShader = FindPieceShader();
-            if (pieceShader != null)
+            _previewDirty = true;
+        }
+
+        private static void MakeMatte(Material material)
+        {
+            if (material == null) return;
+
+            // Painted wood, clay brick and stone are not mirrors. Keeping the
+            // gloss down stops the small pieces from turning into white specular
+            // blobs under the sky and hides the texture detail.
+            if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0.16f);
+            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0.16f);
+            if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0.04f);
+        }
+
+        private static void ApplyPieceTexture(Material material, Texture texture)
+        {
+            if (material == null || texture == null) return;
+
+            material.mainTexture = texture;
+            if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", texture);
+            if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", texture);
+        }
+
+        /// <summary>
+        /// Builds one small procedural texture per piece kind so a brick reads
+        /// as brickwork, a plank as boards, a beam as ribbed steel, a log as
+        /// bark and the ball as stitched panels. Every value stays between
+        /// white and mid grey, so the piece color tints the pattern instead of
+        /// being painted over by it.
+        /// </summary>
+        private static Texture2D CreatePieceTexture(int kind)
+        {
+            const int size = 64;
+
+            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
             {
-                _pieceMaterial = new Material(pieceShader) { color = Color.white };
-                if (_blockTexture != null)
+                wrapMode = TextureWrapMode.Repeat,
+                filterMode = FilterMode.Bilinear,
+                anisoLevel = 2,
+                name = "CascadePieceTexture" + kind
+            };
+
+            Color[] pixels = new Color[size * size];
+
+            switch (kind)
+            {
+                case 0: BrickPattern(pixels, size); break;
+                case 1: PlankPattern(pixels, size); break;
+                case 2: MetalPattern(pixels, size); break;
+                case 3: BarkPattern(pixels, size); break;
+                case 4: BallPattern(pixels, size); break;
+                default: FillPattern(pixels, 0.92f); break;
+            }
+
+            texture.SetPixels(pixels);
+            texture.Apply(false, true);
+            return texture;
+        }
+
+        // Running-bond brickwork: staggered courses, dark mortar, a highlight
+        // along each brick's top edge and a shadow along its bottom.
+        private static void BrickPattern(Color[] pixels, int size)
+        {
+            const int rowHeight = 13;
+            const int brickWidth = 21;
+            const int mortar = 2;
+
+            for (int y = 0; y < size; y++)
+            {
+                int row = y / rowHeight;
+                int offset = (row & 1) == 0 ? 0 : brickWidth / 2;
+                int localY = y % rowHeight;
+
+                for (int x = 0; x < size; x++)
                 {
-                    _pieceMaterial.mainTexture = _blockTexture;
-                    if (_pieceMaterial.HasProperty("_BaseMap")) _pieceMaterial.SetTexture("_BaseMap", _blockTexture);
-                    if (_pieceMaterial.HasProperty("_MainTex")) _pieceMaterial.SetTexture("_MainTex", _blockTexture);
+                    int localX = (x + offset) % brickWidth;
+                    float value;
+
+                    if (localY < mortar || localX < mortar)
+                    {
+                        value = 0.58f; // mortar
+                    }
+                    else
+                    {
+                        int brick = row * 31 + (x + offset) / brickWidth;
+                        value = 0.91f + Noise(brick, row) * 0.09f;
+                        if (localY < mortar + 2 || localX < mortar + 2) value += 0.07f;
+                        if (localY > rowHeight - 3) value -= 0.09f;
+                    }
+
+                    pixels[y * size + x] = Grey(value);
                 }
             }
         }
 
-        private static Texture2D CreateBlockTexture()
+        // Four boards with wavy grain, a shadowed seam and a nail at each end.
+        private static void PlankPattern(Color[] pixels, int size)
         {
-            const int size = 64;
-            Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
-            {
-                wrapMode = TextureWrapMode.Repeat,
-                filterMode = FilterMode.Bilinear,
-                name = "CascadeBlockTexture"
-            };
+            const int plankHeight = 16;
+            const int nailInset = 4;
 
-            Color[] pixels = new Color[size * size];
-            Color faceColor = new Color(0.88f, 0.88f, 0.88f, 1f);
-            Color bevelLight = new Color(1.0f, 1.0f, 1.0f, 1f);
-            Color bevelDark = new Color(0.55f, 0.55f, 0.55f, 1f);
-            Color gridLine = new Color(0.68f, 0.68f, 0.68f, 1f);
-            Color cornerColor = new Color(0.42f, 0.42f, 0.42f, 1f);
+            for (int y = 0; y < size; y++)
+            {
+                int plank = y / plankHeight;
+                int localY = y % plankHeight;
+                float tone = 0.85f + Noise(plank, 7) * 0.12f;
+
+                for (int x = 0; x < size; x++)
+                {
+                    float value = tone;
+
+                    // Long grain lines running along the board.
+                    value += Mathf.Sin(x * 0.31f + plank * 3.1f +
+                                       Mathf.Sin(y * 0.5f) * 1.6f) * 0.035f;
+                    value += (Noise(x, y + plank * 17) - 0.5f) * 0.05f;
+
+                    if (localY < 2) value = 0.56f;           // seam between boards
+                    else if (localY < 4) value -= 0.1f;      // shadow under the seam
+
+                    int nailX = x % (size / 2);
+                    if ((nailX == nailInset || nailX == nailInset + 1) &&
+                        (localY == 6 || localY == plankHeight - 6))
+                    {
+                        value = 0.42f;
+                    }
+
+                    pixels[y * size + x] = Grey(value);
+                }
+            }
+        }
+
+        // Ribbed steel: bright ribs along the beam, dark grooves between them
+        // and a rivet where each rib meets a cross seam.
+        private static void MetalPattern(Color[] pixels, int size)
+        {
+            const int ribWidth = 16;
 
             for (int y = 0; y < size; y++)
             {
                 for (int x = 0; x < size; x++)
                 {
-                    Color c = faceColor;
+                    int rib = x % ribWidth;
+                    float value;
 
-                    // Outer border / bevel (3 pixels)
-                    bool isTop = y >= size - 3;
-                    bool isLeft = x < 3;
-                    bool isBottom = y < 3;
-                    bool isRight = x >= size - 3;
+                    if (rib < 2) value = 0.54f;
+                    else if (rib < 4) value = 1f;
+                    else if (rib > ribWidth - 4) value = 0.76f;
+                    else value = 0.9f;
 
-                    // Corner rivets / bolts
-                    int cornerDistX = Mathf.Min(x, size - 1 - x) - 4;
-                    int cornerDistY = Mathf.Min(y, size - 1 - y) - 4;
-                    if (cornerDistX * cornerDistX + cornerDistY * cornerDistY <= 2)
+                    value += (Noise(x / 2, y) - 0.5f) * 0.05f; // brushed grain
+
+                    if ((rib == 8 || rib == 9) && y % 32 >= 15 && y % 32 <= 17)
                     {
-                        c = cornerColor;
-                    }
-                    else if (isTop || isLeft)
-                    {
-                        c = bevelLight;
-                    }
-                    else if (isBottom || isRight)
-                    {
-                        c = bevelDark;
-                    }
-                    else if (x == size / 2 || y == size / 2) // Inner 1px cross seam
-                    {
-                        c = gridLine;
-                    }
-                    else
-                    {
-                        // Subtle ambient noise / texture grain so it's not totally flat
-                        float grain = ((x * 17 + y * 31) % 7) * 0.012f - 0.036f;
-                        c = new Color(faceColor.r + grain, faceColor.g + grain, faceColor.b + grain, 1f);
+                        value = 1f;
                     }
 
-                    pixels[y * size + x] = c;
+                    pixels[y * size + x] = Grey(value);
                 }
             }
+        }
 
-            tex.SetPixels(pixels);
-            tex.Apply(false, true);
-            return tex;
+        // Bark: wobbly vertical strips so the log reads as a trunk from any side.
+        private static void BarkPattern(Color[] pixels, int size)
+        {
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float wobble = Mathf.Sin(y * 0.17f + x * 0.05f) * 3f;
+                    int band = Mathf.FloorToInt((x + wobble) / 8f);
+                    float value = 0.82f + (band & 1) * 0.15f;
+                    value += (Noise(band, y / 3) - 0.5f) * 0.12f;
+
+                    if (((x + Mathf.RoundToInt(wobble)) % 8) == 0)
+                    {
+                        value *= 0.7f; // deep groove between bark plates
+                    }
+
+                    pixels[y * size + x] = Grey(value);
+                }
+            }
+        }
+
+        // Stitched ball: eight alternating panels with seam lines.
+        private static void BallPattern(Color[] pixels, int size)
+        {
+            const int panelWidth = 8;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    int panel = x / panelWidth;
+                    float value = 0.82f + (panel & 1) * 0.18f;
+                    value += (Noise(panel, panel * 3) - 0.5f) * 0.07f;
+
+                    if (x % panelWidth == 0) value = 0.6f; // seam between panels
+                    if (y % 21 == 0) value = 0.66f;        // cross seam
+
+                    pixels[y * size + x] = Grey(value);
+                }
+            }
+        }
+
+        private static void FillPattern(Color[] pixels, float value)
+        {
+            Color color = Grey(value);
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = color;
+        }
+
+        private static Color Grey(float value)
+        {
+            value = Mathf.Clamp01(value);
+            return new Color(value, value, value, 1f);
+        }
+
+        /// <summary>Cheap deterministic noise, so textures rebuild identically.</summary>
+        private static float Noise(int x, int y)
+        {
+            int hash = (x * 73856093) ^ (y * 19349663);
+            hash = (hash ^ (hash >> 13)) * 1274126177;
+            return ((hash >> 8) & 255) / 255f;
         }
 
         private void BuildVisuals()
@@ -1614,7 +1818,13 @@ namespace CascadeMenu.Mods
             Renderer renderer = go.GetComponent<Renderer>();
             if (renderer != null)
             {
-                if (_ghostMaterial != null) renderer.sharedMaterial = _ghostMaterial;
+                if (_ghostMaterial != null)
+                {
+                    _ghostMaterial.mainTexture = _textured
+                        ? _pieceTextures[Mathf.Clamp(pieceIndex, 0, _pieceTextures.Length - 1)]
+                        : null;
+                    renderer.sharedMaterial = _ghostMaterial;
+                }
                 renderer.shadowCastingMode = ShadowCastingMode.Off;
                 renderer.receiveShadows = false;
             }
