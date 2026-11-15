@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using BepInEx.Logging;
@@ -46,6 +46,9 @@ namespace CascadeMenu
         private bool _screenMode;
 
         private float _nextModeCheck;
+
+        public static readonly Vector2 DefaultWindowOffset = new Vector2(260f, 0f);
+        public const float MenuWindowScale = 0.75f;
 
         private CascadeWindow _window;
 
@@ -889,7 +892,8 @@ namespace CascadeMenu
             EnsureTheme();
             RefreshAutoTheme();
             int page = ResolveSavedPage();
-            _windowOffset = Vector2.zero;
+            // Position on the right side of the screen
+            _windowOffset = DefaultWindowOffset;
             _windowRotation = Quaternion.identity;
             _open = true;
             BuildWindow(page);
@@ -903,7 +907,7 @@ namespace CascadeMenu
             base.StopAllCoroutines();
             _window.gameObject.SetActive(true);
             _windowGroup.alpha = 0f;
-            _window.transform.localScale = Vector3.one * 0.97f;
+            _window.transform.localScale = Vector3.one * (MenuWindowScale * 0.97f);
             _hovered = null;
             _pressed = null;
             _draggingSlider = null;
@@ -1120,7 +1124,7 @@ namespace CascadeMenu
                 }
                 if (_window != null)
                 {
-                    _window.transform.localScale = Vector3.one * Mathf.Lerp(0.97f, 1f, num2);
+                    _window.transform.localScale = Vector3.one * (MenuWindowScale * Mathf.Lerp(0.97f, 1f, num2));
                 }
                 yield return null;
             }
@@ -1130,7 +1134,7 @@ namespace CascadeMenu
             }
             if (_open && _window != null)
             {
-                _window.transform.localScale = Vector3.one;
+                _window.transform.localScale = Vector3.one * MenuWindowScale;
             }
         }
 
@@ -1148,14 +1152,14 @@ namespace CascadeMenu
                 }
                 if (_window != null)
                 {
-                    _window.transform.localScale = Vector3.one * Mathf.Lerp(1f, 0.97f, num);
+                    _window.transform.localScale = Vector3.one * (MenuWindowScale * Mathf.Lerp(1f, 0.97f, num));
                 }
                 yield return null;
             }
             if (!_open && _window != null)
             {
                 _window.gameObject.SetActive(false);
-                _window.transform.localScale = Vector3.one;
+                _window.transform.localScale = Vector3.one * MenuWindowScale;
                 if (_windowGroup != null)
                 {
                     _windowGroup.alpha = 1f;
@@ -1448,7 +1452,7 @@ namespace CascadeMenu
                 {
                     _windowGroup.alpha = 1f;
                 }
-                _window.transform.localScale = Vector3.one;
+                _window.transform.localScale = Vector3.one * MenuWindowScale;
                 UpdateCanvasTransform(forceSnap: false);
                 if (!string.IsNullOrEmpty(text) || flag)
                 {
@@ -1741,7 +1745,7 @@ namespace CascadeMenu
                 {
                     _windowGroup.alpha = 1f;
                 }
-                _window.transform.localScale = Vector3.one;
+                _window.transform.localScale = Vector3.one * MenuWindowScale;
                 UpdateCanvasTransform(forceSnap: false);
                 if (!string.IsNullOrEmpty(text) || flag)
                 {
@@ -1841,7 +1845,7 @@ namespace CascadeMenu
             if (_window != null && _open)
             {
                 _window.gameObject.SetActive(true);
-                _window.transform.localScale = Vector3.one;
+                _window.transform.localScale = Vector3.one * MenuWindowScale;
             }
 
             _hovered = null;
@@ -2080,16 +2084,24 @@ namespace CascadeMenu
             _window.NavigateTo(num, recordHistory: true);
         }
 
+        public void GoBack()
+        {
+            if (_window != null)
+            {
+                _window.GoBack();
+            }
+        }
+
         public void RecenterMenu()
         {
             _snap = true;
-            _windowOffset = Vector2.zero;
+            _windowOffset = DefaultWindowOffset;
             _windowRotation = Quaternion.identity;
             _windowDragging = false;
             _windowRolling = false;
             if (_window != null)
             {
-                _window.SetWindowPosition(Vector2.zero);
+                _window.SetWindowPosition(DefaultWindowOffset);
                 _window.SetWindowRotation(Quaternion.identity);
             }
             if (_open)

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using GorillaLocomotion;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -15,8 +15,9 @@ namespace CascadeMenu.Mods
     /// - Optional grip gating (VR grip, configurable PC mouse/key stand-in).
     /// - Selectable grip hand and beam hand.
     /// - Config-driven beam width, ring size, max distance and colors.
-    /// - A visibility-filtered, non-allocating raycast that passes through
-    ///   invisible colliders and triggers instead of stopping on them.
+    /// - A non-allocating raycast that stops on everything solid: world
+    ///   geometry, props and construction pieces, whether or not the collider
+    ///   belongs to a visible renderer. Triggers are still ignored.
     ///
     /// The beam end and the target ring both use the same accepted hit point.
     /// Disabled or grip-released states return before the aim ray and raycast,
@@ -40,18 +41,21 @@ namespace CascadeMenu.Mods
         internal static VRRig MarkedRig { get; private set; }
         internal static Action<RaycastHit, VRRig, NetPlayer> ActiveGunAction { get; private set; }
         internal static float ActiveGunCooldown { get; private set; } = 0.25f;
+        internal static bool ActiveGunNeedsRaycast { get; private set; }
         private static float _lastFireTime;
 
-        internal static void SetActiveGun(Action<RaycastHit, VRRig, NetPlayer> action, float cooldown = 0.25f)
+        internal static void SetActiveGun(Action<RaycastHit, VRRig, NetPlayer> action, float cooldown = 0.25f, bool needsRaycast = false)
         {
             ActiveGunAction = action;
             ActiveGunCooldown = Mathf.Max(0.05f, cooldown);
+            ActiveGunNeedsRaycast = needsRaycast;
         }
 
         internal static void ClearActiveGun()
         {
             ActiveGunAction = null;
             ActiveGunCooldown = 0.25f;
+            ActiveGunNeedsRaycast = false;
         }
 
         internal static void CycleColor()
@@ -135,7 +139,7 @@ namespace CascadeMenu.Mods
             BuildVisuals();
             RefreshColors(true);
             ProfilerStats.Register(ProfilerStats.GunLibKey, "GunLib",
-                "Aim ray, visibility-filtered raycast, beam and ring");
+                "Aim ray, solid-surface raycast, beam and ring");
             Plugin.Log?.LogInfo("Cascade gun ready. Enabled=" + config.GunEnabled.Value +
                                 " RequireGrip=" + config.GunRequireGrip.Value +
                                 " Module=" + config.GunModule.Value);
@@ -344,11 +348,16 @@ namespace CascadeMenu.Mods
 
             VRRig currentRig = null;
             RaycastHit solidHit = default;
-            bool solidFound = FindNearestHit(origin, direction, maxDistance, out solidHit);
+            bool solidFound = false;
 
-            // Walls/props clamp how far a player can still be targeted. Because
-            // invisible colliders are filtered out, the ray passes through them
-            // and keeps going to the first visible surface.
+            // Only perform physics raycast against environment when the active gun requires it (e.g. surface spawn/teleport)
+            bool performRaycast = ActiveGunAction != null ? ActiveGunNeedsRaycast : false;
+            if (performRaycast)
+            {
+                solidFound = FindNearestHit(origin, direction, maxDistance, out solidHit);
+            }
+
+            // Walls/props clamp how far a player can still be targeted when raycast is active.
             float solidDistance = solidFound ? solidHit.distance : maxDistance;
 
             RaycastHit fireHit = solidHit;
@@ -655,10 +664,10 @@ namespace CascadeMenu.Mods
         // -----------------------------------------------------------------
 
         /// <summary>
-        /// Nearest visible surface the beam can touch. Triggers are ignored by
-        /// the physics query; invisible or disabled renderers are rejected in
-        /// the loop, so an invisible blocker does not stop the beam. The array
-        /// and mask are reused, so this allocates nothing.
+        /// Nearest solid surface the beam can touch. Triggers are ignored by
+        /// the physics query; anything with an enabled collider counts, so
+        /// invisible blockers and props without a renderer still stop the beam.
+        /// The array and mask are reused, so this allocates nothing.
         /// </summary>
         private bool FindNearestHit(Vector3 origin, Vector3 direction, float maxDistance, out RaycastHit best)
         {
@@ -675,7 +684,7 @@ namespace CascadeMenu.Mods
                 if (candidate.collider == null) continue;
                 if (candidate.distance >= nearest) continue;
                 if (IsLocalPlayerCollider(candidate.collider)) continue;
-                if (!IsVisibleCollider(candidate.collider)) continue;
+                if (!IsSolidCollider(candidate.collider)) continue;
 
                 nearest = candidate.distance;
                 best = candidate;
@@ -686,32 +695,18 @@ namespace CascadeMenu.Mods
         }
 
         /// <summary>
-        /// A collider only counts if it belongs to something the player can
-        /// actually see: an enabled Renderer with a material, not a trigger and
-        /// not an overlay line. A collider with no renderer at all is invisible
-        /// geometry and is skipped.
+        /// Everything physical blocks the gun. Only disabled colliders,
+        /// triggers and overlay-only renderers (beams and trails) are skipped,
+        /// so construction pieces and invisible world blockers behave like
+        /// normal solid geometry.
         /// </summary>
-        private static bool IsVisibleCollider(Collider collider)
+        private static bool IsSolidCollider(Collider collider)
         {
             if (collider == null || !collider.enabled || !collider.gameObject.activeInHierarchy) return false;
             if (collider.isTrigger) return false;
 
             Renderer renderer = FindRenderer(collider);
-            if (renderer == null) return false;
-            if (!renderer.enabled || !renderer.gameObject.activeInHierarchy) return false;
             if (renderer is LineRenderer || renderer is TrailRenderer) return false;
-
-            Material material = renderer.sharedMaterial;
-            if (material == null) return false;
-
-            try
-            {
-                if (material.HasProperty("_Color") && material.color.a <= 0.01f) return false;
-            }
-            catch (Exception)
-            {
-                // Some custom shaders throw when reading color; treat as visible.
-            }
 
             return true;
         }

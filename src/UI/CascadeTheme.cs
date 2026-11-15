@@ -139,9 +139,9 @@ namespace CascadeMenu.UI
     /// </summary>
     internal sealed class CascadeTheme
     {
-        public const float WindowWidth = 850f;
-        public const float WindowHeight = 530f;
-        public const float SidebarWidth = 200f;
+        public const float WindowWidth = 620f;
+        public const float WindowHeight = 400f;
+        public const float SidebarWidth = 160f;
         public const float TitlebarHeight = 52f;
         public const float CornerRadius = 10f;
 

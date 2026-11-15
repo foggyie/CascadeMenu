@@ -149,9 +149,10 @@ namespace CascadeMenu.Mods
         private int _piece;
         private float _size = 1f;
         private int _colorStyle;
-        private int _snap;
+        private int _snap = 2;
         private int _rotation;
         private bool _autoWeld = true;
+        private bool _fixedPieces = true;
         private float _weldRadius = 0.4f;
         private float _weldStrength = 3500f;
         private float _weldRange = 4f;
@@ -184,6 +185,7 @@ namespace CascadeMenu.Mods
         private Material _ghostMaterial;
         private Material _pieceMaterial;
         private Material _projectileMaterial;
+        private Texture2D _blockTexture;
 
         private ConstructionPiece _selected;
         private ConstructionPiece _hover;
@@ -252,7 +254,7 @@ namespace CascadeMenu.Mods
                 }));
 
             AddSetting(ModSetting.Dropdown("snap", "Grid snap",
-                "Snap the aim point to a world grid before placing",
+                "Snap the aim point to a world grid, like block building",
                 SnapNames,
                 () => _snap,
                 value => _snap = Mathf.Clamp(value, 0, SnapNames.Length - 1)));
@@ -263,6 +265,11 @@ namespace CascadeMenu.Mods
                 () => _rotation,
                 value => _rotation = Mathf.Clamp(value, 0, 7),
                 value => (value * 45) + " deg"));
+
+            AddSetting(ModSetting.Toggle("fixed", "Static pieces",
+                "Placed blocks stay where you put them like a real build; explosions still knock them loose",
+                () => _fixedPieces,
+                value => _fixedPieces = value));
 
             AddSetting(ModSetting.Toggle("autoweld", "Auto-weld",
                 "Weld each new piece to the nearest piece inside the auto-weld radius",
@@ -427,6 +434,11 @@ namespace CascadeMenu.Mods
             DisposeMaterial(_ghostMaterial);
             DisposeMaterial(_pieceMaterial);
             DisposeMaterial(_projectileMaterial);
+            if (_blockTexture != null)
+            {
+                UnityEngine.Object.Destroy(_blockTexture);
+                _blockTexture = null;
+            }
             _beamMaterial = null;
             _ghostMaterial = null;
             _pieceMaterial = null;
@@ -711,6 +723,29 @@ namespace CascadeMenu.Mods
                 _aimNormal = -direction;
                 _aimPiece = null;
             }
+
+            if (_aimPiece == null && _pieces.Count > 0)
+            {
+                // Fallback piece detection for no-collider mode: find closest piece along aim beam
+                float bestRayDistSq = 0.5f; // within 0.7m radius of beam
+                for (int i = 0; i < _pieces.Count; i++)
+                {
+                    ConstructionPiece p = _pieces[i];
+                    if (p == null) continue;
+                    Vector3 toPiece = p.transform.position - origin;
+                    float proj = Vector3.Dot(toPiece, direction);
+                    if (proj < 0.2f || proj > maxDistance) continue;
+                    Vector3 ptOnRay = origin + direction * proj;
+                    float distSq = (p.transform.position - ptOnRay).sqrMagnitude;
+                    if (distSq < bestRayDistSq)
+                    {
+                        bestRayDistSq = distSq;
+                        _aimPiece = p;
+                        _aimPoint = p.transform.position;
+                        _hasSurface = true;
+                    }
+                }
+            }
         }
 
         private bool FindAimHit(Vector3 origin, Vector3 direction, float maxDistance, out RaycastHit best)
@@ -858,14 +893,25 @@ namespace CascadeMenu.Mods
 
             Rigidbody body = go.AddComponent<Rigidbody>();
             body.mass = Mathf.Clamp(spec.Mass * size * size * size, 0.3f, 90f);
-            body.interpolation = RigidbodyInterpolation.Interpolate;
-            body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             body.maxAngularVelocity = 18f;
+
+            // Static pieces are real building blocks: solid to stand on and
+            // climb, but they stay exactly where they were placed instead of
+            // rolling away. An explosion switches them back to dynamic first.
+            body.isKinematic = _fixedPieces;
+            if (!_fixedPieces)
+            {
+                body.interpolation = RigidbodyInterpolation.Interpolate;
+                body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            }
 
             ConstructionPiece piece = go.AddComponent<ConstructionPiece>();
             piece.Kind = pieceIndex;
             piece.Body = body;
             piece.Col = go.GetComponent<Collider>();
+            // No physics collisions with players; the piece stays in place via kinematic rigidbody
+            if (piece.Col != null) piece.Col.enabled = false;
+            body.isKinematic = true;
             piece.Render = go.GetComponent<Renderer>();
             piece.Block = new MaterialPropertyBlock();
             piece.BaseColor = BaseColorFor(pieceIndex);
@@ -880,7 +926,7 @@ namespace CascadeMenu.Mods
             _highlightDirty = true;
 
             Physics.SyncTransforms();
-            if (_autoWeld) AutoWeld(piece);
+            if (_autoWeld && !_fixedPieces) AutoWeld(piece);
         }
 
         private void DoWeld()
@@ -1023,6 +1069,14 @@ namespace CascadeMenu.Mods
                 ConstructionPiece piece = collider.GetComponentInParent<ConstructionPiece>();
                 if (piece == null || piece.Body == null) continue;
 
+                // A static piece has to be released before force can move it.
+                if (piece.Body.isKinematic)
+                {
+                    piece.Body.isKinematic = false;
+                    piece.Body.useGravity = true;
+                    piece.Body.WakeUp();
+                }
+
                 piece.Body.AddExplosionForce(force, center, radius, 1.2f, ForceMode.Impulse);
 
                 if (!_destroyBuffer.Contains(piece))
@@ -1035,9 +1089,12 @@ namespace CascadeMenu.Mods
             for (int i = 0; i < _destroyBuffer.Count; i++)
             {
                 ConstructionPiece piece = _destroyBuffer[i];
-                if (piece == null || piece.Col == null) continue;
+                if (piece == null) continue;
 
-                Vector3 closest = piece.Col.ClosestPoint(center);
+                // Use transform position when collider is disabled (no-collider mode)
+                Vector3 closest = (piece.Col != null && piece.Col.enabled)
+                    ? piece.Col.ClosestPoint(center)
+                    : piece.transform.position;
                 if ((closest - center).sqrMagnitude > destroyRadius * destroyRadius) continue;
 
                 DestroyPiece(piece);
@@ -1126,21 +1183,19 @@ namespace CascadeMenu.Mods
 
         private void AutoWeld(ConstructionPiece piece)
         {
-            if (!_autoWeld || piece == null || piece.Col == null) return;
+            if (!_autoWeld || piece == null) return;
 
-            Bounds bounds = piece.Col.bounds;
-            bounds.Expand(Mathf.Max(0f, _weldRadius));
-
+            float weldDist = Mathf.Max(0.1f, _weldRadius);
             ConstructionPiece best = null;
             float bestDistance = float.MaxValue;
 
             for (int i = 0; i < _pieces.Count; i++)
             {
                 ConstructionPiece other = _pieces[i];
-                if (other == null || other == piece || other.Col == null) continue;
-                if (!bounds.Intersects(other.Col.bounds)) continue;
+                if (other == null || other == piece) continue;
 
                 float distance = (other.transform.position - piece.transform.position).sqrMagnitude;
+                if (distance > weldDist * weldDist * 4f) continue;
                 if (distance >= bestDistance) continue;
 
                 bestDistance = distance;
@@ -1329,11 +1384,86 @@ namespace CascadeMenu.Mods
             _ghostMaterial = NewUnlitMaterial(new Color(0.35f, 0.75f, 1f, 0.34f), 3000);
             _projectileMaterial = NewUnlitMaterial(new Color(1f, 0.6f, 0.2f, 1f), 4100);
 
+            if (_blockTexture == null)
+            {
+                _blockTexture = CreateBlockTexture();
+            }
+
             Shader pieceShader = FindPieceShader();
             if (pieceShader != null)
             {
                 _pieceMaterial = new Material(pieceShader) { color = Color.white };
+                if (_blockTexture != null)
+                {
+                    _pieceMaterial.mainTexture = _blockTexture;
+                    if (_pieceMaterial.HasProperty("_BaseMap")) _pieceMaterial.SetTexture("_BaseMap", _blockTexture);
+                    if (_pieceMaterial.HasProperty("_MainTex")) _pieceMaterial.SetTexture("_MainTex", _blockTexture);
+                }
             }
+        }
+
+        private static Texture2D CreateBlockTexture()
+        {
+            const int size = 64;
+            Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                wrapMode = TextureWrapMode.Repeat,
+                filterMode = FilterMode.Bilinear,
+                name = "CascadeBlockTexture"
+            };
+
+            Color[] pixels = new Color[size * size];
+            Color faceColor = new Color(0.88f, 0.88f, 0.88f, 1f);
+            Color bevelLight = new Color(1.0f, 1.0f, 1.0f, 1f);
+            Color bevelDark = new Color(0.55f, 0.55f, 0.55f, 1f);
+            Color gridLine = new Color(0.68f, 0.68f, 0.68f, 1f);
+            Color cornerColor = new Color(0.42f, 0.42f, 0.42f, 1f);
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    Color c = faceColor;
+
+                    // Outer border / bevel (3 pixels)
+                    bool isTop = y >= size - 3;
+                    bool isLeft = x < 3;
+                    bool isBottom = y < 3;
+                    bool isRight = x >= size - 3;
+
+                    // Corner rivets / bolts
+                    int cornerDistX = Mathf.Min(x, size - 1 - x) - 4;
+                    int cornerDistY = Mathf.Min(y, size - 1 - y) - 4;
+                    if (cornerDistX * cornerDistX + cornerDistY * cornerDistY <= 2)
+                    {
+                        c = cornerColor;
+                    }
+                    else if (isTop || isLeft)
+                    {
+                        c = bevelLight;
+                    }
+                    else if (isBottom || isRight)
+                    {
+                        c = bevelDark;
+                    }
+                    else if (x == size / 2 || y == size / 2) // Inner 1px cross seam
+                    {
+                        c = gridLine;
+                    }
+                    else
+                    {
+                        // Subtle ambient noise / texture grain so it's not totally flat
+                        float grain = ((x * 17 + y * 31) % 7) * 0.012f - 0.036f;
+                        c = new Color(faceColor.r + grain, faceColor.g + grain, faceColor.b + grain, 1f);
+                    }
+
+                    pixels[y * size + x] = c;
+                }
+            }
+
+            tex.SetPixels(pixels);
+            tex.Apply(false, true);
+            return tex;
         }
 
         private void BuildVisuals()

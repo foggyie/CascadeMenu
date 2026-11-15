@@ -26,29 +26,33 @@ namespace CascadeMenu.Mods
     [PluginToggleable]
     public sealed class VoiceIndicator : Mod
     {
-        // Canvas is authored at 380xN UI units, then scaled to ~22 cm wide.
-        private const float CanvasWidth = 380f;
-        private const float CanvasScale = 0.0006f;
-        private const float Padding = 8f;
-        private const float RowHeight = 40f;
-        private const float RowGap = 4f;
-        private const float IconSize = 22f;
-        private const float IconGap = 8f;
-        private const float BoxHeight = 34f;
+        // Canvas is authored at 260xN UI units, then scaled to ~13 cm wide.
+        private const float CanvasWidth = 260f;
+        private const float CanvasScale = 0.0005f;
+        private const float Padding = 3f;
+        private const float RowHeight = 26f;
+        private const float RowGap = 1f;
+        private const float IconSize = 15f;
+        private const float IconGap = 5f;
+        private const float BoxHeight = 22f;
         private const float RowWidth = CanvasWidth - Padding * 2f;
         private const float BoxX = Padding + IconSize + IconGap;
         private const float BoxWidth = CanvasWidth - BoxX - Padding;
         private const float FadeSpeed = 12f;
         private const float RosterInterval = 0.3f;
 
-        private const int PositionTopLeft = 0;
-        private const int PositionTopRight = 1;
-        private const int PositionBottomLeft = 2;
-        private const int PositionBottomRight = 3;
-        private const int PositionTopCenter = 4;
+        // Right center is index 0 so installs that still have the old default
+        // saved (Top left) move to the right edge with this update.
+        private const int PositionRightCenter = 0;
+        private const int PositionTopLeft = 1;
+        private const int PositionTopRight = 2;
+        private const int PositionBottomLeft = 3;
+        private const int PositionBottomRight = 4;
+        private const int PositionTopCenter = 5;
 
         private static readonly string[] PositionNames =
         {
+            "Right center",
             "Top left",
             "Top right",
             "Bottom left",
@@ -94,7 +98,7 @@ namespace CascadeMenu.Mods
         // ---------------------------------------------------------------
         // Settings (persisted by ModRegistry through ModSetting)
         // ---------------------------------------------------------------
-        private int _position = PositionTopLeft;
+        private int _position = PositionRightCenter;
         private int _nameColor;
         private float _size = 1f;
         private float _opacity = 0.92f;
@@ -430,15 +434,8 @@ namespace CascadeMenu.Mods
             _canvasRect.localRotation = Quaternion.identity;
             ApplyPlacement();
 
-            // Rounded glass backing so names stay readable over any map.
-            RectTransform backgroundRect = CascadeUI.Rect("Background", _canvasRect);
-            CascadeUI.Stretch(backgroundRect);
-            Image background = backgroundRect.gameObject.AddComponent<Image>();
-            background.sprite = CascadeSprites.Rounded(12);
-            background.type = Image.Type.Sliced;
-            background.color = new Color(0.04f, 0.045f, 0.06f, 0.72f);
-            background.raycastTarget = false;
-
+            // No backing panel: the colored name chips are the only graphics,
+            // so the list floats free on the right side of the view.
             CanvasGroup group = root.GetComponent<CanvasGroup>();
             group.alpha = 1f;
             group.blocksRaycasts = false;
@@ -479,11 +476,11 @@ namespace CascadeMenu.Mods
 
             RectTransform boxRect = CascadeUI.TopLeft("Name box", holderRect,
                 IconSize + IconGap, (RowHeight - BoxHeight) * 0.5f, BoxWidth, BoxHeight);
-            row.Box = CascadeUI.Panel(boxRect, Color.white, 9);
+            row.Box = CascadeUI.Panel(boxRect, Color.white, 6);
 
             RectTransform nameRect = CascadeUI.TopLeft("Name", boxRect,
-                12f, 0f, BoxWidth - 24f, BoxHeight);
-            row.Name = CascadeUI.Text(nameRect, string.Empty, 18f, Color.white,
+                8f, 0f, BoxWidth - 16f, BoxHeight);
+            row.Name = CascadeUI.Text(nameRect, string.Empty, 14f, Color.white,
                 TextAlignmentOptions.MidlineLeft, true, false);
 
             row.Root = rowRect.gameObject;
@@ -518,25 +515,29 @@ namespace CascadeMenu.Mods
 
             switch (_position)
             {
+                case PositionTopLeft:
+                    pivot = new Vector2(0f, 1f);
+                    position = new Vector3(-0.30f, 0.13f, 0.6f);
+                    break;
                 case PositionTopRight:
                     pivot = new Vector2(1f, 1f);
-                    position = new Vector3(0.20f, 0.13f, 0.6f);
+                    position = new Vector3(0.30f, 0.13f, 0.6f);
                     break;
                 case PositionBottomLeft:
                     pivot = new Vector2(0f, 0f);
-                    position = new Vector3(-0.20f, -0.13f, 0.6f);
+                    position = new Vector3(-0.30f, -0.13f, 0.6f);
                     break;
                 case PositionBottomRight:
                     pivot = new Vector2(1f, 0f);
-                    position = new Vector3(0.20f, -0.13f, 0.6f);
+                    position = new Vector3(0.30f, -0.13f, 0.6f);
                     break;
                 case PositionTopCenter:
                     pivot = new Vector2(0.5f, 1f);
                     position = new Vector3(0f, 0.14f, 0.6f);
                     break;
                 default:
-                    pivot = new Vector2(0f, 1f);
-                    position = new Vector3(-0.20f, 0.13f, 0.6f);
+                    pivot = new Vector2(1f, 0.5f);
+                    position = new Vector3(0.30f, 0f, 0.6f);
                     break;
             }
 

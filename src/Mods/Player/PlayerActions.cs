@@ -1179,6 +1179,9 @@ namespace CascadeMenu.Mods
             page.Tag = PlayerTag(id);
             page.HiddenFromSidebar = true;
 
+            page.Section("Navigation", string.Empty)
+                .Button("Close Player View", "Return to the player list", "Close", () => menu.GoBack(), true);
+
             page.Section("Live preview", "Their actual gorilla, rendered from the live rig")
                 .Portrait(name, SafePlatform(player), () => FindRigObject(player), () => GetPlayerColor(player));
 
