@@ -48,10 +48,25 @@ namespace CascadeMenu.Mods
             public float Mass;
             public Color Color;
             public bool SideMount;
+
+            /// <summary>
+            /// A full cube that lives in its own cubic cell, so blocks tile
+            /// seamlessly instead of overlapping or leaving half-block gaps.
+            /// </summary>
+            public bool IsBlock;
         }
 
         private static readonly PieceSpec[] Specs =
         {
+            // Block - a full cube that snaps into its own world-aligned cell
+            new PieceSpec
+            {
+                Primitive = PrimitiveType.Cube,
+                Scale = new Vector3(0.5f, 0.5f, 0.5f),
+                Mass = 6f,
+                Color = new Color(0.74f, 0.71f, 0.68f, 1f),
+                IsBlock = true
+            },
             // Brick
             new PieceSpec
             {
@@ -105,6 +120,7 @@ namespace CascadeMenu.Mods
 
         private static readonly string[] PieceNames =
         {
+            "Block",
             "Brick",
             "Plank",
             "Beam",
@@ -265,13 +281,13 @@ namespace CascadeMenu.Mods
                 }));
 
             AddSetting(ModSetting.Dropdown("snap", "Grid snap",
-                "Snap the aim point to a world grid, like block building",
+                "Snap the aim point to a world grid, like block building (the Block piece always uses its own cube grid)",
                 SnapNames,
                 () => _snap,
                 value => _snap = Mathf.Clamp(value, 0, SnapNames.Length - 1)));
 
             AddSetting(ModSetting.Stepper("rotation", "Rotation",
-                "Yaw applied to a placed piece, in 45-degree steps",
+                "Yaw applied to a placed piece, in 45-degree steps (blocks use whole quarter turns)",
                 0, 7,
                 () => _rotation,
                 value => _rotation = Mathf.Clamp(value, 0, 7),
@@ -806,6 +822,29 @@ namespace CascadeMenu.Mods
             normal.Normalize();
 
             Vector3 point = _aimPoint;
+
+            if (spec.IsBlock)
+            {
+                // Minecraft-style cells: the block fills the cell the aim ray
+                // enters, so floors, walls and towers tile with no gaps and no
+                // half-block overlaps. Blocks also stay upright instead of
+                // tilting to whatever surface they were placed against.
+                float cell = Mathf.Max(0.1f, scale.x);
+                Vector3 cellPoint = point + normal * (cell * 0.5f);
+
+                _placementPosition = new Vector3(
+                    (Mathf.Floor(cellPoint.x / cell) + 0.5f) * cell,
+                    (Mathf.Floor(cellPoint.y / cell) + 0.5f) * cell,
+                    (Mathf.Floor(cellPoint.z / cell) + 0.5f) * cell);
+
+                // Quarter turns only, so a wall never ends up slightly askew.
+                float quarter = Mathf.Round(Mathf.Clamp(_rotation, 0, 7) * 45f / 90f) * 90f;
+                _placementRotation = Quaternion.AngleAxis(quarter, Vector3.up);
+
+                _placementValid = _hasSurface && _pieces.Count < Mathf.Max(1, _maxPieces);
+                return;
+            }
+
             int snapIndex = Mathf.Clamp(_snap, 0, SnapSteps.Length - 1);
             float step = SnapSteps[snapIndex];
             if (step > 0f)
@@ -892,10 +931,16 @@ namespace CascadeMenu.Mods
 
         private void PlacePiece()
         {
-            if (!_placementValid)
+            if (_pieces.Count >= Mathf.Max(1, _maxPieces))
             {
                 Notify("Piece limit reached (" + _maxPieces +
                        "). Clear the build or raise Max pieces.");
+                return;
+            }
+
+            if (!_placementValid)
+            {
+                Notify("Aim at a surface to place a piece.");
                 return;
             }
 
@@ -1493,10 +1538,11 @@ namespace CascadeMenu.Mods
             switch (kind)
             {
                 case 0: BrickPattern(pixels, size); break;
-                case 1: PlankPattern(pixels, size); break;
-                case 2: MetalPattern(pixels, size); break;
-                case 3: BarkPattern(pixels, size); break;
-                case 4: BallPattern(pixels, size); break;
+                case 1: BrickPattern(pixels, size); break;
+                case 2: PlankPattern(pixels, size); break;
+                case 3: MetalPattern(pixels, size); break;
+                case 4: BarkPattern(pixels, size); break;
+                case 5: BallPattern(pixels, size); break;
                 default: FillPattern(pixels, 0.92f); break;
             }
 
