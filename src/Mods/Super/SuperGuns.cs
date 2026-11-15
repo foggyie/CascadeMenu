@@ -58,7 +58,7 @@ namespace CascadeMenu.Mods.Super
                     Plugin.Log?.LogInfo($"[Super] Spawned {prefab.gameObject.name} at {pos}");
                 else
                     Plugin.Log?.LogWarning($"[Super] Failed to spawn {prefab.gameObject.name}");
-            }, cooldown: _cooldown, needsRaycast: true);
+            }, cooldown: _cooldown);
         }
 
         public override void OnDisable()

@@ -41,21 +41,18 @@ namespace CascadeMenu.Mods
         internal static VRRig MarkedRig { get; private set; }
         internal static Action<RaycastHit, VRRig, NetPlayer> ActiveGunAction { get; private set; }
         internal static float ActiveGunCooldown { get; private set; } = 0.25f;
-        internal static bool ActiveGunNeedsRaycast { get; private set; }
         private static float _lastFireTime;
 
-        internal static void SetActiveGun(Action<RaycastHit, VRRig, NetPlayer> action, float cooldown = 0.25f, bool needsRaycast = false)
+        internal static void SetActiveGun(Action<RaycastHit, VRRig, NetPlayer> action, float cooldown = 0.25f)
         {
             ActiveGunAction = action;
             ActiveGunCooldown = Mathf.Max(0.05f, cooldown);
-            ActiveGunNeedsRaycast = needsRaycast;
         }
 
         internal static void ClearActiveGun()
         {
             ActiveGunAction = null;
             ActiveGunCooldown = 0.25f;
-            ActiveGunNeedsRaycast = false;
         }
 
         internal static void CycleColor()
@@ -348,16 +345,13 @@ namespace CascadeMenu.Mods
 
             VRRig currentRig = null;
             RaycastHit solidHit = default;
-            bool solidFound = false;
 
-            // Only perform physics raycast against environment when the active gun requires it (e.g. surface spawn/teleport)
-            bool performRaycast = ActiveGunAction != null ? ActiveGunNeedsRaycast : false;
-            if (performRaycast)
-            {
-                solidFound = FindNearestHit(origin, direction, maxDistance, out solidHit);
-            }
+            // The beam always collides with the world. Skipping this query made
+            // the beam run straight through floors, walls and props whenever
+            // the active gun did not ask for a surface hit.
+            bool solidFound = FindNearestHit(origin, direction, maxDistance, out solidHit);
 
-            // Walls/props clamp how far a player can still be targeted when raycast is active.
+            // Walls/props clamp how far a player can still be targeted.
             float solidDistance = solidFound ? solidHit.distance : maxDistance;
 
             RaycastHit fireHit = solidHit;

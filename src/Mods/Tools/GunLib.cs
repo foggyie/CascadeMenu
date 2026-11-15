@@ -9,9 +9,9 @@ namespace CascadeMenu.Mods
     /// </summary>
     public static class GunLib
     {
-        public static void Update(Action<RaycastHit, VRRig, NetPlayer> onFire, float cooldown = 0.25f, bool needsRaycast = false)
+        public static void Update(Action<RaycastHit, VRRig, NetPlayer> onFire, float cooldown = 0.25f)
         {
-            GunLibController.SetActiveGun(onFire, cooldown, needsRaycast);
+            GunLibController.SetActiveGun(onFire, cooldown);
         }
 
         public static void Cleanup()
