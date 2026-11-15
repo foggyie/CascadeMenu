@@ -30,6 +30,7 @@ namespace CascadeMenu.UI
         private bool _muted;
         private Color _avatarColor = new Color(-1f, -1f, -1f, -1f);
         private float _nextPoll;
+        private int _themeVersion = -1;
 
         public void Configure(
             CascadeTheme theme,
@@ -46,6 +47,13 @@ namespace CascadeMenu.UI
 
         private void Update()
         {
+            if (_theme != null && _themeVersion != _theme.Version)
+            {
+                Apply(true);
+                _nextPoll = Time.unscaledTime + 0.12f;
+                return;
+            }
+
             if (Time.unscaledTime < _nextPoll) return;
             _nextPoll = Time.unscaledTime + 0.12f;
             Apply(false);
@@ -67,20 +75,24 @@ namespace CascadeMenu.UI
             bool tapping = IsTapping != null && IsTapping();
             bool muted = IsMuted != null && IsMuted();
 
-            if (!force && selected == _selected && tapping == _tapping && muted == _muted)
+            bool themeChanged = _theme != null && _themeVersion != _theme.Version;
+            if (!force && !themeChanged && selected == _selected && tapping == _tapping && muted == _muted)
             {
                 return;
             }
 
+            if (_theme != null) _themeVersion = _theme.Version;
             _selected = selected;
             _tapping = tapping;
             _muted = muted;
 
             if (Background != null && _theme != null)
             {
+                // Derived from the live theme so a preset switch repaints the
+                // selected and idle player cards without rebuilding the page.
                 Background.color = selected
-                    ? new Color(_theme.Accent.r, _theme.Accent.g, _theme.Accent.b, _theme.IsDark ? 0.22f : 0.16f)
-                    : (_theme.IsDark ? new Color(1f, 1f, 1f, 0.035f) : new Color(0f, 0f, 0f, 0.025f));
+                    ? _theme.Accent.WithAlpha(_theme.IsDark ? 0.22f : 0.16f)
+                    : _theme.AvatarBg.WithAlpha(_theme.IsDark ? 0.035f : 0.025f);
             }
 
             if (SelectionBar != null)
@@ -95,7 +107,7 @@ namespace CascadeMenu.UI
 
             if (NameLabel != null && _theme != null)
             {
-                NameLabel.color = muted ? _theme.TextTertiary : _theme.TextPrimary;
+                CascadeTheme.SetGraphicColor(NameLabel, muted ? _theme.TextTertiary : _theme.TextPrimary);
             }
 
             if (MuteLabel != null)

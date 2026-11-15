@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using InputKey = UnityEngine.InputSystem.Key;
 
 namespace CascadeMenu.Mods
@@ -20,11 +21,14 @@ namespace CascadeMenu.Mods
     /// Base class for modular toggles and actions imported from ResurgencePlugin,
     /// adapted for CascadeMenu.
     ///
-    /// A mod has two independent states:
-    /// - <see cref="Enabled"/>: the menu toggle. It arms the mod and lets its
-    ///   keybind work, but does not start the effect by itself.
-    /// - <see cref="IsActive"/>: the effect is actually running. Only the keybind
-    ///   or the menu's Activate button changes this.
+    /// The menu exposes one switch per mod, driven through
+    /// <see cref="ModRegistry.SetEffect"/>:
+    /// - switching on arms the mod and starts its effect in the same click;
+    /// - switching off stops the effect, runs cleanup and disarms the mod.
+    ///
+    /// The two underlying states remain available:
+    /// - <see cref="Enabled"/>: the menu switch / keybind permission.
+    /// - <see cref="IsActive"/>: the effect is actually running.
     ///
     /// Existing mods keep working unchanged: their OnEnable/OnDisable methods are
     /// called when the effect starts/stops, and OnActivate/OnDeactivate are extra
@@ -40,6 +44,57 @@ namespace CascadeMenu.Mods
 
         /// <summary>Single press toggles immediately; double press needs two taps.</summary>
         public ModPressType PressType { get; set; } = ModPressType.Single;
+
+        /// <summary>
+        /// True when this mod declares extra options. Only these mods draw a
+        /// gear on their row, so the rest keep the compact layout.
+        /// </summary>
+        public bool HasSettings { get; private set; }
+
+        private readonly List<ModSetting> _settings = new List<ModSetting>();
+
+        /// <summary>Options shown on this mod's generated settings page.</summary>
+        public IReadOnlyList<ModSetting> Settings
+        {
+            get { return _settings; }
+        }
+
+        /// <summary>
+        /// Registers one extra option and turns on the gear. Call this from the
+        /// mod's constructor; the registry persists the values automatically.
+        /// </summary>
+        protected ModSetting AddSetting(ModSetting setting)
+        {
+            if (setting == null) return null;
+            _settings.Add(setting);
+            HasSettings = true;
+            return setting;
+        }
+
+        /// <summary>
+        /// Marks the mod as having a settings page even without extra options.
+        /// </summary>
+        protected void EnableSettings()
+        {
+            HasSettings = true;
+        }
+
+        /// <summary>
+        /// True when this mod shows the Single/Double press selector. It stays
+        /// hidden by default; call <see cref="EnablePressChoice"/> only for mods
+        /// that actually want a double-press bind.
+        /// </summary>
+        public bool HasPressChoice { get; private set; }
+
+        /// <summary>
+        /// Opts this mod into the Single/Double press selector on its settings
+        /// page. Also turns on the settings gear.
+        /// </summary>
+        protected void EnablePressChoice()
+        {
+            HasPressChoice = true;
+            HasSettings = true;
+        }
 
         /// <summary>The menu toggle: the mod is armed and its keybind works.</summary>
         public bool Enabled { get; private set; }
@@ -73,10 +128,10 @@ namespace CascadeMenu.Mods
         public virtual void Execute() { }
 
         /// <summary>
-        /// Enables or disables the mod. Enabling only arms the mod; the effect
-        /// starts when the keybind or the menu's Activate button is used.
-        /// Disabling clears Active and runs the cleanup path exactly when an
-        /// effect was running.
+        /// Enables or disables the mod. The registry's one-switch path calls
+        /// this and then starts or stops the effect, so a menu toggle never
+        /// leaves a mod armed but idle. Disabling clears Active and runs the
+        /// cleanup path exactly when an effect was running.
         /// </summary>
         public void SetEnabled(bool value)
         {

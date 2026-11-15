@@ -27,6 +27,14 @@ namespace CascadeMenu
 
         private CascadeTheme _theme;
 
+        // The custom palette editor mutates this object and applies it to the
+        // live theme. It is saved as one string in the config file.
+        private CascadeThemePalette _customPalette;
+
+        private int _customColorIndex;
+
+        private bool _themeLogged;
+
         private GameObject _canvasObject;
 
         private Canvas _canvas;
@@ -96,6 +104,10 @@ namespace CascadeMenu
         private RectTransform _desktopCursorRect;
 
         private Image _desktopCursorDot;
+
+        private Image _desktopCursorRing;
+
+        private Image _desktopCursorRingShadow;
 
         private bool _desktopPointer;
 
@@ -215,7 +227,7 @@ namespace CascadeMenu
         /// </summary>
         internal bool IsTyping
         {
-            get { return _open && _window != null && _window.SearchFocused; }
+            get { return _open && _window != null && _window.IsTyping; }
         }
 
         /// <summary>True while a settings row is waiting for the next key press.</summary>
@@ -235,6 +247,7 @@ namespace CascadeMenu
             _lastPageTag = _config.LastPageTag.Value;
             _lastPageTitle = _config.LastPageTitle.Value;
             _pages = DemoApp.Build(this, _config, _demo);
+            EnsureTheme();
             BuildCanvas();
             BuildPointer();
             Plugin.Log.LogInfo("Cascade menu ready. " + Keybinds.Name(Keybinds.Parse(_config.MenuKey.Value, Key.F1)) +
@@ -371,11 +384,11 @@ namespace CascadeMenu
             _pointerLine.sortingOrder = 310;
             _pointerLine.enabled = false;
             _pointerRingShadow = BuildPointerRing("CascadePointerRingShadow", 0.0065f, 319);
-            _pointerRingShadow.startColor = new Color(0f, 0f, 0f, 0.62f);
-            _pointerRingShadow.endColor = new Color(0f, 0f, 0f, 0.62f);
+            _pointerRingShadow.startColor = Theme.PointerShadow;
+            _pointerRingShadow.endColor = Theme.PointerShadow;
             _pointerRing = BuildPointerRing("CascadePointerRing", 0.0032f, 320);
-            _pointerRing.startColor = Color.white;
-            _pointerRing.endColor = Color.white;
+            _pointerRing.startColor = Theme.Pointer;
+            _pointerRing.endColor = Theme.Pointer;
             _pointerDot = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             _pointerDot.name = "CascadePointerDot";
             Collider component = _pointerDot.GetComponent<Collider>();
@@ -439,8 +452,10 @@ namespace CascadeMenu
             _desktopCursorRect.pivot = new Vector2(0.5f, 0.5f);
             _desktopCursorRect.anchoredPosition = Vector2.zero;
             _desktopCursorRect.sizeDelta = new Vector2(28f, 28f);
-            CascadeUI.Image(CursorImageRect("Shadow", 38f), CascadeSprites.CircleRing(9f), new Color(0f, 0f, 0f, 0.58f), Image.Type.Simple);
-            CascadeUI.Image(CursorImageRect("Ring", 28f), CascadeSprites.CircleRing(5f), Color.white, Image.Type.Simple);
+            RectTransform cursorShadow = CursorImageRect("Shadow", 38f);
+            _desktopCursorRingShadow = CascadeUI.Image(cursorShadow, CascadeSprites.CircleRing(9f), Color.white, Image.Type.Simple);
+            RectTransform cursorRing = CursorImageRect("Ring", 28f);
+            _desktopCursorRing = CascadeUI.Image(cursorRing, CascadeSprites.CircleRing(5f), Color.white, Image.Type.Simple);
             RectTransform rectTransform = CursorImageRect("Dot", 5f);
             _desktopCursorDot = CascadeUI.Image(rectTransform, CascadeSprites.Circle(), Color.white, Image.Type.Simple);
             _desktopCursorObject.SetActive(false);
@@ -841,15 +856,24 @@ namespace CascadeMenu
             }
             if (!current.escapeKey.wasPressedThisFrame)
             {
-                if (current.backspaceKey.wasPressedThisFrame && _window.SearchField != null && _window.SearchField.Focused)
+                if (_window == null) return;
+
+                if ((current.enterKey.wasPressedThisFrame || current.numpadEnterKey.wasPressedThisFrame) &&
+                    _window.TextFieldFocused)
+                {
+                    _window.CommitTextField();
+                    return;
+                }
+
+                if (current.backspaceKey.wasPressedThisFrame && _window.IsTyping)
                 {
                     _window.HandleBackspace();
                 }
                 return;
             }
-            if (_window.SearchField != null && _window.SearchField.Focused)
+            if (_window != null && _window.IsTyping)
             {
-                _window.BlurSearch();
+                _window.BlurInput();
                 return;
             }
             CloseMenu();
@@ -862,6 +886,8 @@ namespace CascadeMenu
                 return;
             }
             _pages = DemoApp.Build(this, _config, _demo);
+            EnsureTheme();
+            RefreshAutoTheme();
             int page = ResolveSavedPage();
             _windowOffset = Vector2.zero;
             _windowRotation = Quaternion.identity;
@@ -926,6 +952,18 @@ namespace CascadeMenu
                     string key = tag.Substring(ModuleSettings.TagPrefix.Length);
                     _pages.Add(ModuleSettings.Build(key, this, _config));
                     return _pages.Count - 1;
+                }
+
+                // Generated mod settings page (gear on a mod row).
+                if (ModRegistry.IsSettingsTag(tag))
+                {
+                    string typeName = tag.Substring(ModRegistry.SettingsTagPrefix.Length);
+                    Mod settingsMod = ModRegistry.FindByTypeName(typeName);
+                    if (settingsMod != null && settingsMod.HasSettings)
+                    {
+                        _pages.Add(ModRegistry.BuildSettingsPage(this, settingsMod));
+                        return _pages.Count - 1;
+                    }
                 }
 
                 // Cosmetic category tab (Hats, Badges, All cosmetics, ...).
@@ -1125,6 +1163,240 @@ namespace CascadeMenu
             }
         }
 
+        private CascadeTheme EnsureTheme()
+        {
+            if (_theme == null)
+            {
+                _theme = CascadeTheme.FromConfig(_config);
+
+                _customPalette = CascadeThemePalette.Parse(_config.CustomPalette.Value);
+                if (_customPalette == null)
+                {
+                    _customPalette = CascadeThemePalette.FromPreset(
+                        CascadeThemePreset.Find(_config.ThemePreset.Value) ?? CascadeThemePreset.Default);
+                }
+            }
+
+            if (!_themeLogged)
+            {
+                _themeLogged = true;
+                Plugin.Log?.LogInfo("Cascade theme: " + _theme.Name +
+                                    " (" + (_theme.IsDark ? "dark" : "light") +
+                                    (_config != null && _config.ThemeAuto.Value ? ", auto seasonal" : string.Empty) +
+                                    (_theme.ContrastAdjusted ? ", text auto-adjusted for contrast" : string.Empty) + ").");
+            }
+            return _theme;
+        }
+
+        /// <summary>The one live theme instance. It is mutated, never replaced.</summary>
+        internal CascadeTheme Theme
+        {
+            get { return EnsureTheme(); }
+        }
+
+        internal bool ThemeAuto
+        {
+            get { return _config != null && _config.ThemeAuto.Value; }
+        }
+
+        /// <summary>Opens the appearance tab (presets and the custom picker).</summary>
+        public void OpenThemesPage()
+        {
+            if (!_open || _window == null)
+            {
+                return;
+            }
+
+            int index = _window.Pages.FindIndex((CascadePage p) => (p.Tag as string) == ThemesPage.Tag);
+            if (index < 0)
+            {
+                _window.Pages.Add(ThemesPage.Build(this));
+                index = _window.Pages.Count - 1;
+            }
+            _window.NavigateTo(index, recordHistory: true);
+        }
+
+        internal CascadeThemePalette CustomPalette
+        {
+            get
+            {
+                EnsureTheme();
+                return _customPalette;
+            }
+        }
+
+        internal int CustomColorIndex
+        {
+            get { return _customColorIndex; }
+            set { _customColorIndex = Mathf.Clamp(value, 0, CascadeThemePalette.Count - 1); }
+        }
+
+        /// <summary>Applies a preset immediately, without rebuilding the window.</summary>
+        internal void SelectThemePreset(string name)
+        {
+            CascadeThemePreset preset = CascadeThemePreset.Find(name) ?? CascadeThemePreset.Default;
+
+            _config.ThemeAuto.Value = false;
+            _config.ThemePreset.Value = preset.Name;
+            _customPalette = preset.Palette.Clone();
+            _config.CustomPalette.Value = _customPalette.Serialize();
+
+            bool adjusted = _theme.Apply(preset);
+            SaveThemeConfig();
+            ApplyThemeLive();
+
+            Plugin.Log?.LogInfo("Cascade theme changed to " + _theme.Name + ".");
+            if (adjusted)
+            {
+                ShowToast("Low contrast",
+                    "The text color was switched automatically so it stays readable on this background.");
+            }
+        }
+
+        internal void SetThemeAuto(bool enabled)
+        {
+            _config.ThemeAuto.Value = enabled;
+
+            if (enabled)
+            {
+                CascadeThemePreset seasonal = CascadeThemePreset.ForDate(DateTime.Now) ?? CascadeThemePreset.Default;
+                _theme.Apply(seasonal);
+                ApplyThemeLive();
+                ShowToast("Seasonal theme", "Using " + seasonal.Name + " for today's date.");
+            }
+            else
+            {
+                SelectThemePreset(_config.ThemePreset.Value);
+            }
+            SaveThemeConfig();
+        }
+
+        /// <summary>Re-checks the date when auto mode is on (startup and each open).</summary>
+        private void RefreshAutoTheme()
+        {
+            if (_config == null || !_config.ThemeAuto.Value || _theme == null) return;
+
+            CascadeThemePreset seasonal = CascadeThemePreset.ForDate(DateTime.Now) ?? CascadeThemePreset.Default;
+            if (string.Equals(_theme.Name, seasonal.Name, StringComparison.Ordinal)) return;
+
+            _theme.Apply(seasonal);
+            ApplyThemeLive();
+        }
+
+        internal Color CustomColor(int index)
+        {
+            return CustomPalette[Mathf.Clamp(index, 0, CascadeThemePalette.Count - 1)];
+        }
+
+        internal float GetCustomChannel(int index, int channel)
+        {
+            Color color = CustomColor(index);
+            return channel == 0 ? color.r : channel == 1 ? color.g : color.b;
+        }
+
+        internal void SetCustomColor(int index, Color color)
+        {
+            CascadeThemePalette palette = CustomPalette;
+            palette[index] = color;
+            ApplyCustomPalette(palette, saveFile: false);
+        }
+
+        internal void SetCustomChannel(int index, int channel, float value)
+        {
+            Color color = CustomColor(index);
+            value = Mathf.Clamp01(value);
+            if (channel == 0) color.r = value;
+            else if (channel == 1) color.g = value;
+            else color.b = value;
+            SetCustomColor(index, color);
+        }
+
+        internal string CustomHex(int index)
+        {
+            return CascadeThemePalette.ToHex(CustomColor(index));
+        }
+
+        internal void SetCustomHex(string value)
+        {
+            Color color;
+            if (string.IsNullOrEmpty(value)) return;
+            if (!value.StartsWith("#")) value = "#" + value;
+            if (!ColorUtility.TryParseHtmlString(value, out color)) return;
+            SetCustomColor(_customColorIndex, color);
+        }
+
+        /// <summary>Applies an edited palette live and marks the theme as Custom.</summary>
+        internal void ApplyCustomPalette(CascadeThemePalette palette, bool saveFile)
+        {
+            if (palette == null) return;
+
+            _customPalette = palette;
+            _config.ThemeAuto.Value = false;
+            _config.ThemePreset.Value = "Custom";
+            _config.CustomPalette.Value = palette.Serialize();
+
+            _theme.Apply(CascadeTheme.CustomPreset(palette));
+            ApplyThemeLive();
+            if (saveFile) SaveThemeConfig();
+        }
+
+        /// <summary>Resets the editor palette to the currently selected preset.</summary>
+        internal void ResetCustomToPreset()
+        {
+            CascadeThemePreset preset = CascadeThemePreset.Find(_config.ThemePreset.Value);
+            if (preset == null || string.Equals(preset.Name, "Custom", StringComparison.Ordinal))
+            {
+                preset = CascadeThemePreset.Default;
+            }
+
+            _customPalette = preset.Palette.Clone();
+            _config.CustomPalette.Value = _customPalette.Serialize();
+            ApplyCustomPalette(_customPalette, saveFile: true);
+            ShowToast("Reset to preset", "Custom colors reset to " + preset.Name + ".");
+        }
+
+        internal void ResetCustomAll()
+        {
+            _customPalette = CascadeThemePreset.DefaultPalette.Clone();
+            _config.CustomPalette.Value = _customPalette.Serialize();
+            _config.ThemePreset.Value = CascadeThemePreset.Default.Name;
+            _config.ThemeAuto.Value = false;
+            _theme.Apply(CascadeThemePreset.Default);
+            SaveThemeConfig();
+            ApplyThemeLive();
+            ShowToast("Reset all", "The default theme and palette are restored.");
+        }
+
+        internal void SaveCustomTheme()
+        {
+            ApplyCustomPalette(CustomPalette, saveFile: true);
+            ShowToast("Custom theme saved", "Your palette is now the active theme.");
+        }
+
+        private void SaveThemeConfig()
+        {
+            if (_config == null) return;
+            try
+            {
+                _config.File.Save();
+            }
+            catch (Exception exception)
+            {
+                Plugin.Log?.LogWarning("Cascade could not save the theme: " + exception.Message);
+            }
+        }
+
+        /// <summary>
+        /// Pushes a theme change into the live UI. Static graphics are repainted
+        /// by the binding cache; this only refreshes the few widgets that keep
+        /// their own state, plus the 3D pointer.
+        /// </summary>
+        private void ApplyThemeLive()
+        {
+            if (_window != null) _window.ApplyTheme();
+            UpdatePointerColor();
+        }
+
         private void BuildWindow(int page)
         {
             if (_canvasRect == null)
@@ -1141,7 +1413,7 @@ namespace CascadeMenu
             _hovered = null;
             _pressed = null;
             _draggingSlider = null;
-            _theme = CascadeTheme.Build(_config.ThemeMode, _config.AccentIndex.Value);
+            _theme = EnsureTheme();
             GameObject gameObject = new GameObject("CascadeWindow", new Type[] { typeof(RectTransform) });
             RectTransform rectTransform = (RectTransform)gameObject.transform;
             rectTransform.SetParent(_canvasRect, false);
@@ -1216,7 +1488,7 @@ namespace CascadeMenu
         /// <summary>
         /// Starts listening for the next keyboard key or controller button so a
         /// settings row can change a bind. <paramref name="target"/> is "menu",
-        /// "acrobatics", or "mod:TypeName" for an auto-generated mod row.
+        /// "acrobatics", "gungrip", or "mod:TypeName" for an auto-generated mod row.
         /// </summary>
         internal void BeginRebind(string target)
         {
@@ -1242,6 +1514,10 @@ namespace CascadeMenu
             {
                 ShowToast("Rebind", "Press a keyboard key for " + RebindLabel(target) + ". Escape clears it.");
             }
+            else if (target == "gungrip")
+            {
+                ShowToast("Rebind", "Press a keyboard key for the desktop grip. Escape cancels.");
+            }
             else
             {
                 ShowToast("Rebind", "Press a key or controller button for " + RebindLabel(target) + ".");
@@ -1261,7 +1537,9 @@ namespace CascadeMenu
                 Mod mod = ModRegistry.FindByTypeName(target.Substring(4));
                 return mod != null ? mod.Name : "this mod";
             }
-            return target == "acrobatics" ? "acrobatics" : "the menu";
+            return target == "acrobatics" ? "acrobatics"
+                : target == "gungrip" ? "the desktop grip"
+                : "the menu";
         }
 
         private void UpdateRebind()
@@ -1280,6 +1558,7 @@ namespace CascadeMenu
 
             Key pressed = Keybinds.CapturePressed();
             bool modTarget = IsModTarget(_rebindTarget);
+            bool gripTarget = _rebindTarget == "gungrip";
             Mod mod = modTarget ? ModRegistry.FindByTypeName(_rebindTarget.Substring(4)) : null;
 
             if (pressed == Key.Escape)
@@ -1321,6 +1600,13 @@ namespace CascadeMenu
                 {
                     _config.AcrobaticsKey.Value = pressed.ToString();
                 }
+                else if (gripTarget)
+                {
+                    // Save the key and switch the desktop grip to keyboard mode
+                    // so the new bind actually drives the gun.
+                    _config.GunPcGripKey.Value = pressed.ToString();
+                    _config.GunPcGrip.Value = 3;
+                }
                 else
                 {
                     _config.MenuKey.Value = pressed.ToString();
@@ -1337,8 +1623,9 @@ namespace CascadeMenu
             }
 
             // Mod binds are keyboard only; a VR trigger is used to click the
-            // Bind button and must not become the bind itself.
-            if (modTarget)
+            // Bind button and must not become the bind itself. The desktop grip
+            // key is keyboard only for the same reason.
+            if (modTarget || gripTarget)
             {
                 return;
             }
@@ -1678,6 +1965,38 @@ namespace CascadeMenu
         /// The page is added on demand so the sidebar is not cluttered with one
         /// tab per slider group.
         /// </summary>
+        /// <summary>
+        /// Opens (or refreshes) the settings page for a generated mod and
+        /// selects it. Only one such page is visible at a time because the page
+        /// replaces the current view instead of opening a floating panel.
+        /// </summary>
+        public void OpenModSettings(Mod mod)
+        {
+            if (!_open || _window == null || mod == null) return;
+
+            CascadePage page = ModRegistry.BuildSettingsPage(this, mod);
+            if (page == null) return;
+
+            string tag = ModRegistry.SettingsTag(mod);
+            int index = _window.Pages.FindIndex((CascadePage p) => (p.Tag as string) == tag);
+            if (index >= 0)
+            {
+                _window.Pages[index] = page;
+            }
+            else
+            {
+                _window.Pages.Add(page);
+                index = _window.Pages.Count - 1;
+            }
+
+            if (index == _window.PageIndex)
+            {
+                _window.SetPage(index, animate: false);
+                return;
+            }
+            _window.NavigateTo(index, recordHistory: true);
+        }
+
         public void OpenModuleSettings(string key)
         {
             if (!_open || _window == null || string.IsNullOrEmpty(key))
@@ -2318,7 +2637,10 @@ namespace CascadeMenu
 
         private void UpdatePointerColor()
         {
-            Color color = (_theme != null) ? _theme.Accent : new Color(0.3f, 0.65f, 1f);
+            CascadeTheme theme = _theme;
+            Color color = theme != null ? (Color)theme.Pointer : new Color(0.3f, 0.65f, 1f);
+            Color shadow = theme != null ? (Color)theme.PointerShadow : new Color(0f, 0f, 0f, 0.62f);
+
             if (_pointerLine != null)
             {
                 _pointerLine.startColor = new Color(color.r, color.g, color.b, 0.9f);
@@ -2326,13 +2648,13 @@ namespace CascadeMenu
             }
             if (_pointerRing != null)
             {
-                _pointerRing.startColor = Color.white;
-                _pointerRing.endColor = Color.white;
+                _pointerRing.startColor = color;
+                _pointerRing.endColor = color;
             }
             if (_pointerRingShadow != null)
             {
-                _pointerRingShadow.startColor = new Color(0f, 0f, 0f, 0.62f);
-                _pointerRingShadow.endColor = new Color(0f, 0f, 0f, 0.62f);
+                _pointerRingShadow.startColor = shadow;
+                _pointerRingShadow.endColor = shadow;
             }
             if (_pointerDotRenderer != null && _pointerDotRenderer.material != null)
             {
@@ -2341,6 +2663,14 @@ namespace CascadeMenu
             if (_desktopCursorDot != null)
             {
                 _desktopCursorDot.color = color;
+            }
+            if (_desktopCursorRing != null)
+            {
+                _desktopCursorRing.color = color;
+            }
+            if (_desktopCursorRingShadow != null)
+            {
+                _desktopCursorRingShadow.color = shadow;
             }
         }
 

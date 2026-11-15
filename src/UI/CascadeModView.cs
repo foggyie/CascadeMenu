@@ -14,23 +14,18 @@ namespace CascadeMenu.UI
         public Image Dot;
         public Image Background;
         public TMP_Text StatusLabel;
-        public TMP_Text ActionLabel;
-        public TMP_Text PressLabel;
 
         public Func<bool> GetEnabled;
         public Func<bool> GetActive;
         public Func<string> GetKeyLabel;
-        public Func<string> GetPressLabel;
-        public Func<string> GetActionLabel;
         public bool IsToggle;
 
         private CascadeTheme _theme;
         private bool _enabled;
         private bool _active;
         private string _status = string.Empty;
-        private string _action = string.Empty;
-        private string _press = string.Empty;
         private float _nextPoll;
+        private int _themeVersion = -1;
 
         public void Configure(CascadeTheme theme)
         {
@@ -40,6 +35,15 @@ namespace CascadeMenu.UI
 
         private void Update()
         {
+            // Theme switches must repaint immediately, even between the slower
+            // state polls.
+            if (_theme != null && _themeVersion != _theme.Version)
+            {
+                Apply(true);
+                _nextPoll = Time.unscaledTime + 0.1f;
+                return;
+            }
+
             if (Time.unscaledTime < _nextPoll) return;
             _nextPoll = Time.unscaledTime + 0.1f;
             Apply(false);
@@ -51,68 +55,55 @@ namespace CascadeMenu.UI
             bool active = GetActive != null && GetActive();
 
             string status = BuildStatus(enabled, active);
-            string action = GetActionLabel != null ? GetActionLabel() : string.Empty;
-            string press = GetPressLabel != null ? GetPressLabel() : string.Empty;
 
-            if (!force && enabled == _enabled && active == _active &&
-                status == _status && action == _action && press == _press)
+            bool themeChanged = _theme != null && _themeVersion != _theme.Version;
+            if (!force && !themeChanged && enabled == _enabled && active == _active &&
+                status == _status)
             {
                 return;
             }
 
+            if (_theme != null) _themeVersion = _theme.Version;
             _enabled = enabled;
             _active = active;
             _status = status;
-            _action = action;
-            _press = press;
 
             if (Dot != null && _theme != null)
             {
                 if (!enabled)
                 {
-                    Dot.color = _theme.TextTertiary;
+                    CascadeTheme.SetGraphicColor(Dot, _theme.TextTertiary);
                 }
                 else if (active && IsToggle)
                 {
-                    Dot.color = new Color(0.30f, 0.85f, 0.42f, 1f);
+                    CascadeTheme.SetGraphicColor(Dot, _theme.ActiveColor);
                 }
                 else
                 {
-                    Dot.color = _theme.Accent;
+                    CascadeTheme.SetGraphicColor(Dot, _theme.Accent);
                 }
             }
 
             if (Background != null && _theme != null)
             {
-                Background.color = enabled && active && IsToggle
-                    ? new Color(_theme.Accent.r, _theme.Accent.g, _theme.Accent.b, 0.10f)
-                    : new Color(0f, 0f, 0f, 0f);
+                if (enabled && active && IsToggle)
+                {
+                    CascadeTheme.SetGraphicColor(Background, _theme.ActiveSoft);
+                }
+                else
+                {
+                    CascadeTheme.SetGraphicColor(Background, _theme.ContentBg.WithAlpha(0f));
+                }
             }
 
             if (StatusLabel != null) StatusLabel.text = status;
-            if (ActionLabel != null) ActionLabel.text = action;
-            if (PressLabel != null) PressLabel.text = press;
         }
 
         private string BuildStatus(bool enabled, bool active)
         {
-            string state;
-            if (!enabled)
-            {
-                state = "Disabled";
-            }
-            else if (!IsToggle)
-            {
-                state = "Ready";
-            }
-            else
-            {
-                state = active ? "ACTIVE" : "Idle";
-            }
-
-            string key = GetKeyLabel != null ? GetKeyLabel() : "unbound";
-            string press = GetPressLabel != null ? GetPressLabel() : "Single";
-            return state + "  ·  " + key + "  ·  " + press + " press";
+            if (!enabled) return "Off";
+            if (!IsToggle) return "Ran once";
+            return active ? "Running" : "On";
         }
     }
 }

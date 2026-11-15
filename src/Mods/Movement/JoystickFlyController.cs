@@ -8,7 +8,7 @@ namespace CascadeMenu.Mods
 {
     /// <summary>
     /// Runs the real gameplay features:
-    /// - double-tap A toggles head-relative joystick flight;
+    /// - the menu switch toggles head-relative joystick flight directly;
     /// - the left stick moves in the direction the player is looking;
     /// - gravity is cancelled for the local player while flight is active;
     /// - the Hand Link patch is enabled/disabled from the menu config.
@@ -16,15 +16,11 @@ namespace CascadeMenu.Mods
     [DefaultExecutionOrder(10000)]
     internal sealed class JoystickFlyController : MonoBehaviour
     {
-        private const float DoubleTapWindow = 0.5f;
-
         private static JoystickFlyController _instance;
 
         private MenuConfig _config;
         private GTPlayer _player;
 
-        private bool _wasPrimaryButton;
-        private float _lastTapTime = -10f;
         private float _lastStickLogTime = -10f;
         private bool _missingPlayerLogged;
         private Vector3 _currentFlightVelocity;
@@ -36,16 +32,22 @@ namespace CascadeMenu.Mods
 
         internal static bool IsFlying { get; private set; } = false;
 
-        /// <summary>Turns flight on/off from the menu (same as double-tapping A).</summary>
+        /// <summary>Flips the menu switch, which starts or stops flight directly.</summary>
         internal static bool ToggleFromMenu()
         {
-            if (_instance == null)
+            if (_instance == null || _instance._config == null)
             {
                 Plugin.Log?.LogInfo("Cascade fly: controller is not ready yet.");
                 return false;
             }
 
-            return _instance.ToggleFlight();
+            _instance._config.JoystickFly.Value = !_instance._config.JoystickFly.Value;
+            if (!_instance._config.JoystickFly.Value)
+            {
+                _instance.StopFlying();
+            }
+
+            return _instance._config.JoystickFly.Value;
         }
 
         internal void Initialize(MenuConfig config)
@@ -62,18 +64,26 @@ namespace CascadeMenu.Mods
                 return;
             }
 
-            HandleDoubleTap();
             HandleDirectionHotkeys();
             HandleHandLinkSetting();
 
             if (!_config.JoystickFly.Value)
             {
-                // Always restore gravity/physics when the master switch is off,
-                // even if a previous state left a gravity multiplier at zero.
+                // Always restore gravity/physics when the switch is off, even
+                // if a previous state left a gravity multiplier at zero.
                 StopFlying();
                 return;
             }
 
+            // One switch: turning the mod on starts flight immediately.
+            if (!IsFlying)
+            {
+                GTPlayer player = _player != null ? _player : GTPlayer.Instance;
+                if (player != null && player.playerRigidBody != null)
+                {
+                    StartFlying(player);
+                }
+            }
         }
 
         private void FixedUpdate()
@@ -97,7 +107,7 @@ namespace CascadeMenu.Mods
 
             if (keyboard.f5Key.wasPressedThisFrame)
             {
-                ToggleFlight();
+                ToggleFromMenu();
             }
 
             if (keyboard.f6Key.wasPressedThisFrame)
@@ -144,77 +154,6 @@ namespace CascadeMenu.Mods
             }
         }
 
-        private void HandleDoubleTap()
-        {
-            ControllerInputPoller poller = ControllerInputPoller.instance;
-            bool pressed = poller != null && poller.rightControllerPrimaryButton;
-
-            // A is the menu's select button. Do not treat menu clicks as a
-            // double-tap gesture while Cascade is open.
-            if (CascadeMenuBehaviour.IsMenuOpen)
-            {
-                _wasPrimaryButton = pressed;
-                _lastTapTime = -10f;
-                return;
-            }
-
-            // Acrobatics uses the same gesture while it is armed, so it gets the
-            // double tap first; toggling flight then needs acrobatics disarmed.
-            if (AcrobaticsController.IsArmed)
-            {
-                _wasPrimaryButton = pressed;
-                _lastTapTime = -10f;
-                return;
-            }
-
-            if (pressed && !_wasPrimaryButton)
-            {
-                float now = Time.unscaledTime;
-                if (now - _lastTapTime <= DoubleTapWindow)
-                {
-                    _lastTapTime = -10f;
-                    ToggleFlight();
-                }
-                else
-                {
-                    _lastTapTime = now;
-                }
-            }
-
-            _wasPrimaryButton = pressed;
-        }
-
-        private bool ToggleFlight()
-        {
-            if (!_config.JoystickFly.Value)
-            {
-                // Master disabled – force off but still allow re‑enable later.
-                if (IsFlying) StopFlying();
-                Plugin.Log?.LogInfo("Cascade joystick fly disabled (master off).");
-                return false;
-            }
-
-            if (IsFlying)
-            {
-                StopFlying();
-                Buzz();
-                Plugin.Log?.LogInfo("Cascade joystick fly disabled.");
-                return true;
-            }
-
-            GTPlayer player = _player != null ? _player : GTPlayer.Instance;
-            if (player == null || player.playerRigidBody == null)
-            {
-                Plugin.Log?.LogInfo("Cascade fly requested, but GTPlayer is not ready yet.");
-                return false;
-            }
-
-            StartFlying(player);
-            Buzz();
-            Plugin.Log?.LogInfo("Cascade joystick fly enabled (double‑tap A).");
-            return true;
-        }
-
         private static void Buzz()
         {
             if (GorillaTagger.Instance != null)
@@ -223,8 +162,7 @@ namespace CascadeMenu.Mods
 
         private void ApplyFlight()
         {
-            // Flight is only active after the player explicitly toggles it with
-            // double-tap A (or the menu button). The master switch just arms it.
+            // The menu switch owns flight: on means flying, off stops everything.
             if (!IsFlying)
             {
                 return;
@@ -392,6 +330,7 @@ namespace CascadeMenu.Mods
             body.linearVelocity = Vector3.zero;
             _currentFlightVelocity = Vector3.zero;
             player.SetPlayerVelocity(Vector3.zero);
+            Buzz();
             Plugin.Log?.LogInfo("Cascade joystick fly started.");
             if (_config != null)
             {
@@ -414,6 +353,7 @@ namespace CascadeMenu.Mods
 
             if (wasFlying)
             {
+                Buzz();
                 Plugin.Log?.LogInfo("Cascade joystick fly stopped.");
             }
 

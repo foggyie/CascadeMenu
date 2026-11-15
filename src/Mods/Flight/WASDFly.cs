@@ -22,11 +22,22 @@ namespace CascadeMenu.Mods.Flight
 
         private Vector3 _move;
         private float _multiplier = 1f;
+        private float _speedScale = 1f;
 
         public WASDFly()
         {
             Name = "WASD Fly";
             isToggle = true;
+
+            AddSetting(ModSetting.Slider(
+                "speed",
+                "Speed multiplier",
+                "Scales free-flight speed without changing the shift/alt modifiers",
+                0.25f,
+                4f,
+                () => _speedScale,
+                value => _speedScale = value,
+                value => value.ToString("0.00") + "x"));
         }
 
         public override void OnEnable()
@@ -100,7 +111,7 @@ namespace CascadeMenu.Mods.Flight
             // transform directly. LateUpdate runs after the game has had its
             // physics step, so our move sticks.
             body.linearVelocity = Vector3.zero;
-            body.transform.position += _move.normalized * (BaseSpeed * _multiplier * Time.deltaTime);
+            body.transform.position += _move.normalized * (BaseSpeed * _speedScale * _multiplier * Time.deltaTime);
         }
 
         private void Stop()

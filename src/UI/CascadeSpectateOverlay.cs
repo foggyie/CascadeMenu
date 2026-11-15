@@ -49,6 +49,7 @@ namespace CascadeMenu.UI
         private bool _modeKnown;
         private bool _modeFirst;
         private bool _disposed;
+        private int _themeVersion = -1;
 
         /// <summary>Builds the window under the menu canvas and returns it.</summary>
         internal static CascadeSpectateOverlay Create(
@@ -192,7 +193,7 @@ namespace CascadeMenu.UI
 
             // --- LIVE badge -------------------------------------------------
             RectTransform badge = TopLeft("LiveBadge", frame, 14f, 12f, 58f, 21f);
-            CascadeUI.Panel(badge, new Color(0f, 0f, 0f, 0.56f), 10);
+            CascadeUI.Panel(badge, _theme.LiveBadge, 10);
 
             RectTransform dot = TopLeft("Dot", badge, 9f, 7f, 7f, 7f);
             CascadeUI.Image(dot, CascadeSprites.Circle(), _theme.TrafficClose, Image.Type.Simple);
@@ -287,10 +288,15 @@ namespace CascadeMenu.UI
             if (_controller == null || _theme == null) return;
 
             bool first = _controller.FirstPerson;
-            if (_modeKnown && _modeFirst == first) return;
+
+            // A live theme switch has to repaint the selected mode too, so the
+            // cached mode state alone is not enough.
+            bool themeChanged = _themeVersion != _theme.Version;
+            if (_modeKnown && _modeFirst == first && !themeChanged) return;
 
             _modeKnown = true;
             _modeFirst = first;
+            _themeVersion = _theme.Version;
 
             if (_firstBackground != null)
                 _firstBackground.color = first ? _theme.Accent : _theme.FieldBg;

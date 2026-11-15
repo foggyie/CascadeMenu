@@ -27,6 +27,7 @@ namespace CascadeMenu.UI
 
         private CascadeTheme _theme;
         private float _value;
+        private int _themeVersion = -1;
 
         public void Configure(CascadeTheme theme, bool value)
         {
@@ -52,6 +53,14 @@ namespace CascadeMenu.UI
             {
                 bool current = Get();
                 if (current != On) On = current;
+            }
+
+            // A theme switch repaints the switch immediately, even while the
+            // knob is sitting at rest.
+            if (_theme != null && _themeVersion != _theme.Version)
+            {
+                _themeVersion = _theme.Version;
+                Apply();
             }
 
             float target = On ? 1f : 0f;
@@ -195,9 +204,18 @@ namespace CascadeMenu.UI
         public TMP_Text[] Labels;
         public CascadeTheme Theme;
 
+        private int _themeVersion = -1;
+
         public RectTransform Root
         {
             get { return (RectTransform)transform; }
+        }
+
+        private void Update()
+        {
+            if (Theme == null || _themeVersion == Theme.Version) return;
+            _themeVersion = Theme.Version;
+            Refresh();
         }
 
         public void Refresh()
@@ -210,6 +228,48 @@ namespace CascadeMenu.UI
                 Rings[i].color = on ? Theme.Accent : Theme.TextTertiary;
                 Dots[i].gameObject.SetActive(on);
                 Labels[i].color = on ? Theme.TextPrimary : Theme.TextSecondary;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Keeps a read-only value (a mod's Active flag, for example) in sync while
+    /// the page is open, so a keybind or the gated button never forces a page
+    /// rebuild or scroll jump.
+    /// </summary>
+    internal sealed class CascadeLabelView : MonoBehaviour
+    {
+        public TMP_Text Label;
+        public Func<string> GetValue;
+        public Func<bool> IsHighlighted;
+        public CascadeTheme Theme;
+
+        private string _value;
+        private bool _highlighted;
+        private int _themeVersion = -1;
+        private float _nextPoll;
+
+        private void Update()
+        {
+            if (Label == null || GetValue == null) return;
+
+            bool themeChanged = Theme != null && _themeVersion != Theme.Version;
+            if (!themeChanged && Time.unscaledTime < _nextPoll) return;
+
+            _nextPoll = Time.unscaledTime + 0.2f;
+            if (Theme != null) _themeVersion = Theme.Version;
+
+            string value = GetValue() ?? string.Empty;
+            bool highlighted = IsHighlighted != null && IsHighlighted();
+            if (!themeChanged && value == _value && highlighted == _highlighted) return;
+
+            _value = value;
+            _highlighted = highlighted;
+            Label.text = value;
+
+            if (Theme != null)
+            {
+                CascadeTheme.SetGraphicColor(Label, highlighted ? Theme.ActiveColor : Theme.TextSecondary);
             }
         }
     }
@@ -257,11 +317,18 @@ namespace CascadeMenu.UI
         public void SetFocused(bool focused)
         {
             Focused = focused;
-            if (Border != null) Border.color = focused ? _theme.FieldFocus : _theme.FieldBorder;
+            RefreshTheme();
+        }
+
+        /// <summary>Repaints the field after a live theme change.</summary>
+        public void RefreshTheme()
+        {
+            if (_theme == null) return;
+            if (Border != null) Border.color = Focused ? _theme.FieldFocus : _theme.FieldBorder;
             if (Background != null)
             {
                 Color baseColor = _theme.FieldBg;
-                if (focused) baseColor = Color.Lerp(baseColor, _theme.Accent, 0.08f);
+                if (Focused) baseColor = Color.Lerp(baseColor, _theme.Accent, 0.08f);
                 Background.color = baseColor;
             }
         }
@@ -286,6 +353,128 @@ namespace CascadeMenu.UI
         {
             if (Query.Length == 0) return;
             SetQuery(Query.Substring(0, Query.Length - 1));
+        }
+    }
+
+    /// <summary>
+    /// A small editable text field used by the theme hex box and by mod
+    /// settings. It shares the menu's one text-input route with the search box,
+    /// so only the focused field receives characters and the mod keybinds stay
+    /// paused while it is active.
+    /// </summary>
+    internal sealed class CascadeTextField
+    {
+        public RectTransform Root;
+        public TMP_Text Text;
+        public TMP_Text Placeholder;
+        public Image Background;
+        public Image Border;
+        public CascadeInteractable Interactable;
+        public bool Focused;
+
+        public Func<string> Get;
+        public Action<string> Changed;
+        public int MaxLength = 12;
+
+        private CascadeTheme _theme;
+        private string _draft = string.Empty;
+
+        public void Configure(CascadeTheme theme, Func<string> get, Action<string> changed)
+        {
+            _theme = theme;
+            Get = get;
+            Changed = changed;
+            Refresh();
+        }
+
+        public void Refresh()
+        {
+            if (Focused) return;
+            _draft = Get != null ? (Get() ?? string.Empty) : string.Empty;
+            if (Text != null) Text.text = _draft;
+            if (Placeholder != null) Placeholder.gameObject.SetActive(_draft.Length == 0);
+        }
+
+        public void RefreshTheme()
+        {
+            if (_theme == null) return;
+            if (Border != null) Border.color = Focused ? _theme.FieldFocus : _theme.FieldBorder;
+            if (Background != null)
+            {
+                Color baseColor = _theme.FieldBg;
+                if (Focused) baseColor = Color.Lerp(baseColor, _theme.Accent, 0.08f);
+                Background.color = baseColor;
+            }
+            if (Text != null) Text.color = _theme.TextPrimary;
+            if (Placeholder != null) Placeholder.color = _theme.TextTertiary;
+        }
+
+        public void SetFocused(bool focused)
+        {
+            Focused = focused;
+            if (focused)
+            {
+                _draft = Get != null ? (Get() ?? string.Empty) : string.Empty;
+                if (Text != null) Text.text = _draft;
+                if (Placeholder != null) Placeholder.gameObject.SetActive(false);
+            }
+            RefreshTheme();
+        }
+
+        public void Append(char character)
+        {
+            if (character < 32 || character == 127) return;
+            if (_draft.Length >= MaxLength) return;
+            _draft += character;
+            if (Text != null) Text.text = _draft;
+            if (Placeholder != null) Placeholder.gameObject.SetActive(false);
+            Changed?.Invoke(_draft);
+        }
+
+        public void Backspace()
+        {
+            if (_draft.Length == 0) return;
+            _draft = _draft.Substring(0, _draft.Length - 1);
+            if (Text != null) Text.text = _draft;
+            if (Placeholder != null) Placeholder.gameObject.SetActive(_draft.Length == 0);
+            Changed?.Invoke(_draft);
+        }
+
+        /// <summary>Applies the draft one last time and leaves edit mode.</summary>
+        public void Commit()
+        {
+            if (Focused) Changed?.Invoke(_draft);
+            SetFocused(false);
+            Refresh();
+        }
+    }
+
+    internal sealed class CascadePresetView : MonoBehaviour
+    {
+        public TMP_Text Title;
+        public TMP_Text Subtitle;
+        public string BaseSubtitle;
+        public Func<bool> IsSelected;
+        public CascadeTheme Theme;
+
+        private int _themeVersion = -1;
+        private bool _selected;
+
+        private void Update()
+        {
+            bool selected = IsSelected != null && IsSelected();
+            if (_themeVersion == Theme.Version && selected == _selected) return;
+
+            _themeVersion = Theme.Version;
+            _selected = selected;
+
+            if (Title != null)
+                CascadeTheme.SetGraphicColor(Title, selected ? Theme.Accent : Theme.TextPrimary);
+            if (Subtitle != null)
+            {
+                Subtitle.text = selected ? "Selected - " + BaseSubtitle : BaseSubtitle;
+                CascadeTheme.SetGraphicColor(Subtitle, selected ? Theme.AccentSoft : Theme.TextSecondary);
+            }
         }
     }
 
@@ -330,9 +519,7 @@ namespace CascadeMenu.UI
 
             RectTransform hover = CascadeUI.Rect("Hover", root);
             CascadeUI.Stretch(hover);
-            Color hoverTint = primary
-                ? new Color(1f, 1f, 1f, 0.14f)
-                : (theme.IsDark ? new Color(1f, 1f, 1f, 0.07f) : new Color(0f, 0f, 0f, 0.05f));
+            CascadeColor hoverTint = primary ? theme.PrimaryHoverTint : theme.HoverTint;
             view.Hover = CascadeUI.Image(hover, CascadeSprites.Rounded(6), hoverTint, Image.Type.Sliced);
             view.Hover.gameObject.SetActive(false);
 
@@ -375,7 +562,7 @@ namespace CascadeMenu.UI
 
             RectTransform knobShadow = CascadeUI.Rect("KnobShadow", knob);
             CascadeUI.Stretch(knobShadow, -1f, -1f, -1f, -1f);
-            CascadeUI.Image(knobShadow, CascadeSprites.Circle(), new Color(0f, 0f, 0f, 0.20f), Image.Type.Simple);
+            CascadeUI.Image(knobShadow, CascadeSprites.Circle(), theme.KnobShadow, Image.Type.Simple);
 
             RectTransform knobFace = CascadeUI.Rect("KnobFace", knob);
             CascadeUI.Stretch(knobFace);
@@ -424,7 +611,7 @@ namespace CascadeMenu.UI
 
             RectTransform thumbShadow = CascadeUI.Rect("Shadow", thumb);
             CascadeUI.Stretch(thumbShadow, -1f, -1f, -1f, -1f);
-            CascadeUI.Image(thumbShadow, CascadeSprites.Circle(), new Color(0f, 0f, 0f, 0.18f), Image.Type.Simple);
+            CascadeUI.Image(thumbShadow, CascadeSprites.Circle(), theme.ThumbShadow, Image.Type.Simple);
 
             RectTransform thumbFace = CascadeUI.Rect("Face", thumb);
             CascadeUI.Stretch(thumbFace);
@@ -574,7 +761,7 @@ namespace CascadeMenu.UI
                 dotRect.pivot = new Vector2(0.5f, 0.5f);
                 dotRect.anchoredPosition = new Vector2(6f, 0f);
                 dotRect.sizeDelta = new Vector2(5f, 5f);
-                CascadeUI.Image(dotRect, CascadeSprites.Circle(), Color.white, Image.Type.Simple);
+                CascadeUI.Image(dotRect, CascadeSprites.Circle(), theme.SelectionText, Image.Type.Simple);
                 view.Dots[i] = dotRect.GetComponent<Image>();
 
                 RectTransform labelRect = CascadeUI.Rect("Label", option);
@@ -737,14 +924,57 @@ namespace CascadeMenu.UI
             return field;
         }
 
+        public static CascadeTextField TextField(
+            CascadeWindow window,
+            RectTransform parent,
+            CascadeTheme theme,
+            string placeholder,
+            int maxLength,
+            Func<string> get,
+            Action<string> changed)
+        {
+            RectTransform root = CascadeUI.Rect("TextField", parent);
+            root.sizeDelta = new Vector2(140f, 26f);
+            var field = new CascadeTextField { Root = root, MaxLength = maxLength };
+
+            RectTransform background = CascadeUI.Rect("Background", root);
+            CascadeUI.Stretch(background);
+            field.Background = CascadeUI.Image(background, CascadeSprites.Rounded(6), theme.FieldBg, Image.Type.Sliced);
+
+            RectTransform border = CascadeUI.Rect("Border", root);
+            CascadeUI.Stretch(border);
+            field.Border = CascadeUI.Outline(border, theme.FieldBorder, 6);
+
+            RectTransform textRect = CascadeUI.Rect("Text", root);
+            CascadeUI.Stretch(textRect, 9f, 9f, 1f, 1f);
+            field.Text = CascadeUI.Text(textRect, string.Empty, 11.5f, theme.TextPrimary, TextAlignmentOptions.Left);
+            field.Text.richText = false;
+
+            RectTransform placeholderRect = CascadeUI.Rect("Placeholder", root);
+            CascadeUI.Stretch(placeholderRect, 9f, 9f, 1f, 1f);
+            field.Placeholder = CascadeUI.Text(
+                placeholderRect, placeholder, 11.5f, theme.TextTertiary, TextAlignmentOptions.Left);
+            field.Placeholder.richText = false;
+
+            field.Configure(theme, get, changed);
+            field.Interactable = window.Register(
+                root,
+                CascadeLayerGroup.Content,
+                () => window.FocusTextField(field),
+                hover: h =>
+                {
+                    if (!field.Focused && field.Border != null)
+                        field.Border.color = h ? theme.TextSecondary : theme.FieldBorder;
+                });
+
+            return field;
+        }
+
         private static Image HoverOverlay(RectTransform parent, int radius, CascadeTheme theme)
         {
             RectTransform hover = CascadeUI.Rect("Hover", parent);
             CascadeUI.Stretch(hover);
-            Color tint = theme != null && !theme.IsDark
-                ? new Color(0f, 0f, 0f, 0.06f)
-                : new Color(1f, 1f, 1f, 0.09f);
-            Image image = CascadeUI.Image(hover, CascadeSprites.Rounded(radius), tint, Image.Type.Sliced);
+            Image image = CascadeUI.Image(hover, CascadeSprites.Rounded(radius), theme.HoverTint, Image.Type.Sliced);
             image.gameObject.SetActive(false);
             return image;
         }

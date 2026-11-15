@@ -15,17 +15,16 @@ namespace CascadeMenu
         private RectTransform _canvasRect;
         private MenuConfig _config;
         private CascadeTheme _theme;
-        private int _themeIndex;
-        private int _accentIndex;
         private int _lastPlacement = -1;
 
         internal void Initialize(MenuConfig config)
         {
             _instance = this;
             _config = config;
-            _themeIndex = config.ThemeIndex.Value;
-            _accentIndex = config.AccentIndex.Value;
-            _theme = CascadeTheme.Build(config.ThemeMode, _accentIndex);
+
+            // The menu owns the live theme instance. Sharing it means a toast
+            // created after a live theme switch already has the new colors.
+            _theme = CascadeTheme.Active ?? CascadeTheme.FromConfig(config);
 
             var canvasObject = new GameObject("CascadeNotifications", typeof(RectTransform), typeof(Canvas));
             DontDestroyOnLoad(canvasObject);
@@ -69,12 +68,11 @@ namespace CascadeMenu
                 ApplyPlacement(placement);
             }
 
-            // Keep theme changes from requiring a menu open/rebuild.
-            if (_config != null && (_themeIndex != _config.ThemeIndex.Value || _accentIndex != _config.AccentIndex.Value))
+            // Keep theme changes from requiring a menu open/rebuild. The active
+            // theme is mutated in place, so this only has to follow the pointer.
+            if (CascadeTheme.Active != null)
             {
-                _themeIndex = _config.ThemeIndex.Value;
-                _accentIndex = _config.AccentIndex.Value;
-                _theme = CascadeTheme.Build(_config.ThemeMode, _config.AccentIndex.Value);
+                _theme = CascadeTheme.Active;
             }
         }
 

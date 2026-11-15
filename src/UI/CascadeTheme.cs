@@ -1,50 +1,141 @@
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace CascadeMenu.UI
 {
-    internal enum CascadeThemeMode
+    /// <summary>Every color role the menu can draw.</summary>
+    internal enum CascadeRole
     {
-        Dark = 0,
-        Light = 1
-    }
-
-    internal sealed class CascadeAccent
-    {
-        public readonly string Name;
-        public readonly Color DarkSelection;
-        public readonly Color DarkSwitch;
-        public readonly Color DarkButtonTop;
-        public readonly Color DarkButtonBottom;
-        public readonly Color LightSelection;
-        public readonly Color LightSwitch;
-        public readonly Color LightButtonTop;
-        public readonly Color LightButtonBottom;
-
-        public CascadeAccent(
-            string name,
-            string darkSelection,
-            string darkSwitch,
-            string darkTop,
-            string darkBottom,
-            string lightSelection,
-            string lightSwitch,
-            string lightTop,
-            string lightBottom)
-        {
-            Name = name;
-            DarkSelection = CascadeTheme.Hex(darkSelection);
-            DarkSwitch = CascadeTheme.Hex(darkSwitch);
-            DarkButtonTop = CascadeTheme.Hex(darkTop);
-            DarkButtonBottom = CascadeTheme.Hex(darkBottom);
-            LightSelection = CascadeTheme.Hex(lightSelection);
-            LightSwitch = CascadeTheme.Hex(lightSwitch);
-            LightButtonTop = CascadeTheme.Hex(lightTop);
-            LightButtonBottom = CascadeTheme.Hex(lightBottom);
-        }
+        None = 0,
+        TextPrimary,
+        TextSecondary,
+        TextTertiary,
+        WindowBorder,
+        SidebarBg,
+        ContentBg,
+        TitlebarBg,
+        TitlebarHairline,
+        ViewBg,
+        ViewBorder,
+        Separator,
+        RowHover,
+        TabHover,
+        Accent,
+        AccentSoft,
+        SelectionText,
+        ToggleOn,
+        ToggleOff,
+        ToggleKnob,
+        SliderTrack,
+        SliderFill,
+        SliderThumb,
+        SliderThumbBorder,
+        ButtonPrimaryTop,
+        ButtonPrimaryBottom,
+        ButtonSecondaryTop,
+        ButtonSecondaryBottom,
+        ButtonSecondaryHover,
+        ButtonPressed,
+        ButtonText,
+        ButtonSecondaryText,
+        FieldBg,
+        FieldBorder,
+        FieldFocus,
+        Scrollbar,
+        TrafficClose,
+        TrafficMinimize,
+        TrafficZoom,
+        TrafficGlyph,
+        ToastBg,
+        ToastBorder,
+        IconNormal,
+        IconSelected,
+        ShadowColor,
+        Active,
+        ActiveSoft,
+        Danger,
+        Warning,
+        Success,
+        TapBadgeBg,
+        TapBadgeText,
+        ModalDim,
+        Pointer,
+        PointerShadow,
+        AvatarBg,
+        HoverTint,
+        PrimaryHoverTint,
+        KnobShadow,
+        ThumbShadow,
+        DisabledToggle,
+        LiveBadge,
+        Count
     }
 
     /// <summary>
-    /// Colors and metrics lifted from Cascade's Dark/Light themes and its accent file.
+    /// A color plus the role it came from. Theme properties return this instead
+    /// of a bare <see cref="Color"/>, which lets the UI factory remember what to
+    /// recolor later without rewriting every widget call site.
+    /// </summary>
+    internal readonly struct CascadeColor
+    {
+        public const float FollowRoleAlpha = -1f;
+
+        public readonly Color Value;
+        public readonly CascadeRole Role;
+        public readonly float Alpha;
+
+        public CascadeColor(Color value, CascadeRole role, float alpha = FollowRoleAlpha)
+        {
+            Value = value;
+            Role = role;
+            Alpha = alpha;
+        }
+
+        public float r { get { return Value.r; } }
+        public float g { get { return Value.g; } }
+        public float b { get { return Value.b; } }
+        public float a { get { return Alpha >= 0f ? Alpha : Value.a; } }
+
+        public CascadeColor WithAlpha(float alpha)
+        {
+            Color value = Value;
+            value.a = alpha;
+            return new CascadeColor(value, Role, alpha);
+        }
+
+        public static implicit operator Color(CascadeColor color)
+        {
+            Color value = color.Value;
+            if (color.Alpha >= 0f) value.a = color.Alpha;
+            return value;
+        }
+
+        public static implicit operator CascadeColor(Color color)
+        {
+            return new CascadeColor(color, CascadeRole.None);
+        }
+    }
+
+    internal sealed class CascadeGraphicBinding
+    {
+        public Graphic Graphic;
+        public CascadeRole Role;
+        public float Alpha = CascadeColor.FollowRoleAlpha;
+    }
+
+    internal sealed class CascadeGradientBinding
+    {
+        public CascadeGradient Gradient;
+        public CascadeRole TopRole;
+        public CascadeRole BottomRole;
+        public float TopAlpha = CascadeColor.FollowRoleAlpha;
+        public float BottomAlpha = CascadeColor.FollowRoleAlpha;
+    }
+
+    /// <summary>
+    /// The central color table. One palette is derived into every menu role, so
+    /// presets and the custom picker only edit the palette.
     /// </summary>
     internal sealed class CascadeTheme
     {
@@ -54,82 +145,23 @@ namespace CascadeMenu.UI
         public const float TitlebarHeight = 52f;
         public const float CornerRadius = 10f;
 
-        public static readonly CascadeAccent[] Accents =
-        {
-            new CascadeAccent("Blue",     "#007AFF", "#0A84FF", "#4894FF", "#0A6EFF", "#007AFF", "#0A84FF", "#2B91FF", "#007AFF"),
-            new CascadeAccent("Purple",   "#9B35D4", "#BF5AF2", "#AE4FE0", "#7A18B8", "#8C2EC0", "#AF52DE", "#9E42CA", "#7010A8"),
-            new CascadeAccent("Pink",     "#D4163E", "#FF375F", "#E83058", "#C00030", "#C8103A", "#FF2D55", "#DC2A50", "#B4002C"),
-            new CascadeAccent("Red",      "#D4201A", "#FF453A", "#E83830", "#BC0E08", "#C81A10", "#FF3B30", "#DC2E24", "#B00808"),
-            new CascadeAccent("Orange",   "#C86800", "#FF9F0A", "#E07C00", "#A85000", "#BC6000", "#FF9500", "#D47000", "#A04800"),
-            new CascadeAccent("Yellow",   "#A87800", "#FFD60A", "#C49000", "#8C6000", "#9C7000", "#FFCC00", "#B88400", "#845800"),
-            new CascadeAccent("Green",    "#1A9030", "#32D74B", "#24A83C", "#0E7020", "#148428", "#28CD41", "#1E9C34", "#0C6818"),
-            new CascadeAccent("Graphite", "#58585C", "#98989D", "#6E6E72", "#404044", "#4E4E52", "#8E8E93", "#626266", "#383838")
-        };
+        private readonly Color[] _colors = new Color[(int)CascadeRole.Count];
 
-        public CascadeThemeMode Mode;
-        public string AccentName;
-        public bool IsDark;
+        // A single cached list of color bindings. Recoloring never searches the
+        // scene; it walks only the graphics the UI factory already registered.
+        private static readonly List<CascadeGraphicBinding> Bindings = new List<CascadeGraphicBinding>();
+        private static readonly List<CascadeGradientBinding> GradientBindings = new List<CascadeGradientBinding>();
 
-        public Color TextPrimary;
-        public Color TextSecondary;
-        public Color TextTertiary;
+        public string Name = "Default";
+        public bool IsCustom;
+        public bool IsDark = true;
+        public bool ContrastAdjusted;
 
-        public Color WindowBorder;
-        public Color SidebarBg;
-        public Color ContentBg;
-        public Color TitlebarBg;
-        public Color TitlebarHairline;
-        public Color ViewBg;
-        public Color ViewBorder;
-        public Color Separator;
-        public Color RowHover;
-        public Color TabHover;
+        /// <summary>Increments after a theme is applied so live widgets can refresh.</summary>
+        public int Version { get; private set; }
 
-        public Color Accent;
-        public Color AccentSoft;
-        public Color SelectionText;
-        public Color ToggleOff;
-        public Color ToggleKnob;
-
-        public Color SliderTrack;
-        public Color SliderFill;
-        public Color SliderThumb;
-        public Color SliderThumbBorder;
-
-        public Color ButtonPrimaryTop;
-        public Color ButtonPrimaryBottom;
-        public Color ButtonSecondaryTop;
-        public Color ButtonSecondaryBottom;
-        public Color ButtonSecondaryHover;
-        public Color ButtonText;
-        public Color ButtonSecondaryText;
-
-        public Color FieldBg;
-        public Color FieldBorder;
-        public Color FieldFocus;
-        public Color Scrollbar;
-
-        public Color TrafficClose;
-        public Color TrafficMinimize;
-        public Color TrafficZoom;
-        public Color TrafficGlyph;
-
-        public Color ToastBg;
-        public Color ToastBorder;
-
-        public Color IconNormal;
-        public Color IconSelected;
-        public Color ShadowColor;
-
-        public static string[] AccentNames
-        {
-            get
-            {
-                var names = new string[Accents.Length];
-                for (int i = 0; i < Accents.Length; i++) names[i] = Accents[i].Name;
-                return names;
-            }
-        }
+        /// <summary>The theme currently built into the menu. Bindings resolve against it.</summary>
+        public static CascadeTheme Active;
 
         public static Color Hex(string hex, float alpha = 1f)
         {
@@ -145,112 +177,465 @@ namespace CascadeMenu.UI
             return color;
         }
 
-        public static CascadeTheme Build(CascadeThemeMode mode, int accentIndex)
+        // -----------------------------------------------------------------
+        // Role accessors. These keep the existing `theme.TextPrimary` call
+        // sites working while carrying the role metadata.
+        // -----------------------------------------------------------------
+        private CascadeColor Role(CascadeRole role)
         {
-            CascadeAccent accent = Accents[Mathf.Clamp(accentIndex, 0, Accents.Length - 1)];
-            var theme = new CascadeTheme
+            return new CascadeColor(_colors[(int)role], role);
+        }
+
+        public CascadeColor TextPrimary { get { return Role(CascadeRole.TextPrimary); } }
+        public CascadeColor TextSecondary { get { return Role(CascadeRole.TextSecondary); } }
+        public CascadeColor TextTertiary { get { return Role(CascadeRole.TextTertiary); } }
+        public CascadeColor WindowBorder { get { return Role(CascadeRole.WindowBorder); } }
+        public CascadeColor SidebarBg { get { return Role(CascadeRole.SidebarBg); } }
+        public CascadeColor ContentBg { get { return Role(CascadeRole.ContentBg); } }
+        public CascadeColor TitlebarBg { get { return Role(CascadeRole.TitlebarBg); } }
+        public CascadeColor TitlebarHairline { get { return Role(CascadeRole.TitlebarHairline); } }
+        public CascadeColor ViewBg { get { return Role(CascadeRole.ViewBg); } }
+        public CascadeColor ViewBorder { get { return Role(CascadeRole.ViewBorder); } }
+        public CascadeColor Separator { get { return Role(CascadeRole.Separator); } }
+        public CascadeColor RowHover { get { return Role(CascadeRole.RowHover); } }
+        public CascadeColor TabHover { get { return Role(CascadeRole.TabHover); } }
+        public CascadeColor Accent { get { return Role(CascadeRole.Accent); } }
+        public CascadeColor AccentSoft { get { return Role(CascadeRole.AccentSoft); } }
+        public CascadeColor SelectionText { get { return Role(CascadeRole.SelectionText); } }
+        public CascadeColor ToggleOn { get { return Role(CascadeRole.ToggleOn); } }
+        public CascadeColor ToggleOff { get { return Role(CascadeRole.ToggleOff); } }
+        public CascadeColor ToggleKnob { get { return Role(CascadeRole.ToggleKnob); } }
+        public CascadeColor SliderTrack { get { return Role(CascadeRole.SliderTrack); } }
+        public CascadeColor SliderFill { get { return Role(CascadeRole.SliderFill); } }
+        public CascadeColor SliderThumb { get { return Role(CascadeRole.SliderThumb); } }
+        public CascadeColor SliderThumbBorder { get { return Role(CascadeRole.SliderThumbBorder); } }
+        public CascadeColor ButtonPrimaryTop { get { return Role(CascadeRole.ButtonPrimaryTop); } }
+        public CascadeColor ButtonPrimaryBottom { get { return Role(CascadeRole.ButtonPrimaryBottom); } }
+        public CascadeColor ButtonSecondaryTop { get { return Role(CascadeRole.ButtonSecondaryTop); } }
+        public CascadeColor ButtonSecondaryBottom { get { return Role(CascadeRole.ButtonSecondaryBottom); } }
+        public CascadeColor ButtonSecondaryHover { get { return Role(CascadeRole.ButtonSecondaryHover); } }
+        public CascadeColor ButtonPressed { get { return Role(CascadeRole.ButtonPressed); } }
+        public CascadeColor ButtonText { get { return Role(CascadeRole.ButtonText); } }
+        public CascadeColor ButtonSecondaryText { get { return Role(CascadeRole.ButtonSecondaryText); } }
+        public CascadeColor FieldBg { get { return Role(CascadeRole.FieldBg); } }
+        public CascadeColor FieldBorder { get { return Role(CascadeRole.FieldBorder); } }
+        public CascadeColor FieldFocus { get { return Role(CascadeRole.FieldFocus); } }
+        public CascadeColor Scrollbar { get { return Role(CascadeRole.Scrollbar); } }
+        public CascadeColor TrafficClose { get { return Role(CascadeRole.TrafficClose); } }
+        public CascadeColor TrafficMinimize { get { return Role(CascadeRole.TrafficMinimize); } }
+        public CascadeColor TrafficZoom { get { return Role(CascadeRole.TrafficZoom); } }
+        public CascadeColor TrafficGlyph { get { return Role(CascadeRole.TrafficGlyph); } }
+        public CascadeColor ToastBg { get { return Role(CascadeRole.ToastBg); } }
+        public CascadeColor ToastBorder { get { return Role(CascadeRole.ToastBorder); } }
+        public CascadeColor IconNormal { get { return Role(CascadeRole.IconNormal); } }
+        public CascadeColor IconSelected { get { return Role(CascadeRole.IconSelected); } }
+        public CascadeColor ShadowColor { get { return Role(CascadeRole.ShadowColor); } }
+        public CascadeColor ActiveColor { get { return Role(CascadeRole.Active); } }
+        public CascadeColor ActiveSoft { get { return Role(CascadeRole.ActiveSoft); } }
+        public CascadeColor Danger { get { return Role(CascadeRole.Danger); } }
+        public CascadeColor Warning { get { return Role(CascadeRole.Warning); } }
+        public CascadeColor Success { get { return Role(CascadeRole.Success); } }
+        public CascadeColor TapBadgeBg { get { return Role(CascadeRole.TapBadgeBg); } }
+        public CascadeColor TapBadgeText { get { return Role(CascadeRole.TapBadgeText); } }
+        public CascadeColor ModalDim { get { return Role(CascadeRole.ModalDim); } }
+        public CascadeColor Pointer { get { return Role(CascadeRole.Pointer); } }
+        public CascadeColor PointerShadow { get { return Role(CascadeRole.PointerShadow); } }
+        public CascadeColor AvatarBg { get { return Role(CascadeRole.AvatarBg); } }
+        public CascadeColor HoverTint { get { return Role(CascadeRole.HoverTint); } }
+        public CascadeColor PrimaryHoverTint { get { return Role(CascadeRole.PrimaryHoverTint); } }
+        public CascadeColor KnobShadow { get { return Role(CascadeRole.KnobShadow); } }
+        public CascadeColor ThumbShadow { get { return Role(CascadeRole.ThumbShadow); } }
+        public CascadeColor DisabledToggle { get { return Role(CascadeRole.DisabledToggle); } }
+        public CascadeColor LiveBadge { get { return Role(CascadeRole.LiveBadge); } }
+
+        // Friendly aliases used by the Themes tab. They point at the same roles
+        // the menu actually draws with.
+        public CascadeColor Background { get { return ContentBg; } }
+        public CascadeColor Panel { get { return SidebarBg; } }
+        public CascadeColor Header { get { return TitlebarBg; } }
+        public CascadeColor Text { get { return TextPrimary; } }
+        public CascadeColor SecondaryText { get { return TextSecondary; } }
+        public CascadeColor Border { get { return WindowBorder; } }
+
+        // -----------------------------------------------------------------
+        // Binding registry
+        // -----------------------------------------------------------------
+
+        public static void Bind(Graphic graphic, CascadeColor color)
+        {
+            if (graphic == null || color.Role == CascadeRole.None) return;
+            Bind(graphic, color.Role, color.Alpha);
+        }
+
+        public static void Bind(Graphic graphic, CascadeRole role, float alpha = CascadeColor.FollowRoleAlpha)
+        {
+            if (graphic == null || role == CascadeRole.None) return;
+
+            for (int i = 0; i < Bindings.Count; i++)
             {
-                Mode = mode,
-                IsDark = mode == CascadeThemeMode.Dark,
-                AccentName = accent.Name,
-                Accent = mode == CascadeThemeMode.Dark ? accent.DarkSelection : accent.LightSelection,
-                AccentSoft = mode == CascadeThemeMode.Dark ? accent.DarkSwitch : accent.LightSwitch,
-                SelectionText = Hex("#FFFFFF"),
-                ToggleKnob = Hex("#FFFFFF"),
-                TrafficClose = Hex("#FF5F57"),
-                TrafficMinimize = Hex("#FEBC2E"),
-                TrafficZoom = Hex("#28C840"),
-                TrafficGlyph = Hex("#000000", 0.55f)
-            };
+                CascadeGraphicBinding existing = Bindings[i];
+                if (existing.Graphic == graphic)
+                {
+                    existing.Role = role;
+                    existing.Alpha = alpha;
+                    return;
+                }
+            }
 
-            if (theme.IsDark)
+            Bindings.Add(new CascadeGraphicBinding
             {
-                theme.TextPrimary = Hex("#FFFFFF", 0.94f);
-                theme.TextSecondary = Hex("#FFFFFF", 0.68f);
-                theme.TextTertiary = Hex("#FFFFFF", 0.40f);
+                Graphic = graphic,
+                Role = role,
+                Alpha = alpha
+            });
+        }
 
-                theme.SidebarBg = Hex("#202023", 0.90f);
-                theme.ContentBg = Hex("#1C1C1E", 0.97f);
-                theme.TitlebarBg = Hex("#2C2C2E", 0.97f);
-                theme.WindowBorder = Hex("#FFFFFF", 0.10f);
-                theme.TitlebarHairline = Hex("#000000", 0.38f);
-                theme.ViewBg = Hex("#1F1F21", 0.98f);
-                theme.ViewBorder = Hex("#FFFFFF", 0.06f);
-                theme.Separator = Hex("#FFFFFF", 0.065f);
-                theme.RowHover = Hex("#FFFFFF", 0.05f);
-                theme.TabHover = Hex("#FFFFFF", 0.07f);
+        public static void Bind(CascadeGradient gradient)
+        {
+            if (gradient == null) return;
 
-                theme.ToggleOff = Hex("#7A7A7A", 0.60f);
-                theme.SliderTrack = Hex("#2C2C2E");
-                theme.SliderFill = accent.DarkSwitch;
-                theme.SliderThumb = Hex("#FFFFFF");
-                theme.SliderThumbBorder = Hex("#000000", 0.20f);
+            for (int i = 0; i < GradientBindings.Count; i++)
+            {
+                if (GradientBindings[i].Gradient == gradient)
+                {
+                    UpdateGradientBinding(GradientBindings[i], gradient);
+                    return;
+                }
+            }
 
-                theme.ButtonPrimaryTop = accent.DarkButtonTop;
-                theme.ButtonPrimaryBottom = accent.DarkButtonBottom;
-                theme.ButtonSecondaryTop = Hex("#3C3C3C");
-                theme.ButtonSecondaryBottom = Hex("#373737");
-                theme.ButtonSecondaryHover = Hex("#484848");
-                theme.ButtonText = Hex("#FFFFFF");
-                theme.ButtonSecondaryText = Hex("#FFFFFF", 0.92f);
+            var binding = new CascadeGradientBinding { Gradient = gradient };
+            UpdateGradientBinding(binding, gradient);
+            GradientBindings.Add(binding);
+        }
 
-                theme.FieldBg = Hex("#FFFFFF", 0.06f);
-                theme.FieldBorder = Hex("#FFFFFF", 0.10f);
-                theme.FieldFocus = accent.DarkSelection;
-                theme.Scrollbar = Hex("#FFFFFF", 0.26f);
+        private static void UpdateGradientBinding(CascadeGradientBinding binding, CascadeGradient gradient)
+        {
+            binding.TopRole = gradient.Top.Role;
+            binding.BottomRole = gradient.Bottom.Role;
+            binding.TopAlpha = gradient.Top.Alpha;
+            binding.BottomAlpha = gradient.Bottom.Alpha;
+        }
 
-                theme.ToastBg = Hex("#2C2C2E", 0.98f);
-                theme.ToastBorder = Hex("#FFFFFF", 0.10f);
+        /// <summary>
+        /// Applies a role color now and keeps the graphic in the recolor cache,
+        /// so a later theme switch repaints it without rebuilding the page.
+        /// </summary>
+        public static void SetGraphicColor(Graphic graphic, CascadeColor color)
+        {
+            if (graphic == null) return;
+            graphic.color = color;
+            Bind(graphic, color);
+        }
 
-                theme.IconNormal = Hex("#FFFFFF", 0.55f);
-                theme.IconSelected = Hex("#FFFFFF");
-                theme.ShadowColor = Hex("#000000", 0.55f);
+        /// <summary>Applies a raw color without registering a role binding.</summary>
+        public static void SetGraphicColor(Graphic graphic, Color color)
+        {
+            if (graphic == null) return;
+            graphic.color = color;
+        }
+
+        /// <summary>Keeps a binding's alpha in sync when a widget fades a graphic.</summary>
+        public static void UpdateAlpha(Graphic graphic, float alpha)
+        {
+            if (graphic == null) return;
+            for (int i = 0; i < Bindings.Count; i++)
+            {
+                if (Bindings[i].Graphic == graphic)
+                {
+                    Bindings[i].Alpha = alpha;
+                    return;
+                }
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // Palette application
+        // -----------------------------------------------------------------
+
+        public bool Apply(CascadeThemePreset preset)
+        {
+            if (preset == null) preset = CascadeThemePreset.Default;
+
+            Name = preset.Name;
+            IsCustom = string.Equals(Name, "Custom", System.StringComparison.Ordinal);
+            IsDark = preset.Dark;
+            CascadeThemePalette p = preset.Palette;
+
+            Color background = p[(int)CascadePaletteIndex.Background];
+            Color panel = p[(int)CascadePaletteIndex.Panel];
+            Color header = p[(int)CascadePaletteIndex.Header];
+            Color button = p[(int)CascadePaletteIndex.Button];
+            Color buttonHover = p[(int)CascadePaletteIndex.ButtonHover];
+            Color buttonPressed = p[(int)CascadePaletteIndex.ButtonPressed];
+            Color toggleOn = p[(int)CascadePaletteIndex.ToggleOn];
+            Color toggleOff = p[(int)CascadePaletteIndex.ToggleOff];
+            Color text = p[(int)CascadePaletteIndex.Text];
+            Color secondary = p[(int)CascadePaletteIndex.SecondaryText];
+            Color accent = p[(int)CascadePaletteIndex.Accent];
+            Color border = p[(int)CascadePaletteIndex.Border];
+            Color active = p[(int)CascadePaletteIndex.Active];
+            Color field = p[(int)CascadePaletteIndex.Field];
+            Color danger = p[(int)CascadePaletteIndex.Danger];
+            Color warning = p[(int)CascadePaletteIndex.Warning];
+            Color success = p[(int)CascadePaletteIndex.Success];
+
+            float textRatio = ContrastRatio(text, background);
+            ContrastAdjusted = textRatio < 3f;
+            if (ContrastAdjusted) text = IsLight(background) ? Color.black : Color.white;
+
+            if (ContrastRatio(secondary, background) < 1.8f)
+                secondary = IsLight(background) ? Color.black : Color.white;
+
+            Color selection = IsLight(accent) ? Hex("#111111") : Color.white;
+            bool dark = IsDark;
+            float normalAlpha = dark ? 0.94f : 0.92f;
+            float secondaryAlpha = dark ? 0.68f : 0.62f;
+
+            Set(CascadeRole.TextPrimary, WithAlpha(text, normalAlpha));
+            Set(CascadeRole.TextSecondary, WithAlpha(secondary, secondaryAlpha));
+            Set(CascadeRole.TextTertiary, WithAlpha(text, dark ? 0.40f : 0.38f));
+
+            Set(CascadeRole.ContentBg, WithAlpha(background, dark ? 0.97f : 0.99f));
+            Set(CascadeRole.SidebarBg, WithAlpha(panel, dark ? 0.90f : 0.94f));
+            Set(CascadeRole.TitlebarBg, WithAlpha(header, dark ? 0.97f : 0.99f));
+            Set(CascadeRole.ViewBg, WithAlpha(panel, dark ? 0.98f : 0.99f));
+            Set(CascadeRole.WindowBorder, WithAlpha(border, 0.10f));
+            Set(CascadeRole.TitlebarHairline, dark ? Hex("#000000", 0.38f) : Hex("#000000", 0.08f));
+            Set(CascadeRole.ViewBorder, WithAlpha(border, dark ? 0.06f : 0.07f));
+            Set(CascadeRole.Separator, WithAlpha(border, dark ? 0.065f : 0.07f));
+            Set(CascadeRole.RowHover, WithAlpha(border, dark ? 0.05f : 0.035f));
+            Set(CascadeRole.TabHover, WithAlpha(border, dark ? 0.07f : 0.05f));
+            Set(CascadeRole.HoverTint, WithAlpha(border, dark ? 0.07f : 0.06f));
+
+            Set(CascadeRole.Accent, accent);
+            Set(CascadeRole.AccentSoft, toggleOn);
+            Set(CascadeRole.ToggleOn, toggleOn);
+            Set(CascadeRole.ToggleOff, WithAlpha(toggleOff, dark ? 0.60f : 0.09f));
+            Set(CascadeRole.ToggleKnob, Color.white);
+            Set(CascadeRole.SelectionText, selection);
+            Set(CascadeRole.ButtonText, selection);
+            Set(CascadeRole.ButtonSecondaryText, WithAlpha(text, dark ? 0.92f : 0.86f));
+            Set(CascadeRole.IconSelected, selection);
+
+            Set(CascadeRole.SliderTrack, dark ? Lighten(panel, 0.07f) : WithAlpha(Color.black, 0.09f));
+            Set(CascadeRole.SliderFill, toggleOn);
+            Set(CascadeRole.SliderThumb, Color.white);
+            Set(CascadeRole.SliderThumbBorder, dark ? WithAlpha(Color.black, 0.20f) : WithAlpha(Color.black, 0.06f));
+
+            Set(CascadeRole.ButtonPrimaryTop, dark ? Lighten(accent, 0.18f) : Lighten(accent, 0.08f));
+            Set(CascadeRole.ButtonPrimaryBottom, dark ? Darken(accent, 0.10f) : accent);
+            Set(CascadeRole.ButtonSecondaryTop, button);
+            Set(CascadeRole.ButtonSecondaryBottom, dark ? Darken(button, 0.03f) : Darken(button, 0.02f));
+            Set(CascadeRole.ButtonSecondaryHover, buttonHover);
+            Set(CascadeRole.ButtonPressed, buttonPressed);
+
+            Set(CascadeRole.FieldBg, WithAlpha(field, dark ? 0.06f : 0.035f));
+            Set(CascadeRole.FieldBorder, WithAlpha(border, dark ? 0.10f : 0.09f));
+            Set(CascadeRole.FieldFocus, accent);
+            Set(CascadeRole.Scrollbar, WithAlpha(border, dark ? 0.26f : 0.28f));
+
+            Set(CascadeRole.TrafficClose, Hex("#FF5F57"));
+            Set(CascadeRole.TrafficMinimize, Hex("#FEBC2E"));
+            Set(CascadeRole.TrafficZoom, Hex("#28C840"));
+            Set(CascadeRole.TrafficGlyph, Hex("#000000", 0.55f));
+
+            Set(CascadeRole.ToastBg, WithAlpha(panel, 0.98f));
+            Set(CascadeRole.ToastBorder, WithAlpha(border, 0.10f));
+            Set(CascadeRole.IconNormal, WithAlpha(text, dark ? 0.55f : 0.50f));
+            Set(CascadeRole.ShadowColor, WithAlpha(Color.black, dark ? 0.55f : 0.35f));
+
+            Set(CascadeRole.Active, active);
+            Set(CascadeRole.ActiveSoft, WithAlpha(active, 0.16f));
+            Set(CascadeRole.Danger, danger);
+            Set(CascadeRole.Warning, warning);
+            Set(CascadeRole.Success, success);
+            Set(CascadeRole.TapBadgeBg, WithAlpha(warning, 0.22f));
+            Set(CascadeRole.TapBadgeText, Lighten(warning, 0.12f));
+            Set(CascadeRole.ModalDim, Hex("#000000", 0.62f));
+            Set(CascadeRole.Pointer, accent);
+            Set(CascadeRole.PointerShadow, Hex("#000000", 0.62f));
+            Set(CascadeRole.AvatarBg, WithAlpha(border, dark ? 0.11f : 0.08f));
+            Set(CascadeRole.PrimaryHoverTint, Hex("#FFFFFF", 0.14f));
+            Set(CascadeRole.KnobShadow, Hex("#000000", 0.20f));
+            Set(CascadeRole.ThumbShadow, Hex("#000000", 0.18f));
+            Set(CascadeRole.DisabledToggle, dark ? Lighten(panel, 0.12f) : Darken(panel, 0.22f));
+            Set(CascadeRole.LiveBadge, Hex("#000000", 0.56f));
+
+            Version++;
+            Active = this;
+            RecolorAll();
+            return ContrastAdjusted;
+        }
+
+        private void Set(CascadeRole role, Color color)
+        {
+            _colors[(int)role] = color;
+        }
+
+        private Color RoleColor(CascadeRole role, float alpha)
+        {
+            Color color = _colors[(int)role];
+            if (alpha >= 0f) color.a = alpha;
+            return color;
+        }
+
+        /// <summary>Repaints only registered graphics, and only when their target changed.</summary>
+        public void RecolorAll()
+        {
+            Active = this;
+
+            for (int i = Bindings.Count - 1; i >= 0; i--)
+            {
+                CascadeGraphicBinding binding = Bindings[i];
+                if (binding.Graphic == null)
+                {
+                    Bindings.RemoveAt(i);
+                    continue;
+                }
+
+                Color target = RoleColor(binding.Role, binding.Alpha);
+                if (binding.Graphic.color != target) binding.Graphic.color = target;
+            }
+
+            for (int i = GradientBindings.Count - 1; i >= 0; i--)
+            {
+                CascadeGradientBinding binding = GradientBindings[i];
+                if (binding.Gradient == null)
+                {
+                    GradientBindings.RemoveAt(i);
+                    continue;
+                }
+
+                if (binding.TopRole != CascadeRole.None)
+                    binding.Gradient.Top = new CascadeColor(
+                        RoleColor(binding.TopRole, binding.TopAlpha), binding.TopRole, binding.TopAlpha);
+                if (binding.BottomRole != CascadeRole.None)
+                    binding.Gradient.Bottom = new CascadeColor(
+                        RoleColor(binding.BottomRole, binding.BottomAlpha), binding.BottomRole, binding.BottomAlpha);
+
+                binding.Gradient.Refresh();
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // Config helpers
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Builds the startup theme from the config. Auto mode picks the theme
+        /// whose date range matches today. Returns one theme instance that the
+        /// menu keeps and mutates for live edits.
+        /// </summary>
+        public static CascadeTheme FromConfig(MenuConfig config)
+        {
+            var theme = new CascadeTheme();
+
+            CascadeThemePalette custom = CascadeThemePalette.Parse(config.CustomPalette.Value);
+            CascadeThemePreset preset = null;
+            bool auto = config.ThemeAuto.Value;
+
+            if (auto)
+            {
+                preset = CascadeThemePreset.ForDate(System.DateTime.Now);
+                if (preset == null) preset = CascadeThemePreset.Default;
             }
             else
             {
-                theme.TextPrimary = Hex("#000000", 0.92f);
-                theme.TextSecondary = Hex("#000000", 0.62f);
-                theme.TextTertiary = Hex("#000000", 0.40f);
-
-                theme.SidebarBg = Hex("#EAEAEA", 0.94f);
-                theme.ContentBg = Hex("#FCFCFC", 0.99f);
-                theme.TitlebarBg = Hex("#EEEEEE", 0.99f);
-                theme.WindowBorder = Hex("#000000", 0.10f);
-                theme.TitlebarHairline = Hex("#000000", 0.08f);
-                theme.ViewBg = Hex("#FFFFFF", 0.99f);
-                theme.ViewBorder = Hex("#000000", 0.07f);
-                theme.Separator = Hex("#000000", 0.07f);
-                theme.RowHover = Hex("#000000", 0.035f);
-                theme.TabHover = Hex("#000000", 0.05f);
-
-                theme.ToggleOff = Hex("#000000", 0.09f);
-                theme.SliderTrack = Hex("#000000", 0.09f);
-                theme.SliderFill = accent.LightSwitch;
-                theme.SliderThumb = Hex("#FFFFFF");
-                theme.SliderThumbBorder = Hex("#000000", 0.06f);
-
-                theme.ButtonPrimaryTop = accent.LightButtonTop;
-                theme.ButtonPrimaryBottom = accent.LightButtonBottom;
-                theme.ButtonSecondaryTop = Hex("#FFFFFF");
-                theme.ButtonSecondaryBottom = Hex("#F7F7F7");
-                theme.ButtonSecondaryHover = Hex("#EFEFEF");
-                theme.ButtonText = Hex("#FFFFFF");
-                theme.ButtonSecondaryText = Hex("#000000", 0.86f);
-
-                theme.FieldBg = Hex("#000000", 0.035f);
-                theme.FieldBorder = Hex("#000000", 0.09f);
-                theme.FieldFocus = accent.LightSelection;
-                theme.Scrollbar = Hex("#000000", 0.28f);
-
-                theme.ToastBg = Hex("#FFFFFF", 0.98f);
-                theme.ToastBorder = Hex("#000000", 0.10f);
-
-                theme.IconNormal = Hex("#000000", 0.50f);
-                theme.IconSelected = Hex("#FFFFFF");
-                theme.ShadowColor = Hex("#000000", 0.35f);
+                string selected = config.ThemePreset.Value;
+                if (string.Equals(selected, "Custom", System.StringComparison.OrdinalIgnoreCase) && custom != null)
+                {
+                    preset = new CascadeThemePreset("Custom", IsLight(custom[(int)CascadePaletteIndex.Background]) == false,
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.Background]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.Panel]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.Header]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.Button]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.ButtonHover]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.ButtonPressed]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.ToggleOn]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.ToggleOff]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.Text]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.SecondaryText]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.Accent]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.Border]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.Active]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.Field]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.Danger]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.Warning]),
+                        CascadeThemePalette.ToHex(custom[(int)CascadePaletteIndex.Success]));
+                }
+                else
+                {
+                    preset = CascadeThemePreset.Find(selected);
+                }
             }
 
+            if (preset == null) preset = CascadeThemePreset.Default;
+            theme.Apply(preset);
             return theme;
+        }
+
+        /// <summary>Builds a preset backed by an edited palette.</summary>
+        public static CascadeThemePreset CustomPreset(CascadeThemePalette palette)
+        {
+            if (palette == null) palette = CascadeThemePreset.DefaultPalette.Clone();
+            bool dark = !IsLight(palette[(int)CascadePaletteIndex.Background]);
+
+            return new CascadeThemePreset("Custom", dark,
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.Background]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.Panel]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.Header]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.Button]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.ButtonHover]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.ButtonPressed]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.ToggleOn]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.ToggleOff]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.Text]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.SecondaryText]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.Accent]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.Border]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.Active]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.Field]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.Danger]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.Warning]),
+                CascadeThemePalette.ToHex(palette[(int)CascadePaletteIndex.Success]));
+        }
+
+        // -----------------------------------------------------------------
+        // Color math
+        // -----------------------------------------------------------------
+
+        public static bool IsLight(Color color)
+        {
+            return Luminance(color) > 0.55f;
+        }
+
+        public static float Luminance(Color color)
+        {
+            return 0.2126f * Channel(color.r) + 0.7152f * Channel(color.g) + 0.0722f * Channel(color.b);
+        }
+
+        private static float Channel(float value)
+        {
+            return value <= 0.03928f ? value / 12.92f : Mathf.Pow((value + 0.055f) / 1.055f, 2.4f);
+        }
+
+        public static float ContrastRatio(Color a, Color b)
+        {
+            float first = Luminance(a);
+            float second = Luminance(b);
+            float bright = Mathf.Max(first, second);
+            float dark = Mathf.Min(first, second);
+            return (bright + 0.05f) / (dark + 0.05f);
+        }
+
+        public static Color Lighten(Color color, float amount)
+        {
+            return Color.Lerp(color, Color.white, Mathf.Clamp01(amount));
+        }
+
+        public static Color Darken(Color color, float amount)
+        {
+            return Color.Lerp(color, Color.black, Mathf.Clamp01(amount));
         }
     }
 }

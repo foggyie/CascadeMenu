@@ -1,15 +1,13 @@
 using GorillaLocomotion;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace CascadeMenu.Mods
 {
     /// <summary>
     /// Body-rotation ("acrobatics") mode, ported from GorillaAcrobatics.
     ///
-    /// It follows the same flow as the joystick fly mod: the menu switch (or
-    /// its bind) arms the mod, and double-tapping A in game engages or
-    /// disengages it. Arming alone never rotates the body.
+    /// The menu switch turns it on or off directly. Arming never waits for an
+    /// in-game gesture, so one button starts and stops the effect.
     ///
     /// While engaged, the body follows the head so leaning, spinning and
     /// flipping with your own movement feel natural. The Cascade menu never
@@ -19,16 +17,10 @@ namespace CascadeMenu.Mods
     [DefaultExecutionOrder(10001)]
     internal sealed class AcrobaticsController : MonoBehaviour
     {
-        private const float DoubleTapWindow = 0.5f;
-
         private static AcrobaticsController _instance;
 
         private MenuConfig _config;
 
-        private bool _wasPressed;
-        private bool _wasPrimaryButton;
-        private float _lastTapTime = -10f;
-        private bool _engaged;
         private bool _active;
         private bool _pendingActivate;
         private int _resetFrames;
@@ -38,7 +30,7 @@ namespace CascadeMenu.Mods
 
         internal static bool IsActive { get; private set; }
 
-        /// <summary>True when the menu switch is on (armed, waiting for the double tap).</summary>
+        /// <summary>True when the menu switch is on.</summary>
         internal static bool IsArmed
         {
             get { return _instance != null && _instance._config != null && _instance._config.Acrobatics.Value; }
@@ -47,7 +39,7 @@ namespace CascadeMenu.Mods
         /// <summary>True while body rotation is actually running.</summary>
         internal static bool IsEngaged
         {
-            get { return _instance != null && _instance._engaged; }
+            get { return _instance != null && _instance._active; }
         }
 
         internal void Initialize(MenuConfig config)
@@ -56,15 +48,10 @@ namespace CascadeMenu.Mods
             _instance = this;
 
             // A saved "on" value must never rotate the body at load time. Every
-            // session starts disarmed and disengaged; the menu switch or the
-            // bind arms it, and the in-game double tap engages it.
-            _engaged = false;
+            // session starts off; the menu switch turns it on directly.
             _active = false;
             IsActive = false;
             _pendingActivate = false;
-            _wasPressed = false;
-            _wasPrimaryButton = false;
-            _lastTapTime = -10f;
             _resetFrames = 0;
             if (config != null) config.Acrobatics.Value = false;
         }
@@ -79,25 +66,10 @@ namespace CascadeMenu.Mods
         {
             if (_config == null) return;
 
-            // The bind flips the same armed value the menu switch uses.
-            HandleToggle();
-
-            // Same gesture as joystick fly: double-tap A in game to engage.
-            HandleDoubleTap();
-
             if (!_config.Acrobatics.Value)
             {
                 // Kill switch. This also stops a mode that was left pending
                 // because the head transform was not ready yet.
-                _engaged = false;
-                if (_active || _pendingActivate) Deactivate();
-                ApplyResetFrames();
-                return;
-            }
-
-            // Armed is not engaged. Wait for the double tap.
-            if (!_engaged)
-            {
                 if (_active || _pendingActivate) Deactivate();
                 ApplyResetFrames();
                 return;
@@ -136,63 +108,6 @@ namespace CascadeMenu.Mods
             IsActive = true;
         }
 
-        /// <summary>
-        /// Mirrors the fly mod's activation: two quick presses of A while the
-        /// menu is closed. The gesture is ignored while acrobatics is disarmed,
-        /// so it can never engage by accident.
-        /// </summary>
-        private void HandleDoubleTap()
-        {
-            ControllerInputPoller poller = ControllerInputPoller.instance;
-            bool pressed = poller != null && poller.rightControllerPrimaryButton;
-
-            // A is the menu's select button. Do not treat menu clicks as a
-            // double-tap gesture while Cascade is open.
-            if (CascadeMenuBehaviour.IsMenuOpen || _config == null || !_config.Acrobatics.Value)
-            {
-                _wasPrimaryButton = pressed;
-                _lastTapTime = -10f;
-                return;
-            }
-
-            if (pressed && !_wasPrimaryButton)
-            {
-                float now = Time.unscaledTime;
-                if (now - _lastTapTime <= DoubleTapWindow)
-                {
-                    _lastTapTime = -10f;
-                    ToggleEngaged();
-                }
-                else
-                {
-                    _lastTapTime = now;
-                }
-            }
-
-            _wasPrimaryButton = pressed;
-        }
-
-        /// <summary>Engages or disengages body rotation without disarming it.</summary>
-        private void ToggleEngaged()
-        {
-            _engaged = !_engaged;
-            if (_engaged) Activate();
-            else Deactivate();
-        }
-
-        private void HandleToggle()
-        {
-            bool pressed = RightStickClicked();
-            if (pressed && !_wasPressed)
-            {
-                bool next = !_config.Acrobatics.Value;
-                SetActive(next);
-                CascadeMenuBehaviour.Instance?.ShowToast("Acrobatics",
-                    next ? "Armed - double-tap A in game." : "Off.");
-            }
-            _wasPressed = pressed;
-        }
-
         internal bool Toggle()
         {
             bool next = _config != null && _config.Acrobatics.Value;
@@ -200,9 +115,8 @@ namespace CascadeMenu.Mods
         }
 
         /// <summary>
-        /// Arms or disarms acrobatics (used by the menu and settings page).
-        /// Arming never engages: the in-game double tap does, exactly like the
-        /// joystick fly mod.
+        /// Turns acrobatics on or off (used by the menu and settings page).
+        /// On starts body rotation immediately.
         /// </summary>
         internal static bool SetActive(bool active)
         {
@@ -212,14 +126,13 @@ namespace CascadeMenu.Mods
             _instance._config.Acrobatics.Value = active;
             if (!active)
             {
-                _instance._engaged = false;
                 _instance.Deactivate();
             }
 
             return _instance._config.Acrobatics.Value;
         }
 
-        /// <summary>Flips the armed value from the Movement page (same as the bind).</summary>
+        /// <summary>Flips the switch from the Movement page.</summary>
         internal static bool ToggleFromMenu()
         {
             if (_instance == null || _instance._config == null)
@@ -284,21 +197,6 @@ namespace CascadeMenu.Mods
             if (GorillaTagger.Instance != null && GorillaTagger.Instance.headCollider != null)
                 return GorillaTagger.Instance.headCollider.transform;
             return null;
-        }
-
-        private bool RightStickClicked()
-        {
-            // VR: the configured controller button (default right stick click).
-            // Works for A/X, B/Y, trigger, grip and either stick click.
-            if (_config != null && VrInput.VrActive &&
-                VrInput.Pressed(VrInput.Parse(_config.AcrobaticsButton.Value)))
-            {
-                return true;
-            }
-
-            // PC / keyboard fallback uses the rebindable "Acrobatics Key".
-            Key key = Keybinds.Parse(_config != null ? _config.AcrobaticsKey.Value : "Delete", Key.Delete);
-            return Keybinds.Pressed(key);
         }
 
         private static void Buzz()

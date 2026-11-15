@@ -52,6 +52,10 @@ namespace CascadeMenu.Mods
             // Drives every Mod subclass found by ModRegistry (Halloween, Super, ...).
             host.AddComponent<ModHost>();
             ModRegistry.Initialize(config);
+
+            // The gun predates the mod system, so its thin Mod wrapper needs the
+            // config after the registry created every mod instance.
+            GunLibMod.EnsureBound(config);
         }
 
         internal static void Shutdown()

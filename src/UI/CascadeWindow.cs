@@ -92,6 +92,7 @@ namespace CascadeMenu.UI
 
         private string _searchQuery = string.Empty;
         private bool _searchFocused;
+        private CascadeTextField _focusedTextField;
         private CascadeKeyboard _keyboard;
 
         private GameObject _dropdown;
@@ -329,6 +330,7 @@ namespace CascadeMenu.UI
                     return "Cosmetics";
                 case "Utilities":
                 case "Settings":
+                case "Themes":
                 case "About":
                 case "Controls":
                 case "Gallery":
@@ -517,10 +519,7 @@ namespace CascadeMenu.UI
         {
             RectTransform hover = CascadeUI.Rect("Hover", parent);
             CascadeUI.Stretch(hover);
-            Color tint = Theme.IsDark
-                ? new Color(1f, 1f, 1f, alpha)
-                : new Color(0f, 0f, 0f, alpha * 0.8f);
-            Image image = CascadeUI.Image(hover, CascadeSprites.Rounded(radius), tint, Image.Type.Sliced);
+            Image image = CascadeUI.Image(hover, CascadeSprites.Rounded(radius), Theme.HoverTint, Image.Type.Sliced);
             image.gameObject.SetActive(false);
             return image;
         }
@@ -620,7 +619,7 @@ namespace CascadeMenu.UI
         {
             if (Pages == null || index < 0 || index >= Pages.Count || index == PageIndex) return;
             _searchQuery = string.Empty;
-            BlurSearch();
+            BlurInput();
 
             if (recordHistory)
             {
@@ -649,6 +648,7 @@ namespace CascadeMenu.UI
 
         private void RebuildContent()
         {
+            _focusedTextField = null;
             CloseDropdown();
             RemoveInteractables(CascadeLayerGroup.Content, CascadeLayerGroup.Overlay);
 
@@ -798,6 +798,30 @@ namespace CascadeMenu.UI
                 return;
             }
 
+            if (row is CascadePresetRow presetRow)
+            {
+                BuildPresetRow(card, presetRow);
+                return;
+            }
+
+            if (row is CascadeTextFieldRow textRow)
+            {
+                BuildTextFieldRow(card, textRow);
+                return;
+            }
+
+            if (row is CascadeSwatchRow swatchRow)
+            {
+                BuildSwatchRow(card, swatchRow);
+                return;
+            }
+
+            if (row is CascadePreviewRow previewRow)
+            {
+                BuildPreviewRow(card, previewRow);
+                return;
+            }
+
             RectTransform root = CascadeUI.Rect("Row", card);
             var layoutElement = root.gameObject.AddComponent<LayoutElement>();
             layoutElement.preferredHeight = row.Height;
@@ -831,7 +855,7 @@ namespace CascadeMenu.UI
                 view.Get = toggle.Get;
                 view.Background.color = toggle.Enabled
                     ? (toggle.Get() ? Theme.AccentSoft : Theme.ToggleOff)
-                    : (Theme.IsDark ? new Color(0.25f, 0.25f, 0.27f, 0.55f) : new Color(0.72f, 0.72f, 0.74f, 0.55f));
+                    : Theme.DisabledToggle;
                 AnchorRightCenter(view.Root, 14f, 28f, 16f);
                 rightOffset = 48f;
 
@@ -931,9 +955,7 @@ namespace CascadeMenu.UI
                 dotRect.pivot = new Vector2(1f, 0f);
                 dotRect.anchoredPosition = new Vector2(3f, -3f);
                 dotRect.sizeDelta = new Vector2(13f, 13f);
-                Color dotColor = cosmetic.Owned
-                    ? new Color(0.3f, 0.85f, 0.42f, 1f)
-                    : Theme.TextTertiary;
+                CascadeColor dotColor = cosmetic.Owned ? Theme.Success : Theme.TextTertiary;
                 CascadeUI.Panel(dotRect, dotColor, 6);
 
                 leftOffset = 12f + iconSize + 10f;
@@ -944,7 +966,7 @@ namespace CascadeMenu.UI
                     RectTransform warnRect = CascadeUI.TopRight(
                         "Warning", root, 12f, (row.Height - 18f) * 0.5f, 220f, 18f);
                     CascadeUI.Text(warnRect, "Can't try on or buy", 10.5f,
-                        new Color(1f, 0.36f, 0.36f, 1f), TextAlignmentOptions.Right, true);
+                        Theme.Danger, TextAlignmentOptions.Right, true);
                     rightOffset = 244f;
                 }
                 else
@@ -987,7 +1009,21 @@ namespace CascadeMenu.UI
             else if (row is CascadeLabelRow labelRow)
             {
                 RectTransform valueRect = CascadeUI.TopRight("Value", root, 12f, (row.Height - 18f) * 0.5f, 150f, 18f);
-                CascadeUI.Text(valueRect, labelRow.Value, 11f, Theme.TextSecondary, TextAlignmentOptions.Right);
+                string value = labelRow.GetValue != null ? (labelRow.GetValue() ?? string.Empty) : labelRow.Value;
+                TMP_Text valueLabel = CascadeUI.Text(valueRect, value, 11f, Theme.TextSecondary,
+                    TextAlignmentOptions.Right);
+
+                if (labelRow.GetValue != null)
+                {
+                    // Poll the value so toggling Active from a keybind updates
+                    // this row without rebuilding the page.
+                    var view = root.gameObject.AddComponent<CascadeLabelView>();
+                    view.Label = valueLabel;
+                    view.GetValue = labelRow.GetValue;
+                    view.IsHighlighted = labelRow.IsHighlighted;
+                    view.Theme = Theme;
+                }
+
                 rightOffset = 174f;
             }
 
@@ -1040,7 +1076,7 @@ namespace CascadeMenu.UI
             Image dot = CascadeUI.Panel(dotRect, Theme.TextTertiary, 4);
 
             const float textLeft = 28f;
-            const float rightOffset = 270f;
+            float rightOffset = row.OpenSettings != null ? 92f : 58f;
 
             RectTransform titleRect = LineRect("Title", root, textLeft, rightOffset, 6f, 24f);
             TMP_Text title = CascadeUI.Text(
@@ -1068,31 +1104,237 @@ namespace CascadeMenu.UI
                 },
                 hover: hovered => hover.gameObject.SetActive(hovered));
 
-            CascadeButtonView action = CascadeWidgets.Button(
-                this, root, row.GetActionLabel(), false, row.Activate);
-            AnchorRightCenter(action.Root, 52f, 64f, 24f);
-
-            CascadeButtonView press = CascadeWidgets.Button(
-                this, root, row.GetPressLabel(), false, row.CyclePress);
-            AnchorRightCenter(press.Root, 122f, 64f, 24f);
-
-            CascadeButtonView bind = CascadeWidgets.Button(
-                this, root, "Bind", false, row.Rebind);
-            AnchorRightCenter(bind.Root, 192f, 58f, 24f);
+            // The row stays minimal: settings gear and Enabled switch only.
+            // Keybind, press type and Active controls live in the gear page.
+            if (row.OpenSettings != null)
+            {
+                CascadeButtonView gear = CascadeWidgets.Button(
+                    this, root, string.Empty, false, row.OpenSettings);
+                AnchorRightCenter(gear.Root, 56f, 26f, 24f);
+                if (gear.Label != null) gear.Label.gameObject.SetActive(false);
+                RectTransform gearIcon = CascadeUI.Center("Gear", gear.Root, 0f, 0f, 14f, 14f);
+                CascadeUI.Image(gearIcon, CascadeIcons.Get(CascadeIcon.Gear), Theme.TextSecondary, Image.Type.Simple);
+            }
 
             var view = root.gameObject.AddComponent<CascadeModView>();
             view.Dot = dot;
             view.Background = background;
             view.StatusLabel = status;
-            view.ActionLabel = action.Label;
-            view.PressLabel = press.Label;
             view.GetEnabled = row.GetEnabled;
             view.GetActive = row.GetActive;
             view.GetKeyLabel = row.GetKeyLabel;
-            view.GetPressLabel = row.GetPressLabel;
-            view.GetActionLabel = row.GetActionLabel;
             view.IsToggle = row.IsToggle;
             view.Configure(Theme);
+        }
+
+        /// <summary>
+        /// One preset theme: name, a miniature swatch of its palette and a Use
+        /// button. Pressing the row or the button applies the theme live.
+        /// </summary>
+        private void BuildPresetRow(RectTransform card, CascadePresetRow row)
+        {
+            RectTransform root = CascadeUI.Rect("Preset", card);
+            var layoutElement = root.gameObject.AddComponent<LayoutElement>();
+            layoutElement.preferredHeight = row.Height;
+            layoutElement.minHeight = row.Height;
+
+            RectTransform hoverRect = CascadeUI.Rect("Hover", root);
+            CascadeUI.Stretch(hoverRect, 3f, 3f, 2f, 2f);
+            Image hover = CascadeUI.Panel(hoverRect, Theme.RowHover, 6);
+            hover.gameObject.SetActive(false);
+
+            const float swatchWidth = 18f;
+            const float swatchGap = 3f;
+            float stripWidth = row.Swatch.Length * swatchWidth +
+                               Mathf.Max(0, row.Swatch.Length - 1) * swatchGap;
+
+            RectTransform strip = CascadeUI.Rect("Swatch", root);
+            strip.anchorMin = strip.anchorMax = new Vector2(1f, 0.5f);
+            strip.pivot = new Vector2(1f, 0.5f);
+            strip.anchoredPosition = new Vector2(-78f, 0f);
+            strip.sizeDelta = new Vector2(stripWidth, swatchWidth);
+
+            for (int i = 0; i < row.Swatch.Length; i++)
+            {
+                RectTransform chip = CascadeUI.Rect("Chip" + i, strip);
+                chip.anchorMin = chip.anchorMax = new Vector2(0f, 0.5f);
+                chip.pivot = new Vector2(0f, 0.5f);
+                chip.anchoredPosition = new Vector2(i * (swatchWidth + swatchGap), 0f);
+                chip.sizeDelta = new Vector2(swatchWidth, swatchWidth);
+                CascadeUI.Panel(chip, row.Swatch[i], 4);
+            }
+
+            CascadeButtonView use = CascadeWidgets.Button(this, root, "Use", false, row.Apply);
+            AnchorRightCenter(use.Root, 12f, 56f, 24f);
+
+            bool selected = row.IsSelected != null && row.IsSelected();
+            RectTransform titleRect = LineRect("Title", root, 12f, stripWidth + 90f, 10f, 22f);
+            TextMeshProUGUI titleLabel = CascadeUI.Text(titleRect, row.Title, 12.5f,
+                selected ? Theme.Accent : Theme.TextPrimary, TextAlignmentOptions.Left, selected);
+
+            RectTransform subtitleRect = LineRect("Subtitle", root, 12f, stripWidth + 90f, 31f, 16f);
+            TextMeshProUGUI subtitleLabel = CascadeUI.Text(subtitleRect,
+                selected ? "Selected - " + row.Subtitle : row.Subtitle,
+                10f, selected ? Theme.AccentSoft : Theme.TextSecondary, TextAlignmentOptions.Left);
+
+            // Keeps the selected marker and its colors in sync across a live
+            // theme switch or a different preset being picked.
+            var view = root.gameObject.AddComponent<CascadePresetView>();
+            view.Title = titleLabel;
+            view.Subtitle = subtitleLabel;
+            view.BaseSubtitle = row.Subtitle;
+            view.IsSelected = row.IsSelected;
+            view.Theme = Theme;
+
+            Register(root, CascadeLayerGroup.Content, row.Apply,
+                hover: hovered => hover.gameObject.SetActive(hovered));
+        }
+
+        /// <summary>One editable text row; the field routes typing through the window.</summary>
+        private void BuildTextFieldRow(RectTransform card, CascadeTextFieldRow row)
+        {
+            RectTransform root = CascadeUI.Rect("TextFieldRow", card);
+            var layoutElement = root.gameObject.AddComponent<LayoutElement>();
+            layoutElement.preferredHeight = row.Height;
+            layoutElement.minHeight = row.Height;
+
+            CascadeTextField field = CascadeWidgets.TextField(
+                this, root, Theme, row.Placeholder, row.MaxLength, row.Get, row.Set);
+            AnchorRightCenter(field.Root, 12f, 150f, 26f);
+
+            bool hasSubtitle = !string.IsNullOrEmpty(row.Subtitle);
+            float top = hasSubtitle ? 7f : (row.Height - 22f) * 0.5f;
+            RectTransform titleRect = LineRect("Title", root, 12f, 174f, top, 22f);
+            CascadeUI.Text(titleRect, row.Title, 12.5f, Theme.TextPrimary, TextAlignmentOptions.Left);
+            if (hasSubtitle)
+            {
+                RectTransform subtitleRect = LineRect("Subtitle", root, 12f, 174f, top + 21f, 17f);
+                CascadeUI.Text(subtitleRect, row.Subtitle, 10.5f, Theme.TextSecondary, TextAlignmentOptions.Left);
+            }
+        }
+
+        /// <summary>A row of color chips; tapping one writes that color.</summary>
+        private void BuildSwatchRow(RectTransform card, CascadeSwatchRow row)
+        {
+            RectTransform root = CascadeUI.Rect("Swatches", card);
+            var layoutElement = root.gameObject.AddComponent<LayoutElement>();
+            layoutElement.preferredHeight = row.Height;
+            layoutElement.minHeight = row.Height;
+
+            const float size = 20f;
+            const float gap = 5f;
+            int count = row.Colors.Length;
+            float width = count * size + Mathf.Max(0, count - 1) * gap;
+
+            RectTransform strip = CascadeUI.Rect("Strip", root);
+            strip.anchorMin = strip.anchorMax = new Vector2(1f, 0.5f);
+            strip.pivot = new Vector2(1f, 0.5f);
+            strip.anchoredPosition = new Vector2(-12f, 0f);
+            strip.sizeDelta = new Vector2(width, size);
+
+            for (int i = 0; i < count; i++)
+            {
+                int index = i;
+                RectTransform chip = CascadeUI.Rect("Chip" + i, strip);
+                chip.anchorMin = chip.anchorMax = new Vector2(0f, 0.5f);
+                chip.pivot = new Vector2(0f, 0.5f);
+                chip.anchoredPosition = new Vector2(i * (size + gap), 0f);
+                chip.sizeDelta = new Vector2(size, size);
+                CascadeUI.Panel(chip, row.Colors[i], 5);
+                CascadeUI.Outline(chip, Theme.FieldBorder, 5);
+
+                RectTransform hoverRect = CascadeUI.Rect("Hover", chip);
+                CascadeUI.Stretch(hoverRect);
+                Image hover = CascadeUI.Image(hoverRect, CascadeSprites.Rounded(5), Theme.HoverTint, Image.Type.Sliced);
+                hover.gameObject.SetActive(false);
+
+                Register(chip, CascadeLayerGroup.Content, () => row.Pick?.Invoke(index),
+                    hover: h => hover.gameObject.SetActive(h));
+            }
+
+            bool hasSubtitle = !string.IsNullOrEmpty(row.Subtitle);
+            float top = hasSubtitle ? 7f : (row.Height - 22f) * 0.5f;
+            RectTransform titleRect = LineRect("Title", root, 12f, width + 24f, top, 22f);
+            CascadeUI.Text(titleRect, row.Title, 12.5f, Theme.TextPrimary, TextAlignmentOptions.Left);
+            if (hasSubtitle)
+            {
+                RectTransform subtitleRect = LineRect("Subtitle", root, 12f, width + 24f, top + 21f, 17f);
+                CascadeUI.Text(subtitleRect, row.Subtitle, 10.5f, Theme.TextSecondary, TextAlignmentOptions.Left);
+            }
+        }
+
+        /// <summary>
+        /// The theme preview. Every piece is created with a role color, so the
+        /// binding cache repaints it automatically on a live theme change.
+        /// </summary>
+        private void BuildPreviewRow(RectTransform card, CascadePreviewRow row)
+        {
+            RectTransform root = CascadeUI.Rect("Preview", card);
+            var layoutElement = root.gameObject.AddComponent<LayoutElement>();
+            layoutElement.preferredHeight = row.Height;
+            layoutElement.minHeight = row.Height;
+
+            RectTransform titleRect = LineRect("Title", root, 12f, 12f, 4f, 18f);
+            CascadeUI.Text(titleRect, row.Title, 11.5f, Theme.TextSecondary, TextAlignmentOptions.Left, true);
+
+            RectTransform preview = CascadeUI.Rect("Window", root);
+            preview.anchorMin = new Vector2(0f, 0f);
+            preview.anchorMax = new Vector2(1f, 1f);
+            preview.pivot = new Vector2(0.5f, 0.5f);
+            preview.offsetMin = new Vector2(12f, 8f);
+            preview.offsetMax = new Vector2(-12f, -26f);
+            CascadeUI.Panel(preview, Theme.Background, 8);
+            RectTransform previewBorder = CascadeUI.Rect("Border", preview);
+            CascadeUI.Stretch(previewBorder);
+            CascadeUI.Outline(previewBorder, Theme.Border, 8);
+
+            RectTransform sidebar = CascadeUI.Rect("Panel", preview);
+            sidebar.anchorMin = new Vector2(0f, 0f);
+            sidebar.anchorMax = new Vector2(0f, 1f);
+            sidebar.pivot = new Vector2(0f, 0.5f);
+            sidebar.sizeDelta = new Vector2(96f, 0f);
+            CascadeUI.Panel(sidebar, Theme.Panel, 8);
+
+            RectTransform header = CascadeUI.Rect("Header", preview);
+            header.anchorMin = new Vector2(0f, 1f);
+            header.anchorMax = new Vector2(1f, 1f);
+            header.pivot = new Vector2(0.5f, 1f);
+            header.offsetMin = new Vector2(0f, -20f);
+            header.offsetMax = new Vector2(0f, 0f);
+            CascadeUI.Panel(header, Theme.Header, 8);
+
+            RectTransform text = CascadeUI.Rect("Text", sidebar);
+            CascadeUI.Stretch(text, 10f, 10f, 8f, 8f);
+            CascadeUI.Text(text, "Aa", 15f, Theme.Text, TextAlignmentOptions.Left, true);
+
+            RectTransform secondary = CascadeUI.Rect("Secondary", preview);
+            secondary.anchorMin = new Vector2(0f, 1f);
+            secondary.anchorMax = new Vector2(1f, 1f);
+            secondary.pivot = new Vector2(0.5f, 1f);
+            secondary.offsetMin = new Vector2(108f, -40f);
+            secondary.offsetMax = new Vector2(-12f, -24f);
+            CascadeUI.Text(secondary, "Secondary text", 9.5f, Theme.SecondaryText, TextAlignmentOptions.Left);
+
+            RectTransform button = CascadeUI.Rect("Button", preview);
+            button.anchorMin = button.anchorMax = new Vector2(1f, 0f);
+            button.pivot = new Vector2(1f, 0f);
+            button.anchoredPosition = new Vector2(-12f, 9f);
+            button.sizeDelta = new Vector2(58f, 18f);
+            CascadeUI.Panel(button, Theme.ButtonSecondaryTop, 5);
+
+            RectTransform accent = CascadeUI.Rect("Accent", preview);
+            accent.anchorMin = accent.anchorMax = new Vector2(0f, 0f);
+            accent.pivot = new Vector2(0f, 0f);
+            accent.anchoredPosition = new Vector2(108f, 9f);
+            accent.sizeDelta = new Vector2(44f, 18f);
+            CascadeUI.Panel(accent, Theme.Accent, 5);
+
+            RectTransform active = CascadeUI.Rect("Active", preview);
+            active.anchorMin = active.anchorMax = new Vector2(0f, 0f);
+            active.pivot = new Vector2(0f, 0f);
+            active.anchoredPosition = new Vector2(160f, 14f);
+            active.sizeDelta = new Vector2(8f, 8f);
+            CascadeUI.Panel(active, Theme.ActiveColor, 4);
         }
 
         /// <summary>
@@ -1134,7 +1376,7 @@ namespace CascadeMenu.UI
             avatarRect.anchoredPosition = new Vector2(9f, 0f);
             avatarRect.sizeDelta = new Vector2(44f, 44f);
             CascadeUI.Image(avatarRect, CascadeSprites.Circle(),
-                Theme.IsDark ? new Color(1f, 1f, 1f, 0.11f) : new Color(0f, 0f, 0f, 0.08f),
+                Theme.AvatarBg,
                 Image.Type.Simple);
 
             RectTransform faceRect = CascadeUI.Rect("Face", avatarRect);
@@ -1165,10 +1407,10 @@ namespace CascadeMenu.UI
             tapRect.pivot = new Vector2(1f, 0.5f);
             tapRect.anchoredPosition = new Vector2(-right, 0f);
             tapRect.sizeDelta = new Vector2(40f, 18f);
-            CascadeUI.Image(tapRect, CascadeSprites.Rounded(4), new Color(1f, 0.72f, 0.2f, 0.22f), Image.Type.Sliced);
+            CascadeUI.Image(tapRect, CascadeSprites.Rounded(4), Theme.TapBadgeBg, Image.Type.Sliced);
             RectTransform tapText = CascadeUI.Rect("Text", tapRect);
             CascadeUI.Stretch(tapText, 2f, 2f, 0f, 0f);
-            CascadeUI.Text(tapText, "TAP", 8f, new Color(1f, 0.78f, 0.32f, 1f), TextAlignmentOptions.Center, true);
+            CascadeUI.Text(tapText, "TAP", 8f, Theme.TapBadgeText, TextAlignmentOptions.Center, true);
             tapRect.gameObject.SetActive(false);
             right += 46f;
 
@@ -1282,8 +1524,8 @@ namespace CascadeMenu.UI
             CascadeUI.Stretch(background);
             Image backgroundImage = CascadeUI.Panel(background, Color.white, 8);
             var gradient = background.gameObject.AddComponent<CascadeGradient>();
-            gradient.Top = new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.13f);
-            gradient.Bottom = new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.01f);
+            gradient.Top = Theme.Accent.WithAlpha(0.13f);
+            gradient.Bottom = Theme.Accent.WithAlpha(0.01f);
 
             RectTransform iconRect = CascadeUI.TopLeft("Icon", root, 12f, 15f, 46f, 46f);
             Image iconBackground = CascadeUI.Image(iconRect, CascadeSprites.Rounded(12), Color.white, Image.Type.Sliced);
@@ -1339,6 +1581,73 @@ namespace CascadeMenu.UI
         internal bool SearchFocused
         {
             get { return _searchFocused; }
+        }
+
+        /// <summary>True while the search box or any inline text field has focus.</summary>
+        public bool IsTyping
+        {
+            get { return _searchFocused || _focusedTextField != null; }
+        }
+
+        public bool TextFieldFocused
+        {
+            get { return _focusedTextField != null; }
+        }
+
+        /// <summary>Routes typing to one inline field, blurring the search box.</summary>
+        public void FocusTextField(CascadeTextField field)
+        {
+            if (field == null) return;
+            BlurSearch();
+            if (_focusedTextField != null && _focusedTextField != field)
+            {
+                _focusedTextField.SetFocused(false);
+            }
+            _focusedTextField = field;
+            field.SetFocused(true);
+            if (_keyboard != null) _keyboard.SetVisible(XRSettings.isDeviceActive);
+        }
+
+        public void BlurTextField()
+        {
+            if (_focusedTextField != null)
+            {
+                _focusedTextField.SetFocused(false);
+                _focusedTextField = null;
+            }
+        }
+
+        /// <summary>Applies the focused field and leaves edit mode.</summary>
+        public void CommitTextField()
+        {
+            if (_focusedTextField == null) return;
+            _focusedTextField.Commit();
+            _focusedTextField = null;
+        }
+
+        /// <summary>Leaves any text entry mode (used by Escape).</summary>
+        public void BlurInput()
+        {
+            BlurSearch();
+            BlurTextField();
+        }
+
+        /// <summary>
+        /// Repaints the window after the live theme was mutated. Registered
+        /// graphics are recolored by the binding cache; this refreshes the few
+        /// widgets that cache a computed color of their own.
+        /// </summary>
+        public void ApplyTheme()
+        {
+            if (!_built) return;
+            if (_menu != null) Theme = _menu.Theme;
+            if (Theme == null) return;
+
+            CascadeTheme.Active = Theme;
+            Theme.RecolorAll();
+
+            if (SearchField != null) SearchField.RefreshTheme();
+            if (_focusedTextField != null) _focusedTextField.RefreshTheme();
         }
 
         private void OnSearchChanged(string query)
@@ -1404,11 +1713,21 @@ namespace CascadeMenu.UI
 
         public void HandleTextInput(char character)
         {
+            if (_focusedTextField != null)
+            {
+                _focusedTextField.Append(character);
+                return;
+            }
             if (_searchFocused && SearchField != null) SearchField.Append(character);
         }
 
         public void HandleBackspace()
         {
+            if (_focusedTextField != null)
+            {
+                _focusedTextField.Backspace();
+                return;
+            }
             if (_searchFocused && SearchField != null) SearchField.Backspace();
         }
 
@@ -1463,8 +1782,10 @@ namespace CascadeMenu.UI
             {
                 int index = i;
                 RectTransform option = CascadeUI.TopLeft("Option" + i, _dropdownPanel, 4f, 4f + i * 24f, width - 8f, 24f);
-                Image hover = CascadeUI.Panel(option, Theme.RowHover, 5);
-                hover.color = new Color(Theme.RowHover.r, Theme.RowHover.g, Theme.RowHover.b, 0f);
+                // Unbound raw color: the option stays transparent until it is
+                // hovered, so a live recolor cannot make every row look hovered.
+                Image hover = CascadeUI.Panel(option, (Color)Theme.RowHover, 5);
+                hover.color = Theme.RowHover.WithAlpha(0f);
 
                 RectTransform labelRect = LineRect("Label", option, 10f, 26f, 0f, 24f);
                 TMP_Text label = CascadeUI.Text(labelRect, view.Options[i], 11.5f,
@@ -1487,7 +1808,7 @@ namespace CascadeMenu.UI
                     CloseDropdown();
                 }, hover: hovered =>
                 {
-                    hover.color = new Color(Theme.RowHover.r, Theme.RowHover.g, Theme.RowHover.b, hovered ? Theme.RowHover.a : 0f);
+                    hover.color = Theme.RowHover.WithAlpha(hovered ? Theme.RowHover.a : 0f);
                     label.color = hovered || index == selected ? Theme.TextPrimary : Theme.TextSecondary;
                 });
             }
@@ -1509,7 +1830,7 @@ namespace CascadeMenu.UI
 
             _disconnectOverlay = CascadeUI.Rect("DisconnectOverlay", _root);
             CascadeUI.Stretch(_disconnectOverlay);
-            Image dim = CascadeUI.Image(_disconnectOverlay, CascadeSprites.White(), new Color(0f, 0f, 0f, 0.62f), Image.Type.Simple);
+            Image dim = CascadeUI.Image(_disconnectOverlay, CascadeSprites.White(), Theme.ModalDim, Image.Type.Simple);
             dim.raycastTarget = false;
             Register(_disconnectOverlay, CascadeLayerGroup.Overlay, () => { });
 
@@ -1571,7 +1892,7 @@ namespace CascadeMenu.UI
 
             _confirmOverlay = CascadeUI.Rect("ConfirmOverlay", _root);
             CascadeUI.Stretch(_confirmOverlay);
-            Image dim = CascadeUI.Image(_confirmOverlay, CascadeSprites.White(), new Color(0f, 0f, 0f, 0.62f), Image.Type.Simple);
+            Image dim = CascadeUI.Image(_confirmOverlay, CascadeSprites.White(), Theme.ModalDim, Image.Type.Simple);
             dim.raycastTarget = false;
             Register(_confirmOverlay, CascadeLayerGroup.Overlay, () => { });
 
@@ -1897,7 +2218,7 @@ namespace CascadeMenu.UI
 
             // The on-screen keyboard only exists in VR. On desktop the search
             // field keeps working with the physical keyboard only.
-            if (_keyboard != null) _keyboard.SetVisible(_searchFocused && XRSettings.isDeviceActive);
+            if (_keyboard != null) _keyboard.SetVisible(IsTyping && XRSettings.isDeviceActive);
 
             _sidebarTarget = _sidebarExpanded ? CascadeTheme.SidebarWidth : 0f;
             if (_config != null && !_config.Animations.Value)

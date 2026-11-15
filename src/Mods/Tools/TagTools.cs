@@ -14,10 +14,22 @@ namespace CascadeMenu.Mods
     [PluginToggleable]
     public class TagGun : Mod
     {
+        private float _cooldown = 0.35f;
+
         public TagGun()
         {
             Name = "Tag gun";
             isToggle = true;
+
+            AddSetting(ModSetting.Slider(
+                "cooldown",
+                "Tag cooldown",
+                "Seconds between tags, so a held trigger does not spam the lobby",
+                0.1f,
+                2f,
+                () => _cooldown,
+                value => _cooldown = value,
+                value => value.ToString("0.00") + " s"));
         }
 
         public override void Update()
@@ -26,7 +38,7 @@ namespace CascadeMenu.Mods
             {
                 if (player == null) return;
                 PlayerActions.TagPlayer(player);
-            }, cooldown: 0.35f);
+            }, cooldown: _cooldown);
         }
 
         public override void OnDisable()

@@ -22,8 +22,8 @@ namespace CascadeMenu.Mods
     ///   }
     ///
     /// ...and it appears on its namespace's page with an Enabled toggle, a
-    /// keybind, a Single/Double press selector and an Active indicator. No
-    /// registration call and no per-mod keybind code is needed.
+    /// keybind, a settings gear and an Active indicator. No registration call
+    /// and no per-mod keybind code is needed.
     ///
     /// Categories come from the namespace: CascadeMenu.Mods.Halloween -> "Halloween",
     /// CascadeMenu.Mods.Super -> "Super", CascadeMenu.Mods -> "General".
@@ -31,7 +31,11 @@ namespace CascadeMenu.Mods
     internal static class ModRegistry
     {
         private const string BindSection = "Binds";
+        private const string SettingsSection = "Mod settings";
         private const float FallbackDoublePressWindow = 0.3f;
+
+        /// <summary>Tag prefix for a generated mod settings page.</summary>
+        internal const string SettingsTagPrefix = "cascade.modsettings.";
 
         private static readonly List<Mod> All = new List<Mod>();
         private static readonly List<string> CategoryList = new List<string>();
@@ -41,6 +45,11 @@ namespace CascadeMenu.Mods
             new Dictionary<Mod, ConfigEntry<string>>();
         private static readonly Dictionary<Mod, ConfigEntry<string>> PressEntries =
             new Dictionary<Mod, ConfigEntry<string>>();
+
+        // Mod option changes are coalesced so dragging a slider does not write
+        // the config file every frame.
+        private static readonly HashSet<Mod> DirtySettings = new HashSet<Mod>();
+        private static float _nextSettingsFlush;
 
         // Reused every frame so the input path does not allocate.
         private static readonly HashSet<Key> DoubleKeys = new HashSet<Key>();
@@ -137,6 +146,8 @@ namespace CascadeMenu.Mods
                 KeyEntries[mod] = keyEntry;
                 PressEntries[mod] = pressEntry;
 
+                ApplySettings(mod);
+
                 Plugin.Log?.LogInfo("Cascade bind: " + mod.Name + " = " +
                                     Keybinds.Name(mod.Key) + " (" + PressName(mod.PressType) + ").");
             }
@@ -152,9 +163,101 @@ namespace CascadeMenu.Mods
             return ModPressType.Single;
         }
 
+        /// <summary>
+        /// Restores every extra option a mod declared. The config section is
+        /// shared; the key is "ClassName.SettingKey", so renaming a mod class
+        /// starts a fresh entry instead of reading someone else's value.
+        /// </summary>
+        private static void ApplySettings(Mod mod)
+        {
+            if (_config == null || mod.Settings == null) return;
+
+            string id = mod.GetType().Name;
+            for (int i = 0; i < mod.Settings.Count; i++)
+            {
+                ModSetting setting = mod.Settings[i];
+                if (setting == null) continue;
+
+                try
+                {
+                    ConfigEntry<string> entry = _config.File.Bind(
+                        SettingsSection,
+                        id + "." + setting.Key,
+                        setting.Serialize(),
+                        setting.Title + " for \"" + mod.Name + "\".");
+
+                    setting.Deserialize(entry.Value);
+                }
+                catch (Exception exception)
+                {
+                    Plugin.Log?.LogWarning("Cascade could not load a setting for \"" + mod.Name + "\": " + exception.Message);
+                }
+            }
+        }
+
+        /// <summary>Writes every setting of one mod to the config file.</summary>
+        internal static void SaveSettings(Mod mod)
+        {
+            if (_config == null || mod == null || mod.Settings == null) return;
+
+            string id = mod.GetType().Name;
+            bool changed = false;
+            for (int i = 0; i < mod.Settings.Count; i++)
+            {
+                ModSetting setting = mod.Settings[i];
+                if (setting == null) continue;
+
+                try
+                {
+                    ConfigEntry<string> entry = _config.File.Bind(
+                        SettingsSection,
+                        id + "." + setting.Key,
+                        setting.Serialize(),
+                        setting.Title + " for \"" + mod.Name + "\".");
+
+                    entry.Value = setting.Serialize();
+                    changed = true;
+                }
+                catch (Exception exception)
+                {
+                    Plugin.Log?.LogWarning("Cascade could not save a setting for \"" + mod.Name + "\": " + exception.Message);
+                }
+            }
+
+            if (changed)
+            {
+                try
+                {
+                    _config.File.Save();
+                }
+                catch (Exception exception)
+                {
+                    Plugin.Log?.LogWarning("Cascade could not save the settings file: " + exception.Message);
+                }
+            }
+        }
+
         private static string PressName(ModPressType type)
         {
             return type == ModPressType.Double ? "double press" : "single press";
+        }
+
+        private static void MarkSettingsDirty(Mod mod)
+        {
+            if (mod != null) DirtySettings.Add(mod);
+        }
+
+        /// <summary>Writes pending option changes at most once a second.</summary>
+        private static void FlushSettings()
+        {
+            if (DirtySettings.Count == 0 || Time.unscaledTime < _nextSettingsFlush) return;
+            _nextSettingsFlush = Time.unscaledTime + 1f;
+
+            foreach (Mod mod in DirtySettings)
+            {
+                SaveSettings(mod);
+            }
+            DirtySettings.Clear();
         }
 
         /// <summary>Page name for a mod, derived from its namespace.</summary>
@@ -226,14 +329,13 @@ namespace CascadeMenu.Mods
         {
             EnsureLoaded();
 
-            var page = new CascadePage("Mods", "Enable to arm a mod, then press its key or Start", CascadeIcon.Layers);
+            var page = new CascadePage("Mods", "Flip one switch to start or stop a mod", CascadeIcon.Layers);
             page.Tag = AllModsTag;
 
             page.Section("How this works",
-                    "Enabled only arms the keybind. Active is the effect actually running.")
-                .Label("Enabled", "Menu toggle; the keybind is ignored while off", "Toggle")
-                .Label("Active", "Changed by the keybind or the Start/Stop button", "Dot")
-                .Label("Keybind", "Press Escape while rebinding to clear it", "Bind");
+                    "One switch turns a mod on or off; there is no separate activation bind.")
+                .Label("Switch", "Turns the effect on or off immediately", "Toggle")
+                .Label("Active", "Lit while the effect is running", "Dot");
 
             for (int c = 0; c < CategoryList.Count; c++)
             {
@@ -247,24 +349,7 @@ namespace CascadeMenu.Mods
                 {
                     Mod mod = All[i];
                     if (CategoryOf(mod) != category) continue;
-
-                    Mod captured = mod;
-                    section.Mod(
-                        captured.Name,
-                        captured.isToggle ? "Toggle mod" : "One-shot action",
-                        () => captured.Enabled,
-                        value => SetEnabled(captured, value),
-                        () => captured.IsActive,
-                        () => Keybinds.Name(captured.Key),
-                        () =>
-                        {
-                            if (menu != null) menu.BeginRebind(ModTarget(captured));
-                        },
-                        () => PressLabel(captured.PressType),
-                        () => CyclePress(captured),
-                        () => ActionLabel(captured),
-                        () => Trigger(captured),
-                        captured.isToggle);
+                    AppendModRow(section, menu, mod);
                 }
             }
 
@@ -276,16 +361,198 @@ namespace CascadeMenu.Mods
             page.Section("Module", "Applies to every mod in the registry")
                 .Button("Disable all", "Disarm every mod and stop its effect", "Disable",
                     DisableAll, false)
-                .Label("Enabled", "Armed, so the keybind works", EnabledCount + " / " + All.Count)
+                .Label("Enabled", "Effect is on", EnabledCount + " / " + All.Count)
                 .Label("Active", "Effects currently running", ActiveCount + " / " + All.Count);
 
             return page;
+        }
+
+        /// <summary>
+        /// Appends one compact mod row (state line, Enabled switch and optional
+        /// settings gear) to an existing section. The Mods page and the Visual
+        /// tab both use this so a mod has exactly one row implementation.
+        /// </summary>
+        internal static void AppendModRow(CascadeSection section, CascadeMenuBehaviour menu, Mod mod)
+        {
+            if (section == null || mod == null) return;
+
+            Mod captured = mod;
+            section.Mod(
+                captured.Name,
+                captured.isToggle ? "Toggle mod" : "One-shot action",
+                () => captured.Enabled,
+                value => SetEffect(captured, value),
+                () => captured.IsActive,
+                () => Keybinds.Name(captured.Key),
+                () =>
+                {
+                    if (menu != null) menu.BeginRebind(ModTarget(captured));
+                },
+                () => PressLabel(captured.PressType),
+                () => CyclePress(captured),
+                () => ActionLabel(captured),
+                () => Trigger(captured),
+                captured.isToggle,
+                captured.HasSettings
+                    ? (Action)(() =>
+                    {
+                        if (menu != null) menu.OpenModSettings(captured);
+                    })
+                    : null);
+        }
+
+        /// <summary>
+        /// Turns a mod on or off from a plain feature toggle. On arms the mod
+        /// and starts the effect in the same click; off stops the effect and
+        /// disarms it, matching the other feature rows.
+        /// </summary>
+        internal static void SetEffect(Mod mod, bool value)
+        {
+            if (mod == null) return;
+
+            try
+            {
+                if (value)
+                {
+                    mod.SetEnabled(true);
+                    if (mod.isToggle) mod.SetActive(true);
+                    else mod.ToggleActive();
+                }
+                else
+                {
+                    if (mod.isToggle) mod.SetActive(false);
+                    mod.SetEnabled(false);
+                }
+            }
+            catch (Exception exception)
+            {
+                Plugin.Log?.LogError("Cascade mod \"" + mod.Name + "\" failed to switch: " + exception);
+            }
         }
 
         /// <summary>Rebind target used by the menu for a mod's key row.</summary>
         private static string ModTarget(Mod mod)
         {
             return "mod:" + mod.GetType().Name;
+        }
+
+        internal static string SettingsTag(Mod mod)
+        {
+            return SettingsTagPrefix + (mod != null ? mod.GetType().Name : string.Empty);
+        }
+
+        internal static bool IsSettingsTag(string tag)
+        {
+            return !string.IsNullOrEmpty(tag) &&
+                   tag.StartsWith(SettingsTagPrefix, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Builds the settings page behind a mod's gear. It contains the
+        /// Enabled switch, the live Active state and any options the mod
+        /// declares. The page is added to the existing window, so only one
+        /// settings panel can be open and its scroll position survives value
+        /// changes.
+        /// </summary>
+        internal static CascadePage BuildSettingsPage(CascadeMenuBehaviour menu, Mod mod)
+        {
+            if (mod == null) return null;
+
+            var page = new CascadePage(mod.Name + " settings",
+                "Mod options", CascadeIcon.Sliders);
+            page.Tag = SettingsTag(mod);
+            page.HiddenFromSidebar = true;
+
+            Mod captured = mod;
+
+            page.Section("State", "The row switch starts and stops this mod")
+                .Toggle("Enabled", "Turn the mod on or off",
+                    () => captured.Enabled,
+                    value => SetEffect(captured, value))
+                .LiveLabel("Active", captured.isToggle
+                        ? "Effect currently running"
+                        : "One-shot mods do not stay active",
+                    () => captured.IsActive ? "ON" : "OFF",
+                    () => captured.IsActive);
+
+            if (captured.Settings != null && captured.Settings.Count > 0)
+            {
+                CascadeSection options = page.Section("Options", "Settings declared by this mod");
+                for (int i = 0; i < captured.Settings.Count; i++)
+                {
+                    AddSettingRow(options, captured, captured.Settings[i]);
+                }
+            }
+
+            page.Section("Module", "Back to the Mods list")
+                .Button("Back to Mods", "Return to the generated mod list", "Back",
+                    () => menu.OpenPage(AllModsTag, "Mods"), false);
+
+            return page;
+        }
+
+        private static void AddSettingRow(CascadeSection section, Mod mod, ModSetting setting)
+        {
+            if (setting == null) return;
+
+            switch (setting.Kind)
+            {
+                case ModSettingKind.Toggle:
+                    section.Toggle(setting.Title, setting.Description,
+                        () => setting.GetBool(),
+                        value =>
+                        {
+                            setting.SetBool(value);
+                            MarkSettingsDirty(mod);
+                        });
+                    break;
+
+                case ModSettingKind.Slider:
+                    section.Slider(setting.Title, setting.Description,
+                        setting.Min, setting.Max,
+                        () => setting.GetFloat(),
+                        value =>
+                        {
+                            setting.SetFloat(value);
+                            MarkSettingsDirty(mod);
+                        },
+                        setting.Format ?? (value => value.ToString("0.##")));
+                    break;
+
+                case ModSettingKind.Stepper:
+                    section.Stepper(setting.Title, setting.Description,
+                        setting.MinInt, setting.MaxInt,
+                        () => setting.GetInt(),
+                        value =>
+                        {
+                            setting.SetInt(value);
+                            MarkSettingsDirty(mod);
+                        },
+                        setting.Format == null ? null : (Func<int, string>)(value => setting.Format(value)));
+                    break;
+
+                case ModSettingKind.Dropdown:
+                    section.Dropdown(setting.Title, setting.Description,
+                        setting.Options,
+                        () => Mathf.Clamp(setting.GetInt(), 0, Mathf.Max(0, setting.Options.Length - 1)),
+                        value =>
+                        {
+                            setting.SetInt(value);
+                            MarkSettingsDirty(mod);
+                        });
+                    break;
+
+                case ModSettingKind.Text:
+                    section.TextField(setting.Title, setting.Description,
+                        "all", 96,
+                        () => setting.GetText(),
+                        value =>
+                        {
+                            setting.SetText(value);
+                            MarkSettingsDirty(mod);
+                        });
+                    break;
+            }
         }
 
         private static string PressLabel(ModPressType type)
@@ -473,6 +740,7 @@ namespace CascadeMenu.Mods
         internal static void UpdateInput()
         {
             EnsureLoaded();
+            FlushSettings();
             if (All.Count == 0 || Keyboard.current == null) return;
 
             CascadeMenuBehaviour menu = CascadeMenuBehaviour.Instance;

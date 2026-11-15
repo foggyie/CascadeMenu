@@ -90,7 +90,7 @@ namespace CascadeMenu.UI
             actionX += 185f;
             CreateKey(actionX, actionY, 54f, KeyHeight, "Del", true, () => _window.HandleBackspace());
             actionX += 59f;
-            CreateKey(actionX, actionY, 64f, KeyHeight, "Done", true, () => _window.BlurSearch());
+            CreateKey(actionX, actionY, 64f, KeyHeight, "Done", true, () => _window.BlurInput());
 
             _root.gameObject.SetActive(false);
         }
@@ -108,7 +108,7 @@ namespace CascadeMenu.UI
         {
             RectTransform key = CascadeUI.TopLeft("Key_" + label, _root, x, y, width, height);
 
-            Color background = action ? _theme.AccentSoft : _theme.FieldBg;
+            CascadeColor background = action ? _theme.AccentSoft : _theme.FieldBg;
             CascadeUI.Image(key, CascadeSprites.Rounded(6), background, Image.Type.Sliced);
 
             RectTransform border = CascadeUI.Rect("Border", key);

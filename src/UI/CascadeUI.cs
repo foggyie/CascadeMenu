@@ -223,9 +223,27 @@ namespace CascadeMenu.UI
             return image;
         }
 
+        /// <summary>
+        /// Role-aware overload. Theme properties carry a <see cref="CascadeRole"/>
+        /// so the created graphic can be repainted later without a scene search.
+        /// </summary>
+        public static Image Image(RectTransform rect, Sprite sprite, CascadeColor color, UnityEngine.UI.Image.Type type = UnityEngine.UI.Image.Type.Sliced)
+        {
+            Image image = Image(rect, sprite, (Color)color, type);
+            CascadeTheme.Bind(image, color);
+            return image;
+        }
+
         public static Image Panel(RectTransform rect, Color color, int radius)
         {
             return Image(rect, CascadeSprites.Rounded(radius), color, UnityEngine.UI.Image.Type.Sliced);
+        }
+
+        public static Image Panel(RectTransform rect, CascadeColor color, int radius)
+        {
+            Image image = Panel(rect, (Color)color, radius);
+            CascadeTheme.Bind(image, color);
+            return image;
         }
 
         public static Image Solid(RectTransform rect, Color color)
@@ -233,9 +251,23 @@ namespace CascadeMenu.UI
             return Image(rect, CascadeSprites.White(), color, UnityEngine.UI.Image.Type.Simple);
         }
 
+        public static Image Solid(RectTransform rect, CascadeColor color)
+        {
+            Image image = Solid(rect, (Color)color);
+            CascadeTheme.Bind(image, color);
+            return image;
+        }
+
         public static Image Outline(RectTransform rect, Color color, int radius, int thickness = 1)
         {
             return Image(rect, CascadeSprites.Outline(radius, thickness), color, UnityEngine.UI.Image.Type.Sliced);
+        }
+
+        public static Image Outline(RectTransform rect, CascadeColor color, int radius, int thickness = 1)
+        {
+            Image image = Outline(rect, (Color)color, radius, thickness);
+            CascadeTheme.Bind(image, color);
+            return image;
         }
 
         /// <summary>
@@ -283,6 +315,20 @@ namespace CascadeMenu.UI
             return label;
         }
 
+        public static TextMeshProUGUI Text(
+            RectTransform rect,
+            string text,
+            float size,
+            CascadeColor color,
+            TextAlignmentOptions alignment = TextAlignmentOptions.Left,
+            bool bold = false,
+            bool wrap = false)
+        {
+            TextMeshProUGUI label = Text(rect, text, size, (Color)color, alignment, bold, wrap);
+            CascadeTheme.Bind(label, color);
+            return label;
+        }
+
         public static TextMeshProUGUI Label(
             Transform parent,
             string name,
@@ -300,9 +346,27 @@ namespace CascadeMenu.UI
             return Text(rect, text, size, color, alignment, bold);
         }
 
+        public static TextMeshProUGUI Label(
+            Transform parent,
+            string name,
+            string text,
+            float size,
+            CascadeColor color,
+            float x,
+            float y,
+            float width,
+            float height,
+            TextAlignmentOptions alignment = TextAlignmentOptions.Left,
+            bool bold = false)
+        {
+            RectTransform rect = TopLeft(name, parent, x, y, width, height);
+            return Text(rect, text, size, color, alignment, bold);
+        }
+
         public static void SetAlpha(Graphic graphic, float alpha)
         {
             if (graphic == null) return;
+            CascadeTheme.UpdateAlpha(graphic, alpha);
             Color color = graphic.color;
             color.a = alpha;
             graphic.color = color;
@@ -314,9 +378,32 @@ namespace CascadeMenu.UI
             return color;
         }
 
+        public static CascadeColor Alpha(CascadeColor color, float alpha)
+        {
+            return color.WithAlpha(alpha);
+        }
+
+        public static Color WithAlpha(Color color, float alpha)
+        {
+            color.a = alpha;
+            return color;
+        }
+
+        public static CascadeColor WithAlpha(CascadeColor color, float alpha)
+        {
+            return color.WithAlpha(alpha);
+        }
+
         public static void SetTextColor(TMP_Text label, Color color)
         {
             if (label != null) label.color = color;
+        }
+
+        public static void SetTextColor(TMP_Text label, CascadeColor color)
+        {
+            if (label == null) return;
+            label.color = color;
+            CascadeTheme.Bind(label, color);
         }
 
         public static string Truncate(string value, int max)
@@ -346,8 +433,36 @@ namespace CascadeMenu.UI
     /// <summary>Two-color vertical vertex tint for Image graphics (button gradients, glass sheen).</summary>
     internal sealed class CascadeGradient : BaseMeshEffect
     {
-        public Color Top = Color.white;
-        public Color Bottom = Color.white;
+        private CascadeColor _top = Color.white;
+        private CascadeColor _bottom = Color.white;
+
+        public CascadeColor Top
+        {
+            get { return _top; }
+            set
+            {
+                _top = value;
+                CascadeTheme.Bind(this);
+                if (graphic != null) graphic.SetVerticesDirty();
+            }
+        }
+
+        public CascadeColor Bottom
+        {
+            get { return _bottom; }
+            set
+            {
+                _bottom = value;
+                CascadeTheme.Bind(this);
+                if (graphic != null) graphic.SetVerticesDirty();
+            }
+        }
+
+        /// <summary>Asks the owner graphic to rebuild with the current colors.</summary>
+        public void Refresh()
+        {
+            if (graphic != null) graphic.SetVerticesDirty();
+        }
 
         public override void ModifyMesh(VertexHelper vertexHelper)
         {

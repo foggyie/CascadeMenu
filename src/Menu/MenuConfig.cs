@@ -9,8 +9,10 @@ namespace CascadeMenu
         // key and one press type per discovered mod under its own section.
         public readonly ConfigFile File;
 
-        public readonly ConfigEntry<int> ThemeIndex;
-        public readonly ConfigEntry<int> AccentIndex;
+        public readonly ConfigEntry<string> ThemePreset;
+        public readonly ConfigEntry<bool> ThemeAuto;
+        public readonly ConfigEntry<string> CustomPalette;
+        public readonly ConfigEntry<int> GunAccentIndex;
         public readonly ConfigEntry<int> UiMode;
         public readonly ConfigEntry<float> Scale;
         public readonly ConfigEntry<float> Distance;
@@ -73,6 +75,21 @@ namespace CascadeMenu
         public readonly ConfigEntry<bool> GunShowMarker;
         public readonly ConfigEntry<int> GunModule;
 
+        // GunLib grip / aim (Job 4)
+        public readonly ConfigEntry<bool> GunActive;
+        public readonly ConfigEntry<bool> GunRequireGrip;
+        public readonly ConfigEntry<int> GunGripHand;
+        public readonly ConfigEntry<int> GunBeamHand;
+        public readonly ConfigEntry<int> GunPcGrip;
+        public readonly ConfigEntry<string> GunPcGripKey;
+        public readonly ConfigEntry<bool> GunBeamEnabled;
+        public readonly ConfigEntry<bool> GunUseThemeColor;
+        public readonly ConfigEntry<string> GunBeamColor;
+        public readonly ConfigEntry<float> GunBeamWidth;
+        public readonly ConfigEntry<string> GunRingColor;
+        public readonly ConfigEntry<float> GunRingSize;
+        public readonly ConfigEntry<float> GunMaxDistance;
+
         // Placement / anchoring
         public readonly ConfigEntry<float> MenuHeight;
         public readonly ConfigEntry<float> MenuRaiseAbove;
@@ -94,17 +111,29 @@ namespace CascadeMenu
         {
             File = config;
 
-            ThemeIndex = config.Bind(
+            ThemePreset = config.Bind(
                 "Appearance",
-                "Theme",
-                0,
-                new ConfigDescription("0 = Dark, 1 = Light", new AcceptableValueRange<int>(0, 1)));
+                "Theme Preset",
+                "Default",
+                "Name of a preset in CascadeThemePreset.All, or \"Custom\" for the saved palette.");
 
-            AccentIndex = config.Bind(
+            ThemeAuto = config.Bind(
                 "Appearance",
-                "Accent",
+                "Auto Seasonal Theme",
+                false,
+                "When enabled, the theme is chosen from today's date at startup and when the menu opens.");
+
+            CustomPalette = config.Bind(
+                "Appearance",
+                "Custom Palette",
+                string.Empty,
+                "Internal: seventeen #RRGGBB colors used by the saved Custom theme.");
+
+            GunAccentIndex = config.Bind(
+                "Appearance",
+                "Gun Beam Accent",
                 0,
-                new ConfigDescription("Index into Cascade's accent palette", new AcceptableValueRange<int>(0, 7)));
+                new ConfigDescription("Index into the preset accent colors used by the target gun beam", new AcceptableValueRange<int>(0, 31)));
 
             UiMode = config.Bind(
                 "Window",
@@ -277,6 +306,87 @@ namespace CascadeMenu
                 "Gun Module",
                 0,
                 new ConfigDescription("0 = Select, 1 = Mark, 2 = Copy Name", new AcceptableValueRange<int>(0, 2)));
+
+            GunActive = config.Bind(
+                "GunLib",
+                "Gun Active",
+                true,
+                "Internal: the Job 2 Active state of the gun. Enabled arms it; Active starts the beam.");
+
+            GunRequireGrip = config.Bind(
+                "GunLib",
+                "Require Grip",
+                true,
+                "When on, the gun only aims and fires while the chosen grip is held. Releasing grip hides the beam and ring immediately.");
+
+            GunGripHand = config.Bind(
+                "GunLib",
+                "Grip Hand",
+                0,
+                new ConfigDescription("VR grip that arms the gun. 0 = Right, 1 = Left, 2 = Either.",
+                    new AcceptableValueRange<int>(0, 2)));
+
+            GunBeamHand = config.Bind(
+                "GunLib",
+                "Beam Hand",
+                2,
+                new ConfigDescription("Hand the beam comes from. 0 = Right, 1 = Left, 2 = Hand holding grip.",
+                    new AcceptableValueRange<int>(0, 2)));
+
+            GunPcGrip = config.Bind(
+                "GunLib",
+                "PC Grip Input",
+                0,
+                new ConfigDescription("Desktop stand-in for grip. 0 = Right mouse, 1 = Left mouse, 2 = Middle mouse, 3 = Keyboard key.",
+                    new AcceptableValueRange<int>(0, 3)));
+
+            GunPcGripKey = config.Bind(
+                "GunLib",
+                "PC Grip Key",
+                "LeftAlt",
+                "Keyboard key used when PC Grip Input is set to Keyboard key (Input System name).");
+
+            GunBeamEnabled = config.Bind(
+                "GunLib",
+                "Beam Visible",
+                true,
+                "Draw the thin beam. Turning it off keeps targeting and the ring.");
+
+            GunUseThemeColor = config.Bind(
+                "GunLib",
+                "Use Theme Colors",
+                true,
+                "Take the beam and ring color from the active Cascade theme. Turn off to use the hex colors below.");
+
+            GunBeamColor = config.Bind(
+                "GunLib",
+                "Beam Color",
+                "#4DB2FF",
+                "Beam color as #RRGGBB when Use Theme Colors is off.");
+
+            GunBeamWidth = config.Bind(
+                "GunLib",
+                "Beam Width",
+                0.006f,
+                new ConfigDescription("Beam start width in metres", new AcceptableValueRange<float>(0.001f, 0.03f)));
+
+            GunRingColor = config.Bind(
+                "GunLib",
+                "Ring Color",
+                "#4DB2FF",
+                "Target ring color as #RRGGBB when Use Theme Colors is off.");
+
+            GunRingSize = config.Bind(
+                "GunLib",
+                "Ring Size",
+                0.38f,
+                new ConfigDescription("Target ring radius in metres", new AcceptableValueRange<float>(0.12f, 0.9f)));
+
+            GunMaxDistance = config.Bind(
+                "GunLib",
+                "Max Distance",
+                30f,
+                new ConfigDescription("Maximum aim distance in metres", new AcceptableValueRange<float>(3f, 80f)));
 
             // -----------------------------------------------------------------
             // Placement: the menu spawns as a world object in front of the head.
@@ -461,15 +571,12 @@ namespace CascadeMenu
 
         }
 
-        public CascadeMenu.UI.CascadeThemeMode ThemeMode
-        {
-            get { return ThemeIndex.Value == 1 ? CascadeMenu.UI.CascadeThemeMode.Light : CascadeMenu.UI.CascadeThemeMode.Dark; }
-        }
-
         public void ResetDefaults()
         {
-            ThemeIndex.Value = 0;
-            AccentIndex.Value = 0;
+            ThemePreset.Value = "Default";
+            ThemeAuto.Value = false;
+            CustomPalette.Value = string.Empty;
+            GunAccentIndex.Value = 0;
             UiMode.Value = 0;
             Scale.Value = 1f;
             Distance.Value = 0.7f;
@@ -499,6 +606,19 @@ namespace CascadeMenu
             GunSticky.Value = true;
             GunShowMarker.Value = true;
             GunModule.Value = 0;
+            GunActive.Value = true;
+            GunRequireGrip.Value = true;
+            GunGripHand.Value = 0;
+            GunBeamHand.Value = 2;
+            GunPcGrip.Value = 0;
+            GunPcGripKey.Value = "LeftAlt";
+            GunBeamEnabled.Value = true;
+            GunUseThemeColor.Value = true;
+            GunBeamColor.Value = "#4DB2FF";
+            GunBeamWidth.Value = 0.006f;
+            GunRingColor.Value = "#4DB2FF";
+            GunRingSize.Value = 0.38f;
+            GunMaxDistance.Value = 30f;
             MenuHeight.Value = 1.5f;
             MenuRaiseAbove.Value = 1.8f;
             MenuReanchorDistance.Value = 1.6f;

@@ -15,6 +15,8 @@ namespace CascadeMenu
         {
             var pages = new List<CascadePage>();
             pages.Add(BuildHome(menu, config));
+            pages.Add(ThemesPage.Build(menu));
+            pages.Add(GunLibPage.Build(menu, config));
             pages.Add(PlayerActions.BuildPlayersPage(menu));
             pages.Add(BuildNotifications(menu, config));
             pages.Add(BuildFun(menu, config));
@@ -27,6 +29,7 @@ namespace CascadeMenu
             pages.Add(ModRegistry.BuildAllPage(menu));
 
             pages.Add(Buildutilities(menu, config));
+            pages.Add(ProfilerPage.Build(menu, config));
             pages.Add(BuildSettings(menu, config));
             pages.Add(BuildAbout());
             pages.Add(BuildGallery(menu, state));
@@ -50,23 +53,10 @@ namespace CascadeMenu
             // roster and the per-player actions.
             PlayerActions.AppendRoomSection(home);
 
-            home.Section("Quick appearance")
-                .Dropdown("Theme", "Dark and light appearances are included",
-                    new[] { "Dark", "Light" },
-                    () => config.ThemeIndex.Value,
-                    index =>
-                    {
-                        config.ThemeIndex.Value = index;
-                        menu.QueueRebuild();
-                    })
-                .Dropdown("Accent", "Selection, switches and primary buttons",
-                    CascadeTheme.AccentNames,
-                    () => config.AccentIndex.Value,
-                    index =>
-                    {
-                        config.AccentIndex.Value = index;
-                        menu.QueueRebuild();
-                    });
+            home.Section("Appearance", "Seasonal presets and a custom palette")
+                .Label("Current theme", "Applied to every tab and popup", menu.Theme.Name)
+                .Button("Open Themes", "Presets, seasonal auto and the custom color picker", "Themes",
+                    menu.OpenThemesPage, true);
 
             return home;
         }
@@ -193,6 +183,35 @@ namespace CascadeMenu
                 .Button("Copy all player names", "Clipboard: comma separated", "Copy",
                     () => PlayerActions.Copy(FunActions.AllNames()), false);
 
+            Mod construction = ModRegistry.Find("Construction");
+            if (construction != null)
+            {
+                Mod captured = construction;
+                System.Action openSettings = captured.HasSettings && menu != null
+                    ? (System.Action)(() => menu.OpenModSettings(captured))
+                    : null;
+
+                CascadeSection constructionSection = fun.Section("Construction",
+                        "Physics pieces, welding and demolition")
+                    .Toggle(captured.Name,
+                        "Aim with the grip; trigger builds, welds or fires",
+                        () => captured.Enabled && captured.IsActive,
+                        value => ModRegistry.SetEffect(captured, value),
+                        true,
+                        openSettings)
+                    .Button("Undo last piece", "Remove the newest piece in the build", "Undo",
+                        () => Construction.UndoForMenu(), false)
+                    .Button("Clear build", "Delete every construction piece and weld", "Clear",
+                        () => Construction.ClearAllForMenu(), false);
+
+                if (menu != null)
+                {
+                    constructionSection.Button("Construction settings",
+                        "Tool, piece, welding, explosion and input options", "Open",
+                        () => menu.OpenModSettings(captured), false);
+                }
+            }
+
             return fun;
         }
 
@@ -208,7 +227,7 @@ namespace CascadeMenu
             movement.Section("Module settings", "Speed, direction, smoothing and keybinds")
                 .Button("Flight settings", "Speed, stick mapping and direction", "Open",
                     () => menu.OpenModuleSettings("fly"), false)
-                .Button("Acrobatics settings", "Arming, smoothing and the double-tap gesture", "Open",
+                .Button("Acrobatics settings", "Smoothing and rotation controls", "Open",
                     () => menu.OpenModuleSettings("acrobatics"), false);
 
             return movement;
@@ -221,6 +240,22 @@ namespace CascadeMenu
         {
             var visual = FeatureCatalog.BuildPage(config, "Visual", "HUD, ESP and target markers", CascadeIcon.Eye, menu);
 
+            // Both rig overlays draw on remote gorilla rigs, so they live
+            // together as plain feature toggles (gear opens the mod settings).
+            var rigs = visual.Section("Player tags (on rigs)",
+                "Display-only labels and cards drawn above remote gorilla rigs");
+            AddRigOverlayToggle(rigs, menu, "Name Tags",
+                "Name plate above each player's gorilla rig");
+            AddRigOverlayToggle(rigs, menu, "Player HUD",
+                "Information card above each player's gorilla rig");
+
+            // The talking panel follows the camera instead of a rig, so it
+            // gets its own small section.
+            var voice = visual.Section("Talking players",
+                "A panel that follows your view and lists who is speaking");
+            AddRigOverlayToggle(voice, menu, "Talking Players",
+                "Speaker list with each player's color while they talk");
+
             visual.Section("Module settings", "Range, colors and the HUD layout")
                 .Button("ESP settings", "Range, color and overlay options", "Open",
                     () => menu.OpenModuleSettings("esp"), false)
@@ -232,6 +267,38 @@ namespace CascadeMenu
                     () => menu.OpenModuleSettings("cosmetics"), false);
 
             return visual;
+        }
+
+        /// <summary>
+        /// Adds a rig overlay as a plain feature row (toggle plus gear), the
+        /// same shape as the ESP rows. The gear opens the full mod settings,
+        /// while the toggle starts or stops the effect immediately.
+        /// </summary>
+        private static void AddRigOverlayToggle(
+            CascadeSection section,
+            CascadeMenuBehaviour menu,
+            string modName,
+            string subtitle)
+        {
+            if (section == null) return;
+
+            Mod mod = ModRegistry.Find(modName);
+            if (mod == null) return;
+
+            Mod captured = mod;
+            System.Action openSettings = null;
+            if (captured.HasSettings && menu != null)
+            {
+                openSettings = () => menu.OpenModSettings(captured);
+            }
+
+            section.Toggle(
+                captured.Name,
+                subtitle,
+                () => captured.Enabled && captured.IsActive,
+                value => ModRegistry.SetEffect(captured, value),
+                true,
+                openSettings);
         }
         
         private static CascadePage Buildutilities(CascadeMenuBehaviour menu, MenuConfig config)
@@ -355,7 +422,7 @@ namespace CascadeMenu
             settings.Section("Module settings", "Every tuning control lives on its module's own page")
                 .Button("Flight settings", "Speed, direction and stick mapping", "Open",
                     () => menu.OpenModuleSettings("fly"), false)
-                .Button("Acrobatics settings", "Arming, smoothing and the double-tap gesture", "Open",
+                .Button("Acrobatics settings", "Smoothing and rotation controls", "Open",
                     () => menu.OpenModuleSettings("acrobatics"), false)
                 .Button("ESP settings", "Boxes, names, tracers and range", "Open",
                     () => menu.OpenModuleSettings("esp"), false)
@@ -385,20 +452,6 @@ namespace CascadeMenu
                     VrInput.ButtonNames,
                     () => VrInput.IndexOf(config.MenuButton.Value),
                     index => config.MenuButton.Value = VrInput.Format(VrInput.FromIndex(index)))
-                .Button("Acrobatics key",
-                    "Keyboard or controller bind (currently " +
-                    Keybinds.Name(Keybinds.Parse(config.AcrobaticsKey.Value, UnityEngine.InputSystem.Key.Delete)) + ")",
-                    "Rebind", () => menu.BeginRebind("acrobatics"), false)
-                .Dropdown("Acrobatics button", "VR button that arms acrobatics",
-                    VrInput.ButtonNames,
-                    () => VrInput.IndexOf(config.AcrobaticsButton.Value),
-                    index => config.AcrobaticsButton.Value = VrInput.Format(VrInput.FromIndex(index)))
-                .Slider("Double-press window",
-                    "Maximum gap between taps for a mod set to Double press",
-                    0.1f, 1f,
-                    () => config.DoublePressWindow.Value,
-                    value => config.DoublePressWindow.Value = value,
-                    value => value.ToString("0.00") + " s")
                 .Label("Always available", "Insert also opens the menu", "F1 / Insert");
 
             return settings;
@@ -415,6 +468,10 @@ namespace CascadeMenu
                 .Label("Cascade UI", "Original Luau interface library", "cascadeui")
                 .Label("Built for", "Gorilla Tag + BepInEx", "VR / Desktop")
                 .Label("Renderer", "World-space Unity Canvas", "No EventSystem");
+
+            about.Section("Contributors", "People and tools behind this build")
+                .Label("Maintainer", "Cascade Menu project", "foggyie")
+                .Label("AI assistance", "Themes, mod lifecycle, settings panels and docs", "OpenCode");
 
             about.Section("Links", "Opens in your desktop browser.")
                 .Button("Open Cascade on GitHub", "Original themes, screenshots and docs",
@@ -433,9 +490,7 @@ namespace CascadeMenu
                 .Label("Fly axes", "Keyboard", "F6 / F7 / F8 / F9")
                 .Label("Bindable VR buttons", "Settings > Input", "A/X, B/Y, trigger, grip, stick")
                 .Label("Acrobatics", "Default", "right stick click")
-                .Label("Acrobatics engage", "Double-tap A while armed", "2x A")
-                .Label("Mod keybinds", "Mods tab: enable, then Bind", "Single / Double")
-                .Label("Double-press window", "Settings > Input", "0.30 s default")
+                .Label("Mod switches", "Mods tab", "One toggle per mod")
                 .Label("VR keyboard", "Shown while the search field is focused", "tap keys");
 
             return about;

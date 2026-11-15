@@ -23,7 +23,8 @@ namespace CascadeMenu.UI
         Check,
         Sidebar,
         Recenter,
-        Sparkle
+        Sparkle,
+        Speaker
     }
 
     /// <summary>
@@ -281,6 +282,22 @@ namespace CascadeMenu.UI
                         new Vector2(-0.88f, 0f), new Vector2(-0.16f, 0.16f)
                     };
                     return (x, y) => Polygon(x, y, star);
+                }
+
+                case CascadeIcon.Speaker:
+                {
+                    return (x, y) =>
+                    {
+                        float body = RoundedBox(x, y, -0.46f, 0f, 0.16f, 0.28f, 0.04f);
+                        float cone = RoundedBox(x, y, -0.22f, 0f, 0.20f, 0.46f, 0.06f);
+                        float wave1 = Mathf.Max(
+                            Mathf.Abs(Circle(x, y, 0.04f, 0f, 0.30f)) - 0.055f,
+                            0.06f - x);
+                        float wave2 = Mathf.Max(
+                            Mathf.Abs(Circle(x, y, 0.04f, 0f, 0.52f)) - 0.055f,
+                            0.06f - x);
+                        return Mathf.Min(Mathf.Min(body, cone), Mathf.Min(wave1, wave2));
+                    };
                 }
             }
             return (x, y) => 1f;

@@ -54,6 +54,18 @@ namespace CascadeMenu.UI
             return this;
         }
 
+        /// <summary>
+        /// A label whose value is polled while the page is visible. Used for
+        /// live state such as a mod's Active flag, so the panel does not have to
+        /// be rebuilt when a keybind changes it.
+        /// </summary>
+        public CascadeSection LiveLabel(string title, string subtitle, Func<string> getValue,
+            Func<bool> highlight = null)
+        {
+            Rows.Add(new CascadeLabelRow(title, subtitle, getValue, highlight));
+            return this;
+        }
+
         public CascadeSection Hero(string title, string subtitle, string value, CascadeIcon icon = CascadeIcon.Layers)
         {
             Rows.Add(new CascadeHeroRow(title, subtitle, value, icon));
@@ -162,8 +174,9 @@ namespace CascadeMenu.UI
         }
 
         /// <summary>
-        /// One auto-generated mod row: Enabled toggle, keybind, Single/Double
-        /// press selector, Active indicator and an action button.
+        /// One auto-generated mod row: a live state line, an Enabled toggle and
+        /// an optional settings gear. Keybind, press type and Active controls
+        /// live on the gear page, not in the row.
         /// </summary>
         public CascadeSection Mod(
             string title,
@@ -177,7 +190,8 @@ namespace CascadeMenu.UI
             Action cyclePress,
             Func<string> getActionLabel,
             Action activate,
-            bool isToggle)
+            bool isToggle,
+            Action openSettings = null)
         {
             Rows.Add(new CascadeModRow(
                 title,
@@ -191,7 +205,47 @@ namespace CascadeMenu.UI
                 cyclePress,
                 getActionLabel,
                 activate,
-                isToggle));
+                isToggle,
+                openSettings));
+            return this;
+        }
+
+        /// <summary>Adds one preset theme with a live swatch preview.</summary>
+        public CascadeSection ThemePreset(
+            string name,
+            string subtitle,
+            Color[] swatch,
+            Func<bool> selected,
+            Action apply)
+        {
+            Rows.Add(new CascadePresetRow(name, subtitle, swatch, selected, apply));
+            return this;
+        }
+
+        /// <summary>One editable line of text (hex color input).</summary>
+        public CascadeSection TextField(
+            string title,
+            string subtitle,
+            string placeholder,
+            int maxLength,
+            Func<string> get,
+            Action<string> set)
+        {
+            Rows.Add(new CascadeTextFieldRow(title, subtitle, placeholder, maxLength, get, set));
+            return this;
+        }
+
+        /// <summary>A row of quick-pick color swatches.</summary>
+        public CascadeSection Swatches(string title, string subtitle, Color[] colors, Action<int> pick)
+        {
+            Rows.Add(new CascadeSwatchRow(title, subtitle, colors, pick));
+            return this;
+        }
+
+        /// <summary>A live preview of the current theme, built from the theme roles.</summary>
+        public CascadeSection ThemePreview(string title, string subtitle)
+        {
+            Rows.Add(new CascadePreviewRow(title, subtitle));
             return this;
         }
     }
@@ -219,9 +273,23 @@ namespace CascadeMenu.UI
     {
         public readonly string Value;
 
+        /// <summary>When set, the rendered value is polled instead of frozen.</summary>
+        public readonly Func<string> GetValue;
+
+        /// <summary>Optional emphasis (for example, Active ON) applied to the value.</summary>
+        public readonly Func<bool> IsHighlighted;
+
         public CascadeLabelRow(string title, string subtitle, string value) : base(title, subtitle)
         {
             Value = value ?? string.Empty;
+        }
+
+        public CascadeLabelRow(string title, string subtitle, Func<string> getValue,
+            Func<bool> isHighlighted = null) : base(title, subtitle)
+        {
+            Value = string.Empty;
+            GetValue = getValue;
+            IsHighlighted = isHighlighted;
         }
 
         public override float Height
@@ -570,6 +638,7 @@ namespace CascadeMenu.UI
         public readonly Func<string> GetActionLabel;
         public readonly Action Activate;
         public readonly bool IsToggle;
+        public readonly Action OpenSettings;
 
         public CascadeModRow(
             string title,
@@ -583,7 +652,8 @@ namespace CascadeMenu.UI
             Action cyclePress,
             Func<string> getActionLabel,
             Action activate,
-            bool isToggle) : base(title, subtitle)
+            bool isToggle,
+            Action openSettings = null) : base(title, subtitle)
         {
             GetEnabled = getEnabled;
             SetEnabled = setEnabled;
@@ -595,6 +665,7 @@ namespace CascadeMenu.UI
             GetActionLabel = getActionLabel;
             Activate = activate;
             IsToggle = isToggle;
+            OpenSettings = openSettings;
         }
 
         public override float Height
@@ -610,6 +681,88 @@ namespace CascadeMenu.UI
                 string press = GetPressLabel != null ? GetPressLabel() : string.Empty;
                 return base.SearchText + " keybind " + key + " " + press + " active";
             }
+        }
+    }
+
+    /// <summary>
+    /// One preset theme row. The swatch strip is a miniature of the theme so
+    /// picking a season is visual instead of a list of names.
+    /// </summary>
+    internal sealed class CascadePresetRow : CascadeRow
+    {
+        public readonly Color[] Swatch;
+        public readonly Func<bool> IsSelected;
+        public readonly Action Apply;
+
+        public CascadePresetRow(string title, string subtitle, Color[] swatch, Func<bool> selected, Action apply)
+            : base(title, subtitle)
+        {
+            Swatch = swatch ?? new Color[0];
+            IsSelected = selected;
+            Apply = apply;
+        }
+
+        public override float Height
+        {
+            get { return 54f; }
+        }
+    }
+
+    /// <summary>A row that edits one short string (the hex color box).</summary>
+    internal sealed class CascadeTextFieldRow : CascadeRow
+    {
+        public readonly string Placeholder;
+        public readonly int MaxLength;
+        public readonly Func<string> Get;
+        public readonly Action<string> Set;
+
+        public CascadeTextFieldRow(
+            string title,
+            string subtitle,
+            string placeholder,
+            int maxLength,
+            Func<string> get,
+            Action<string> set) : base(title, subtitle)
+        {
+            Placeholder = placeholder ?? string.Empty;
+            MaxLength = Mathf.Max(1, maxLength);
+            Get = get;
+            Set = set;
+        }
+
+        public override float Height
+        {
+            get { return string.IsNullOrEmpty(Subtitle) ? 48f : 56f; }
+        }
+    }
+
+    /// <summary>A row of quick-pick color chips used by the custom picker.</summary>
+    internal sealed class CascadeSwatchRow : CascadeRow
+    {
+        public readonly Color[] Colors;
+        public readonly Action<int> Pick;
+
+        public CascadeSwatchRow(string title, string subtitle, Color[] colors, Action<int> pick)
+            : base(title, subtitle)
+        {
+            Colors = colors ?? new Color[0];
+            Pick = pick;
+        }
+
+        public override float Height
+        {
+            get { return string.IsNullOrEmpty(Subtitle) ? 44f : 52f; }
+        }
+    }
+
+    /// <summary>Live preview of every important color role in the current theme.</summary>
+    internal sealed class CascadePreviewRow : CascadeRow
+    {
+        public CascadePreviewRow(string title, string subtitle) : base(title, subtitle) { }
+
+        public override float Height
+        {
+            get { return 96f; }
         }
     }
 }

@@ -11,11 +11,22 @@ namespace CascadeMenu.Mods.Super
     public class SpawnResourceGun : Mod
     {
         private int _prefabIndex;
+        private float _cooldown = 0.3f;
 
         public SpawnResourceGun()
         {
             Name = "Spawn Resource (Gun)";
             isToggle = true;
+
+            AddSetting(ModSetting.Slider(
+                "cooldown",
+                "Fire cooldown",
+                "Seconds between shots, so a held trigger does not spam objects",
+                0.05f,
+                2f,
+                () => _cooldown,
+                value => _cooldown = value,
+                value => value.ToString("0.00") + " s"));
         }
 
         public override void Update()
@@ -47,7 +58,7 @@ namespace CascadeMenu.Mods.Super
                     Plugin.Log?.LogInfo($"[Super] Spawned {prefab.gameObject.name} at {pos}");
                 else
                     Plugin.Log?.LogWarning($"[Super] Failed to spawn {prefab.gameObject.name}");
-            }, cooldown: 0.3f);
+            }, cooldown: _cooldown);
         }
 
         public override void OnDisable()

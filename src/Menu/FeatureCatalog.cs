@@ -53,15 +53,18 @@ namespace CascadeMenu
                 // ---------------------------------------------------------
                 // Fun
                 // ---------------------------------------------------------
-                FeatureOf("Fun", "Toys", "Target gun", "Thin client-side player gun", config.GunEnabled, settings: "gun"),
+                new Feature("Fun", "Toys", "Target gun", "Thin client-side player gun",
+                    () => CascadeMenu.Mods.GunLibMod.IsArmed(config),
+                    value => CascadeMenu.Mods.GunLibMod.SetArmed(config, value),
+                    settingsKey: "gun"),
                 FeatureOf("Fun", "Toys", "Gun target ring", "Draw a ring on the locked player", config.GunShowMarker, settings: "gun"),
 
                 // ---------------------------------------------------------
                 // Movement
                 // ---------------------------------------------------------
-                FeatureOf("Movement", "Joystick fly", "Joystick fly (master)", "Arms double-tap A / F5 flight", config.JoystickFly, settings: "fly"),
+                FeatureOf("Movement", "Joystick fly", "Joystick fly (master)", "Toggle to fly with the sticks", config.JoystickFly, settings: "fly"),
                 FeatureOf("Movement", "Gravity", "Block hand link", "Stop other players pulling you around", config.HandLinkBlock),
-                new Feature("Movement", "Acrobatics", "Body rotation", "Arm it, then double-tap A in game",
+                new Feature("Movement", "Acrobatics", "Body rotation", "Toggle body rotation on or off",
                     () => config.Acrobatics.Value,
                     value => CascadeMenu.Mods.AcrobaticsController.SetActive(value),
                     settingsKey: "acrobatics"),

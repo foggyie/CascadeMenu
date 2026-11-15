@@ -1,5 +1,6 @@
 using CascadeMenu.Mods;
 using CascadeMenu.UI;
+using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace CascadeMenu
@@ -106,13 +107,13 @@ namespace CascadeMenu
         {
             page.Section("Flight", "Applies the next time you fly")
                 .Label("Flying", "Current flight state", JoystickFlyController.IsFlying ? "ON" : "OFF")
-                .Button("Toggle flight now", "Same as double-tapping A / F5", "Toggle",
+                .Button("Toggle flight now", "Same as the Movement switch", "Toggle",
                     () =>
                     {
                         bool handled = JoystickFlyController.ToggleFromMenu();
                         if (!handled)
                         {
-                            menu.ShowToast("Joystick fly", "Enable the master switch on the Movement tab first.");
+                            menu.ShowToast("Joystick fly", "Flight is not ready yet.");
                         }
                         menu.QueueRebuild();
                     }, true)
@@ -166,16 +167,14 @@ namespace CascadeMenu
         private static void BuildAcrobatics(CascadePage page, CascadeMenuBehaviour menu, MenuConfig config)
         {
             page.Section("Body rotation", "VR only - the menu stays level while your body rotates")
-                .Toggle("Acrobatics", "Arm it here, then double-tap A in game to engage",
+                .Toggle("Acrobatics", "Turn body rotation on or off",
                     () => config.Acrobatics.Value,
                     value => AcrobaticsController.SetActive(value))
-                .Button("Toggle acrobatics now", "Arm or disarm the in-game double-tap gesture", "Toggle",
+                .Button("Toggle acrobatics now", "Same as the Body rotation switch", "Toggle",
                     () =>
                     {
                         bool active = AcrobaticsController.ToggleFromMenu();
-                        menu.ShowToast("Acrobatics", active
-                            ? "Armed - double-tap A in game."
-                            : "Off.");
+                        menu.ShowToast("Acrobatics", active ? "On." : "Off.");
                         menu.QueueRebuild();
                     }, false)
                 .Slider("Rotation smoothing", "How quickly the body follows the head",
@@ -183,19 +182,6 @@ namespace CascadeMenu
                     () => config.AcrobaticsSmoothing.Value,
                     value => config.AcrobaticsSmoothing.Value = value,
                     value => value.ToString("0.0"));
-
-            page.Section("Binding", "Change what arms acrobatics on PC or in VR")
-                .Button("Acrobatics key",
-                    "Keyboard or controller bind (currently " +
-                    Keybinds.Name(Keybinds.Parse(config.AcrobaticsKey.Value, Key.Delete)) + ")",
-                    "Rebind", () => menu.BeginRebind("acrobatics"), false)
-                .Dropdown("Acrobatics button", "VR button that arms acrobatics",
-                    VrInput.ButtonNames,
-                    () => VrInput.IndexOf(config.AcrobaticsButton.Value),
-                    index => config.AcrobaticsButton.Value = VrInput.Format(VrInput.FromIndex(index)))
-                .Label("Default", "Right stick click", "Right Stick")
-                .Label("Engage", "Double-tap A in game while armed", "2x A")
-                .Label("Menu behaviour", "The window never copies head roll", "stays upright");
 
             AddBack(page, menu, "Movement");
         }
@@ -270,6 +256,23 @@ namespace CascadeMenu
                     () => config.HudArrayList.Value,
                     value => config.HudArrayList.Value = value);
 
+            page.Section("Player HUD (above players)", "One display-only card above every other player")
+                .Button("Player HUD settings", "Line toggles, size, distance, height, opacity, tagged-only and compact mode",
+                    "Open", () =>
+                    {
+                        Mod hud = ModRegistry.Find("Player HUD");
+                        if (hud != null)
+                        {
+                            menu.OpenModSettings(hud);
+                        }
+                        else
+                        {
+                            menu.ShowToast("Player HUD", "The HUD mod is still loading.");
+                        }
+                    }, true)
+                .Button("Mods list", "Arm the HUD and set its keybind or Activate button", "Open",
+                    () => menu.OpenPage(null, "Mods"), false);
+
             page.Section("Note", "The HUD is drawn by the overlay, not by this window.")
                 .Label("Position", "Top left of your view", "fixed");
 
@@ -283,8 +286,8 @@ namespace CascadeMenu
         {
             page.Section("Target gun", "Thin client-side player gun")
                 .Toggle("Target gun", "Enable the gun on your right hand",
-                    () => config.GunEnabled.Value,
-                    value => config.GunEnabled.Value = value)
+                    () => GunLibMod.IsArmed(config),
+                    value => GunLibMod.SetArmed(config, value))
                 .Toggle("Gun target ring", "Draw a ring on the locked player",
                     () => config.GunShowMarker.Value,
                     value => config.GunShowMarker.Value = value)
@@ -299,6 +302,17 @@ namespace CascadeMenu
                         config.GunModule.Value = index;
                         menu.QueueRebuild();
                     });
+
+            page.Section("Grip and beam", "Everything else lives on the GunLib tab")
+                .Toggle("Require grip", "Only aim while the selected grip is held",
+                    () => config.GunRequireGrip.Value,
+                    value => config.GunRequireGrip.Value = value)
+                .Dropdown("Grip hand", "VR hand that arms the gun",
+                    new[] { "Right", "Left", "Either" },
+                    () => Mathf.Clamp(config.GunGripHand.Value, 0, 2),
+                    index => config.GunGripHand.Value = Mathf.Clamp(index, 0, 2))
+                .Button("Open GunLib tab", "Beam, ring, desktop grip and color controls", "Open",
+                    () => menu.OpenPage(GunLibPage.Tag, "GunLib"), true);
 
             AddBack(page, menu, "Fun");
         }
