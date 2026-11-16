@@ -16,6 +16,8 @@ The module tabs now contain real gameplay features: a toggleable hand-link block
 - Mods are one switch: turning one on starts its effect immediately; turning it off stops it and runs cleanup.
 - **Module tabs**: every mod category has its own sidebar page - **Overlays**, **Tools**, **Flight**, **Desktop**, **Performance** and **Super** - so mods are grouped by purpose instead of sharing one long list.
 - **Crosshair**, **Clock**, **Session Stats** and **Screenshot**: camera-anchored overlays for a centre dot/cross/ring, a corner clock, live FPS/room/players/uptime, and a one-shot PNG capture saved to `CascadeScreenshots`.
+- **Compass**, **Speedometer**, **FPS Graph** and **Screen Tint**: more visual overlays - a sliding heading strip, local movement speed with a fill bar, sixty scrolling frame-rate bars, and a full-view colour filter.
+- **Joystick Fly**, **Noclip** and **Acrobatics** are one-switch mod rows backed by the existing movement controllers; **Unlimited FPS** removes VSync and raises the frame cap, restoring the previous values when switched off.
 - **Name Tags**: lightweight, display-only name labels above every remote gorilla rig, with an optional platform line, a fixed custom size, five appearance presets and off-screen fade. Separate from the full Player HUD so either can run alone.
 - **Player HUD**: a display-only, themed information card above every other player. Name, rig color swatch, RGB/hex, player ID, Photon custom properties, tagged state, platform, ping, FPS, distance and cosmetic count. Cards are pooled per player and updated a few times a second, with no raycast targets, so nothing on them can be clicked. Name Tags and Player HUD both appear as simple toggle rows with gear buttons on the **Visual** page; each gear page has Classic, VRChat, Fortnite, Minimal and Glass appearance presets plus a name-color mode.
 - **Talking Players**: a small, camera-anchored speaker list on the right of the view that shows only the players who are speaking, each with a speaker glyph and a name chip tinted with that player's gorilla color. There is no backing panel behind the chips and the rows are packed tight, so the list stays a thin strip at the screen edge. Sensitivity, linger time, row count, position, size, opacity, distance and text color are settings; the mod is a single toggle on the **Visual** page and costs nothing while off.
@@ -163,6 +165,7 @@ CascadeMenu/
         NoclipController.cs   Collision bypass
       Flight/
         WASDFly.cs            Desktop WASD free-flight
+        JoystickFly.cs        One-switch wrapper for the stick flight controller
       Tools/
         GunLibController.cs   Grip-gated aim, solid-surface raycast, beam and ring
         GunLibMod.cs          Thin Mod wrapper exposing the gun's Enabled/Active state
@@ -177,6 +180,10 @@ CascadeMenu/
         Crosshair.cs          Centre-of-view dot, cross or ring
         Clock.cs              Corner clock with optional date
         SessionStats.cs       FPS, room, players and uptime card
+        Compass.cs            Sliding heading strip
+        Speedometer.cs        Local movement speed and fill bar
+        FpsGraph.cs           Scrolling frame-rate bars
+        ScreenTint.cs         Full-view colour filter
         HudOverlay.cs         Local status overlay
       Player/
         PlayerActions.cs      Player list actions
@@ -190,8 +197,11 @@ CascadeMenu/
         PCButtonClicker.cs    Desktop button input
       Performance/
         NoMoreCosmetics.cs    Cosmetic suppression
+        UnlimitedFps.cs       VSync/frame-cap override
       Super/
         SuperGuns.cs          Super-power guns
+        Noclip.cs             One-switch wrapper for the noclip controller
+        Acrobatics.cs         One-switch wrapper for body rotation
       Util/
         Util.cs               Shared helpers
     UI/
@@ -264,7 +274,7 @@ Only mods that declare settings show a gear. A mod opts in by calling `AddSettin
 
 Changing a value updates the panel in place and keeps its scroll position; only one settings page is open at a time.
 
-The following mods currently expose extra options: **WASD Fly** (speed multiplier), **Tag gun** (cooldown), **Teleport (Gun)** (cooldown), **Spawn Resource (Gun)** (cooldown), **Orbit Ghost (Gun)** (radius, speed and height), **Name Tags** (style preset, name color, size, range, height, opacity, platform line, hide-self and off-screen fade), **Player HUD** (style preset, name color, every card line, size, range, height and opacity), **Talking Players** (position, name color, size, opacity, sensitivity, linger, range, rows, include-self and speaker icon), **Crosshair** (style, color and size), **Clock** (position, 24-hour time, seconds, date and size), **Session Stats** (FPS, players, room, uptime, size and opacity), **Screenshot** (supersize), **Construction** (tool, piece, size, color style, textures, snapping, rotation, static pieces, auto-weld radius, weld range/strength, explosion radius/force, destroy radius, max pieces, grip hand, desktop grip, aim range, projectile speed and cooldown) and **GunLib** (keybind and Active state). ESP, HUD, Gun, Cosmetics, Flight and Acrobatics expose their settings through the existing Settings modules; the GunLib tab links to both.
+The following mods currently expose extra options: **WASD Fly** (speed multiplier), **Tag gun** (cooldown), **Teleport (Gun)** (cooldown), **Spawn Resource (Gun)** (cooldown), **Orbit Ghost (Gun)** (radius, speed and height), **Name Tags** (style preset, name color, size, range, height, opacity, platform line, hide-self and off-screen fade), **Player HUD** (style preset, name color, every card line, size, range, height and opacity), **Talking Players** (position, name color, size, opacity, sensitivity, linger, range, rows, include-self and speaker icon), **Crosshair** (style, color and size), **Clock** (position, 24-hour time, seconds, date and size), **Session Stats** (FPS, players, room, uptime, size and opacity), **Screenshot** (supersize), **Compass** (degrees, size and opacity), **Speedometer** (units, maximum, size and opacity), **FPS Graph** (position, scale, size and opacity), **Screen Tint** (color and opacity), **Joystick Fly** (speed, vertical speed, acceleration and aim), **Acrobatics** (smoothing), **Unlimited FPS** (target cap), **Construction** (tool, piece, size, color style, textures, snapping, rotation, static pieces, auto-weld radius, weld range/strength, explosion radius/force, destroy radius, max pieces, grip hand, desktop grip, aim range, projectile speed and cooldown) and **GunLib** (keybind and Active state). ESP, HUD, Gun, Cosmetics, Flight and Acrobatics expose their settings through the existing Settings modules; the GunLib tab links to both.
 
 ## Troubleshooting
 
