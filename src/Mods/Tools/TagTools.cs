@@ -12,6 +12,7 @@ namespace CascadeMenu.Mods
     /// </summary>
     [PluginPreferenced]
     [PluginToggleable]
+    [ModCategory("Tools")]
     public class TagGun : Mod
     {
         private float _cooldown = 0.35f;
@@ -48,6 +49,7 @@ namespace CascadeMenu.Mods
     }
 
     /// <summary>One-shot Mods-page action that tags everyone in the room.</summary>
+    [ModCategory("Tools")]
     public class TagAllPlayers : Mod
     {
         public TagAllPlayers()

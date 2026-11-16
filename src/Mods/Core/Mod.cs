@@ -10,6 +10,23 @@ namespace CascadeMenu.Mods
     [AttributeUsage(AttributeTargets.Class)]
     public class PluginToggleableAttribute : Attribute { }
 
+    /// <summary>
+    /// Places a mod on a specific module page. Without it the registry falls
+    /// back to the mod's namespace. The name must match a category page built
+    /// by <see cref="ModRegistry"/> (Overlays, Tools, Flight, Desktop,
+    /// Performance or Super).
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+    public sealed class ModCategoryAttribute : Attribute
+    {
+        public readonly string Name;
+
+        public ModCategoryAttribute(string name)
+        {
+            Name = name;
+        }
+    }
+
     /// <summary>How many presses of a mod's key are needed to toggle it.</summary>
     public enum ModPressType
     {

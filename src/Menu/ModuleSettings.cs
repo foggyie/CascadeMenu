@@ -271,7 +271,7 @@ namespace CascadeMenu
                         }
                     }, true)
                 .Button("Mods list", "Arm the HUD and set its keybind or Activate button", "Open",
-                    () => menu.OpenPage(null, "Mods"), false);
+                    () => menu.OpenPage(ModRegistry.CategoryTag("Overlays"), "Overlays"), false);
 
             page.Section("Note", "The HUD is drawn by the overlay, not by this window.")
                 .Label("Position", "Top left of your view", "fixed");

@@ -15,6 +15,7 @@ namespace CascadeMenu.Mods
     /// settings page.
     /// </summary>
     [PluginToggleable]
+    [ModCategory("Tools")]
     public sealed class GunLibMod : Mod
     {
         internal static GunLibMod Instance { get; private set; }

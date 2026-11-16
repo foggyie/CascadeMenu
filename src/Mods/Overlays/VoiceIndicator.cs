@@ -24,6 +24,7 @@ namespace CascadeMenu.Mods
     /// Disabling the mod destroys the canvas, so an off mod costs nothing.
     /// </summary>
     [PluginToggleable]
+    [ModCategory("Overlays")]
     public sealed class VoiceIndicator : Mod
     {
         // Canvas is authored at 260xN UI units, then scaled to ~13 cm wide.

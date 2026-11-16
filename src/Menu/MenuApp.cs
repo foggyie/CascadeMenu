@@ -9,9 +9,9 @@ namespace CascadeMenu
     /// Builds the page tree. Every open rebuilds it so live data (players, room)
     /// is fresh. Categories are declared in <see cref="FeatureCatalog"/>.
     /// </summary>
-    internal static class DemoApp
+    internal static class MenuApp
     {
-        public static List<CascadePage> Build(CascadeMenuBehaviour menu, MenuConfig config, DemoState state)
+        public static List<CascadePage> Build(CascadeMenuBehaviour menu, MenuConfig config, MenuState state)
         {
             var pages = new List<CascadePage>();
             pages.Add(BuildHome(menu, config));
@@ -25,8 +25,13 @@ namespace CascadeMenu
             pages.Add(CosmeticBrowser.BuildCategoriesPage(menu));
             pages.Add(CosmeticShop.BuildPage(menu));
 
-            // One page for every discovered Mod subclass, grouped by module.
-            pages.Add(ModRegistry.BuildAllPage(menu));
+            // One sidebar tab per discovered module category (Overlays, Tools,
+            // Flight, Desktop, Performance, Super, ...).
+            List<string> categories = ModRegistry.Categories();
+            for (int i = 0; i < categories.Count; i++)
+            {
+                pages.Add(ModRegistry.BuildCategoryPage(menu, categories[i]));
+            }
 
             pages.Add(Buildutilities(menu, config));
             pages.Add(ProfilerPage.Build(menu, config));
@@ -499,7 +504,7 @@ namespace CascadeMenu
         // -----------------------------------------------------------------
         // Component gallery (kept as a living style guide)
         // -----------------------------------------------------------------
-        private static CascadePage BuildGallery(CascadeMenuBehaviour menu, DemoState state)
+        private static CascadePage BuildGallery(CascadeMenuBehaviour menu, MenuState state)
         {
             var controls = new CascadePage("Controls", "Every Cascade component", CascadeIcon.Layers);
             controls.Section("Inputs", "The full control gallery uses the same reusable UI kit.")

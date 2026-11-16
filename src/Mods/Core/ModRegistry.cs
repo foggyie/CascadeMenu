@@ -40,6 +40,13 @@ namespace CascadeMenu.Mods
         private static readonly List<Mod> All = new List<Mod>();
         private static readonly List<string> CategoryList = new List<string>();
 
+        // Sidebar order. Categories that are not listed here follow, sorted
+        // alphabetically, so a namespace-only mod still gets a stable page.
+        private static readonly string[] PreferredCategories =
+        {
+            "Overlays", "Tools", "Flight", "Desktop", "Performance", "Super"
+        };
+
         // Persistence for the generated per-mod rows.
         private static readonly Dictionary<Mod, ConfigEntry<string>> KeyEntries =
             new Dictionary<Mod, ConfigEntry<string>>();
@@ -112,6 +119,7 @@ namespace CascadeMenu.Mods
                 string category = CategoryOf(All[i]);
                 if (!CategoryList.Contains(category)) CategoryList.Add(category);
             }
+            CategoryList.Sort(CompareCategories);
 
             Plugin.Log?.LogInfo("Cascade mod registry: " + All.Count + " mod(s) in " +
                                 CategoryList.Count + " categor" + (CategoryList.Count == 1 ? "y" : "ies") + ".");
@@ -260,9 +268,18 @@ namespace CascadeMenu.Mods
             DirtySettings.Clear();
         }
 
-        /// <summary>Page name for a mod, derived from its namespace.</summary>
+        /// <summary>Page name for a mod, from its attribute or its namespace.</summary>
         internal static string CategoryOf(Mod mod)
         {
+            if (mod == null) return "General";
+
+            ModCategoryAttribute category = (ModCategoryAttribute)Attribute.GetCustomAttribute(
+                mod.GetType(), typeof(ModCategoryAttribute));
+            if (category != null && !string.IsNullOrEmpty(category.Name))
+            {
+                return category.Name;
+            }
+
             string space = mod.GetType().Namespace ?? string.Empty;
             const string prefix = "CascadeMenu.Mods";
             if (space.Length <= prefix.Length) return "General";
@@ -270,6 +287,16 @@ namespace CascadeMenu.Mods
 
             string rest = space.Substring(prefix.Length).TrimStart('.');
             return string.IsNullOrEmpty(rest) ? "General" : rest;
+        }
+
+        private static int CompareCategories(string a, string b)
+        {
+            int orderA = Array.IndexOf(PreferredCategories, a);
+            int orderB = Array.IndexOf(PreferredCategories, b);
+            if (orderA < 0) orderA = PreferredCategories.Length;
+            if (orderB < 0) orderB = PreferredCategories.Length;
+            if (orderA != orderB) return orderA.CompareTo(orderB);
+            return string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>Category pages, in discovery order (usually alphabetical).</summary>
@@ -318,42 +345,54 @@ namespace CascadeMenu.Mods
             }
         }
 
-        /// <summary>Tag of the single page listing every discovered mod.</summary>
-        internal const string AllModsTag = "cascade.mods";
+        /// <summary>Tag used by the sidebar tab for one module page.</summary>
+        internal static string CategoryTag(string category)
+        {
+            return "cascade.category." + (string.IsNullOrEmpty(category) ? "General" : category);
+        }
+
+        private static CascadeIcon CategoryIcon(string category)
+        {
+            switch (category)
+            {
+                case "Overlays": return CascadeIcon.Eye;
+                case "Tools": return CascadeIcon.Gear;
+                case "Flight": return CascadeIcon.Recenter;
+                case "Desktop": return CascadeIcon.Sidebar;
+                case "Performance": return CascadeIcon.Sparkle;
+                case "Super": return CascadeIcon.Layers;
+                default: return CascadeIcon.Layers;
+            }
+        }
 
         /// <summary>
-        /// Builds one page with a section per module, instead of a sidebar tab per
-        /// namespace. Keeps the navigation rail short and predictable.
+        /// Builds one sidebar page for a single module category. Every mod in
+        /// that category gets the usual one-switch row; the shared footer can
+        /// disarm the whole registry.
         /// </summary>
-        internal static CascadePage BuildAllPage(CascadeMenuBehaviour menu)
+        internal static CascadePage BuildCategoryPage(CascadeMenuBehaviour menu, string category)
         {
             EnsureLoaded();
 
-            var page = new CascadePage("Mods", "Flip one switch to start or stop a mod", CascadeIcon.Layers);
-            page.Tag = AllModsTag;
+            int count = CountIn(category);
+            var page = new CascadePage(
+                category,
+                count + (count == 1 ? " mod in this module" : " mods in this module"),
+                CategoryIcon(category));
+            page.Tag = CategoryTag(category);
 
-            page.Section("How this works",
-                    "One switch turns a mod on or off; there is no separate activation bind.")
-                .Label("Switch", "Turns the effect on or off immediately", "Toggle")
-                .Label("Active", "Lit while the effect is running", "Dot");
+            CascadeSection section = page.Section(
+                category,
+                "Flip one switch to start or stop a mod");
 
-            for (int c = 0; c < CategoryList.Count; c++)
+            for (int i = 0; i < All.Count; i++)
             {
-                string category = CategoryList[c];
-                int count = CountIn(category);
-                CascadeSection section = page.Section(
-                    category,
-                    count + (count == 1 ? " mod in this module" : " mods in this module"));
-
-                for (int i = 0; i < All.Count; i++)
-                {
-                    Mod mod = All[i];
-                    if (CategoryOf(mod) != category) continue;
-                    AppendModRow(section, menu, mod);
-                }
+                Mod mod = All[i];
+                if (CategoryOf(mod) != category) continue;
+                AppendModRow(section, menu, mod);
             }
 
-            if (page.Sections.Count == 0)
+            if (section.Rows.Count == 0)
             {
                 page.Section("Empty").Label("Nothing here", "No mods were discovered", "-");
             }
@@ -484,9 +523,10 @@ namespace CascadeMenu.Mods
                 }
             }
 
-            page.Section("Module", "Back to the Mods list")
-                .Button("Back to Mods", "Return to the generated mod list", "Back",
-                    () => menu.OpenPage(AllModsTag, "Mods"), false);
+            string category = CategoryOf(captured);
+            page.Section("Module", "Back to this mod's tab")
+                .Button("Back to " + category, "Return to the " + category + " module tab", "Back",
+                    () => menu.OpenPage(CategoryTag(category), category), false);
 
             return page;
         }

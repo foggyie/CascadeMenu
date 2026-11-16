@@ -44,7 +44,7 @@ namespace CascadeMenu.UI
 
         private CascadeMenuBehaviour _menu;
         private MenuConfig _config;
-        private DemoState _state;
+        private MenuState _state;
         private Canvas _canvas;
         private RectTransform _canvasRect;
 
@@ -107,7 +107,7 @@ namespace CascadeMenu.UI
             RectTransform canvasRect,
             CascadeMenuBehaviour menu,
             MenuConfig config,
-            DemoState state,
+            MenuState state,
             CascadeTheme theme,
             List<CascadePage> pages,
             int pageIndex)
@@ -1241,7 +1241,13 @@ namespace CascadeMenu.UI
                 chip.anchoredPosition = new Vector2(i * (size + gap), 0f);
                 chip.sizeDelta = new Vector2(size, size);
                 CascadeUI.Panel(chip, row.Colors[i], 5);
-                CascadeUI.Outline(chip, Theme.FieldBorder, 5);
+
+                // The outline lives on a child so the chip keeps exactly one
+                // Graphic. Adding it to the chip would fail and reintroduce the
+                // theme crash.
+                RectTransform chipBorder = CascadeUI.Rect("Border", chip);
+                CascadeUI.Stretch(chipBorder);
+                CascadeUI.Outline(chipBorder, Theme.FieldBorder, 5);
 
                 RectTransform hoverRect = CascadeUI.Rect("Hover", chip);
                 CascadeUI.Stretch(hoverRect);

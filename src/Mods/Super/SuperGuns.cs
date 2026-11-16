@@ -8,6 +8,7 @@ namespace CascadeMenu.Mods.Super
     /// </summary>
     [PluginPreferenced]
     [PluginToggleable]
+    [ModCategory("Super")]
     public class SpawnResourceGun : Mod
     {
         private int _prefabIndex;

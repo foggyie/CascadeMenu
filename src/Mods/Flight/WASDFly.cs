@@ -16,6 +16,7 @@ namespace CascadeMenu.Mods.Flight
     /// Controls while enabled: WASD move, Space up, Ctrl down, Shift faster,
     /// Alt slower, arrow keys turn, hold right mouse to look.
     /// </summary>
+    [ModCategory("Flight")]
     public class WASDFly : Mod
     {
         private const float BaseSpeed = 8f;

@@ -3,10 +3,10 @@ using System.Collections.Generic;
 namespace CascadeMenu
 {
     /// <summary>
-    /// Small session store for the demo controls. Replace these values with your own
+    /// Small session store for page-only controls. Replace these values with your own
     /// mod settings when wiring Cascade pages to real features.
     /// </summary>
-    internal sealed class DemoState
+    internal sealed class MenuState
     {
         private readonly Dictionary<string, bool> _bools = new Dictionary<string, bool>();
         private readonly Dictionary<string, float> _floats = new Dictionary<string, float>();

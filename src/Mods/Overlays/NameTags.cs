@@ -28,6 +28,7 @@ namespace CascadeMenu.Mods
     /// false and the CanvasGroup blocks input, so no part of it is clickable.
     /// </summary>
     [PluginToggleable]
+    [ModCategory("Overlays")]
     public sealed class NameTags : Mod
     {
         private const string LabelName = "CascadeNameTag";

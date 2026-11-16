@@ -2,7 +2,7 @@
 
 A macOS Sequoia-inspired, world-space UI kit for **Gorilla Tag** on **BepInEx 5**. The look and feel are based on the Cascade Luau UI: dark glass, traffic lights, a collapsible 200px sidebar, rounded cards, native-feeling controls, search, dropdowns and toasts.
 
-The **Mods** page now contains real gameplay features: a toggleable hand-link block and a head-relative joystick fly mode. The remaining pages show how to build and wire reusable UI rows.
+The module tabs now contain real gameplay features: a toggleable hand-link block, a head-relative joystick fly mode, overlay tools and a construction kit. The remaining pages show how to build and wire reusable UI rows.
 
 ## Features
 
@@ -14,6 +14,8 @@ The **Mods** page now contains real gameplay features: a toggleable hand-link bl
 - Optional date-based Auto theme that picks a holiday or season at startup and whenever the menu opens.
 - Custom color editor with RGB sliders, a hex field, quick-pick swatches and a live preview. Changes repaint every open window without rebuilding it.
 - Mods are one switch: turning one on starts its effect immediately; turning it off stops it and runs cleanup.
+- **Module tabs**: every mod category has its own sidebar page - **Overlays**, **Tools**, **Flight**, **Desktop**, **Performance** and **Super** - so mods are grouped by purpose instead of sharing one long list.
+- **Crosshair**, **Clock**, **Session Stats** and **Screenshot**: camera-anchored overlays for a centre dot/cross/ring, a corner clock, live FPS/room/players/uptime, and a one-shot PNG capture saved to `CascadeScreenshots`.
 - **Name Tags**: lightweight, display-only name labels above every remote gorilla rig, with an optional platform line, a fixed custom size, five appearance presets and off-screen fade. Separate from the full Player HUD so either can run alone.
 - **Player HUD**: a display-only, themed information card above every other player. Name, rig color swatch, RGB/hex, player ID, Photon custom properties, tagged state, platform, ping, FPS, distance and cosmetic count. Cards are pooled per player and updated a few times a second, with no raycast targets, so nothing on them can be clicked. Name Tags and Player HUD both appear as simple toggle rows with gear buttons on the **Visual** page; each gear page has Classic, VRChat, Fortnite, Minimal and Glass appearance presets plus a name-color mode.
 - **Talking Players**: a small, camera-anchored speaker list on the right of the view that shows only the players who are speaking, each with a speaker glyph and a name chip tinted with that player's gorilla color. There is no backing panel behind the chips and the rows are packed tight, so the list stays a thin strip at the screen edge. Sensitivity, linger time, row count, position, size, opacity, distance and text color are settings; the mod is a single toggle on the **Visual** page and costs nothing while off.
@@ -139,8 +141,8 @@ CascadeMenu/
     PluginInfo.cs
     Menu/
       CascadeMenuBehaviour.cs Canvas, pointer, input, lifecycle, theme ownership, config rebuilds
-      DemoApp.cs              Declarative pages and callbacks
-      DemoState.cs            Session-only demo value store
+      MenuApp.cs              Declarative pages and callbacks
+      MenuState.cs            Session-only menu value store
       MenuConfig.cs           BepInEx config entries
       ThemesPage.cs           Preset list, Auto toggle and the custom color editor
       GunLibPage.cs           State, grip, beam/ring and settings links for the gun
@@ -166,11 +168,15 @@ CascadeMenu/
         GunLibMod.cs          Thin Mod wrapper exposing the gun's Enabled/Active state
         Construction.cs       Physics pieces, welds, demolition gun and explosions
         TagTools.cs           Tag-related tools
+        Screenshot.cs         One-shot PNG capture into CascadeScreenshots
       Overlays/
         OverlayStyles.cs      Classic, VRChat, Fortnite, Minimal and Glass appearance presets
         NameTags.cs           Pooled display-only name plates above remote rigs
         PlayerHud.cs          Pooled display-only player cards above every player
         VoiceIndicator.cs     Talking-players strip with player-colored name chips
+        Crosshair.cs          Centre-of-view dot, cross or ring
+        Clock.cs              Corner clock with optional date
+        SessionStats.cs       FPS, room, players and uptime card
         HudOverlay.cs         Local status overlay
       Player/
         PlayerActions.cs      Player list actions
@@ -201,7 +207,7 @@ CascadeMenu/
 
 ## Adding a page
 
-Pages are declared in `src/Menu/DemoApp.cs`. The fluent API is intentionally small:
+Pages are declared in `src/Menu/MenuApp.cs`. The fluent API is intentionally small:
 
 ```csharp
 var example = new CascadePage("Example", "An example page", CascadeIcon.Home);
@@ -218,7 +224,7 @@ pages.Add(example);
 
 Available row builders live in `CascadeRows.cs`. A new row type needs a matching branch in `CascadeWindow.BuildRow`.
 
-The `Mods` page is already wired to real config entries. The UI layer itself still does not require Harmony; gameplay patches live behind `GameplayMods` and `JoystickFlyController`.
+The module pages are already wired to real config entries. The UI layer itself still does not require Harmony; gameplay patches live behind `GameplayMods` and `JoystickFlyController`.
 
 ## Theming and tokens
 
@@ -236,11 +242,11 @@ Open **Themes** from the sidebar to see every preset as a row with a color swatc
 - **Reset to preset** restores the editor to the selected preset; **Reset all** restores the Default theme and palette.
 - Low-contrast text is switched automatically and a toast explains the change. This works in both the PC screen-space layout and the VR world-space layout.
 
-A theme change never rebuilds the menu or resets the page. Static graphics are repainted from a cached binding list (`CascadeTheme.RecolorAll`), and the small number of widgets that cache their own state track `CascadeTheme.Version`.
+A theme change never rebuilds the menu or resets the page. Static graphics are repainted from a cached binding list (`CascadeTheme.RecolorAll`), and the small number of widgets that cache their own state track `CascadeTheme.Version`. Color swatches keep their border on a child image instead of stacking a second `Graphic` on the chip, so changing a theme cannot break the Themes page or stop the menu from opening.
 
 ## Mod lifecycle
 
-The Mods page uses two independent states:
+Each module tab (Overlays, Tools, Flight, Desktop, Performance and Super) uses two independent states:
 
 - **Enabled** arms the mod. It does not start the effect.
 - **Active** means the effect is running. It follows the mod's one switch.
@@ -258,7 +264,7 @@ Only mods that declare settings show a gear. A mod opts in by calling `AddSettin
 
 Changing a value updates the panel in place and keeps its scroll position; only one settings page is open at a time.
 
-The following mods currently expose extra options: **WASD Fly** (speed multiplier), **Tag gun** (cooldown), **Teleport (Gun)** (cooldown), **Spawn Resource (Gun)** (cooldown), **Orbit Ghost (Gun)** (radius, speed and height), **Name Tags** (style preset, name color, size, range, height, opacity, platform line, hide-self and off-screen fade), **Player HUD** (style preset, name color, every card line, size, range, height and opacity), **Talking Players** (position, name color, size, opacity, sensitivity, linger, range, rows, include-self and speaker icon), **Construction** (tool, piece, size, color style, textures, snapping, rotation, static pieces, auto-weld radius, weld range/strength, explosion radius/force, destroy radius, max pieces, grip hand, desktop grip, aim range, projectile speed and cooldown) and **GunLib** (keybind and Active state). ESP, HUD, Gun, Cosmetics, Flight and Acrobatics expose their settings through the existing Settings modules; the GunLib tab links to both.
+The following mods currently expose extra options: **WASD Fly** (speed multiplier), **Tag gun** (cooldown), **Teleport (Gun)** (cooldown), **Spawn Resource (Gun)** (cooldown), **Orbit Ghost (Gun)** (radius, speed and height), **Name Tags** (style preset, name color, size, range, height, opacity, platform line, hide-self and off-screen fade), **Player HUD** (style preset, name color, every card line, size, range, height and opacity), **Talking Players** (position, name color, size, opacity, sensitivity, linger, range, rows, include-self and speaker icon), **Crosshair** (style, color and size), **Clock** (position, 24-hour time, seconds, date and size), **Session Stats** (FPS, players, room, uptime, size and opacity), **Screenshot** (supersize), **Construction** (tool, piece, size, color style, textures, snapping, rotation, static pieces, auto-weld radius, weld range/strength, explosion radius/force, destroy radius, max pieces, grip hand, desktop grip, aim range, projectile speed and cooldown) and **GunLib** (keybind and Active state). ESP, HUD, Gun, Cosmetics, Flight and Acrobatics expose their settings through the existing Settings modules; the GunLib tab links to both.
 
 ## Troubleshooting
 
@@ -272,7 +278,7 @@ The following mods currently expose extra options: **WASD Fly** (speed multiplie
 
 ## Notes
 
-- Gameplay patches are local-only and can be turned off from the Mods page or the BepInEx config.
+- Gameplay patches are local-only and can be turned off from their module tabs or the BepInEx config.
 - `libs` is included so the project builds without locating the game installation from MSBuild.
 - Build outputs live under `bin/Release` and are not committed.
 

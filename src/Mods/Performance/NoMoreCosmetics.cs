@@ -17,6 +17,7 @@ namespace CascadeMenu.Mods.Performance
     /// The local player's own rig is never touched, so your cosmetics stay
     /// visible to you.
     /// </summary>
+    [ModCategory("Performance")]
     public class NoMoreCosmetics : Mod
     {
         private const float RosterInterval = 0.5f;

@@ -22,6 +22,7 @@ namespace CascadeMenu.Mods
     /// pass. Pieces are never sent over the network.
     /// </summary>
     [PluginToggleable]
+    [ModCategory("Tools")]
     public sealed class Construction : Mod
     {
         private const string RootName = "CascadeConstruction";

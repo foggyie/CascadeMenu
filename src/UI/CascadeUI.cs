@@ -214,7 +214,11 @@ namespace CascadeMenu.UI
 
         public static Image Image(RectTransform rect, Sprite sprite, Color color, UnityEngine.UI.Image.Type type = UnityEngine.UI.Image.Type.Sliced)
         {
-            var image = rect.gameObject.AddComponent<Image>();
+            // A RectTransform can only ever hold one Graphic. Reusing an existing
+            // Image keeps helpers such as Panel() + Outline() on the same rect
+            // from throwing "a Graphic is already added" and returning null.
+            Image image = rect.GetComponent<Image>();
+            if (image == null) image = rect.gameObject.AddComponent<Image>();
             image.sprite = sprite;
             image.color = color;
             image.type = sprite != null ? type : UnityEngine.UI.Image.Type.Simple;

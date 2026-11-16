@@ -21,7 +21,7 @@ namespace CascadeMenu
 
         private MenuConfig _config;
 
-        private DemoState _demo;
+        private MenuState _menuState;
 
         private List<CascadePage> _pages;
 
@@ -248,10 +248,10 @@ namespace CascadeMenu
             GameplayMods.Initialize(_config, base.gameObject);
             Plugin.Root.AddComponent<StandaloneNotificationOverlay>().Initialize(_config);
             Plugin.Root.AddComponent<HudOverlay>().Initialize(_config);
-            _demo = new DemoState();
+            _menuState = new MenuState();
             _lastPageTag = _config.LastPageTag.Value;
             _lastPageTitle = _config.LastPageTitle.Value;
-            _pages = DemoApp.Build(this, _config, _demo);
+            _pages = MenuApp.Build(this, _config, _menuState);
             EnsureTheme();
             BuildCanvas();
             BuildPointer();
@@ -890,7 +890,7 @@ namespace CascadeMenu
             {
                 return;
             }
-            _pages = DemoApp.Build(this, _config, _demo);
+            _pages = MenuApp.Build(this, _config, _menuState);
             EnsureTheme();
             RefreshAutoTheme();
             int page = ResolveSavedPage();
@@ -1429,7 +1429,7 @@ namespace CascadeMenu
             _window = gameObject.AddComponent<CascadeWindow>();
             _window.CloseRequested = CloseMenu;
             _window.RecenterRequested = RecenterMenu;
-            _window.Initialize(_canvas, _canvasRect, this, _config, _demo, _theme, _pages, page);
+            _window.Initialize(_canvas, _canvasRect, this, _config, _menuState, _theme, _pages, page);
             _window.SetWindowPosition(_windowOffset);
             _window.SetWindowRotation(_windowRotation);
             if (!_open)
@@ -1725,7 +1725,7 @@ namespace CascadeMenu
             float normalized = (_window != null) ? _window.ScrollNormalized : 1f;
             string text = (_window != null) ? _window.SearchQuery : string.Empty;
             bool flag = _window != null && _window.SearchFocused;
-            _pages = DemoApp.Build(this, _config, _demo);
+            _pages = MenuApp.Build(this, _config, _menuState);
             // Tag first: keeps cosmetic categories, player pages and module
             // settings pages alive instead of jumping back to Players.
             int num = ResolveSavedPage();

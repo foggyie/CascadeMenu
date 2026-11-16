@@ -15,6 +15,7 @@ namespace CascadeMenu.Mods.PC
     /// the raw key state and the Input System, and any failure is logged instead
     /// of throwing (a throw would make the mod host switch it back off).
     /// </summary>
+    [ModCategory("Desktop")]
     public class PCButtonClicker : Mod
     {
         [DllImport("user32.dll")]

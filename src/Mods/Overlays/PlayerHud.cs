@@ -30,6 +30,7 @@ namespace CascadeMenu.Mods
     /// nothing on it can be clicked.
     /// </summary>
     [PluginToggleable]
+    [ModCategory("Overlays")]
     public sealed class PlayerHud : Mod
     {
         private const string CardName = "CascadePlayerHud";
