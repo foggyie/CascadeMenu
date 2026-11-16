@@ -44,7 +44,8 @@ namespace CascadeMenu.Mods
         // alphabetically, so a namespace-only mod still gets a stable page.
         private static readonly string[] PreferredCategories =
         {
-            "Overlays", "Tools", "Flight", "Desktop", "Performance", "Super"
+            "Overlays", "Movement", "Visual", "Fun", "Tools", "Flight", "Desktop",
+            "Performance", "Super"
         };
 
         // Persistence for the generated per-mod rows.
@@ -299,6 +300,16 @@ namespace CascadeMenu.Mods
             return string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>Every discovered mod, for pages and overlays that list them.</summary>
+        internal static IReadOnlyList<Mod> DiscoveredMods
+        {
+            get
+            {
+                EnsureLoaded();
+                return All;
+            }
+        }
+
         /// <summary>Category pages, in discovery order (usually alphabetical).</summary>
         internal static List<string> Categories()
         {
@@ -356,10 +367,13 @@ namespace CascadeMenu.Mods
             switch (category)
             {
                 case "Overlays": return CascadeIcon.Eye;
+                case "Movement": return CascadeIcon.Person;
+                case "Visual": return CascadeIcon.Eye;
+                case "Fun": return CascadeIcon.Sparkle;
                 case "Tools": return CascadeIcon.Gear;
                 case "Flight": return CascadeIcon.Recenter;
                 case "Desktop": return CascadeIcon.Sidebar;
-                case "Performance": return CascadeIcon.Sparkle;
+                case "Performance": return CascadeIcon.Sliders;
                 case "Super": return CascadeIcon.Layers;
                 default: return CascadeIcon.Layers;
             }

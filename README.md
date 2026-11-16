@@ -14,7 +14,8 @@ The module tabs now contain real gameplay features: a toggleable hand-link block
 - Optional date-based Auto theme that picks a holiday or season at startup and whenever the menu opens.
 - Custom color editor with RGB sliders, a hex field, quick-pick swatches and a live preview. Changes repaint every open window without rebuilding it.
 - Mods are one switch: turning one on starts its effect immediately; turning it off stops it and runs cleanup.
-- **Module tabs**: every mod category has its own sidebar page - **Overlays**, **Tools**, **Flight**, **Desktop**, **Performance** and **Super** - so mods are grouped by purpose instead of sharing one long list.
+- **Module tabs**: every mod category has its own sidebar page - **Overlays**, **Movement**, **Visual**, **Fun**, **Tools**, **Flight**, **Desktop**, **Performance** and **Super** - so mods are grouped by purpose instead of sharing one long list.
+- **A hundred extra one-switch mods** fill the new pages. Overlays: coordinates, altitude, attitude, velocity, hand speed, distance walked, jump counter, room info, session clock, frame time, memory, active mods, keybinds, target info, room props, water state, ground state, input monitor, time scale and build stamp. Movement: gravity scale, weightless, heavy gravity, moon/super jump, jump speed, no slide, ice skates, long arms, tiny/giant body, slow motion, bullet time, bouncy feet, air dash, rocket jump, auto walk and speed cap. Visual: FOV boost/narrow, extended view, vignette, letterbox, scanlines, film grain, alignment grid, safe zone, night vision, fullbright, fog off/density, long shadows, plus chams, tracers, boxes, markers and cosmetic tags. Fun: motion/hand/rainbow trails, laser sight, orbiting orbs, party lights, fireflies, snowfall, rainfall, confetti, fireworks, ground ring, beacon light and breadcrumbs. Tools: ruler, look distance, object info, beacon, clipboard helpers for room code/player list/local id/position/room props, free cursor and fullscreen. Flight: jump jet, feather fall, rocket boots and glide. Desktop: lock/show cursor, big/compact menu and menu near. Performance: shadow off, short shadows, 60/72/90 FPS caps, player culling, LOD bias, texture quality, AA off and pixel lights. Every one of them is a single row with an immediate start/stop and a gear only when it has options.
 - **Crosshair**, **Clock**, **Session Stats** and **Screenshot**: camera-anchored overlays for a centre dot/cross/ring, a corner clock, live FPS/room/players/uptime, and a one-shot PNG capture saved to `CascadeScreenshots`.
 - **Compass**, **Speedometer**, **FPS Graph** and **Screen Tint**: more visual overlays - a sliding heading strip, local movement speed with a fill bar, sixty scrolling frame-rate bars, and a full-view colour filter.
 - **Joystick Fly**, **Noclip** and **Acrobatics** are one-switch mod rows backed by the existing movement controllers; **Unlimited FPS** removes VSync and raises the frame cap, restoring the previous values when switched off.
@@ -122,9 +123,15 @@ All of these features are local-only. The BepInEx log prints `Cascade gameplay p
 
 - **Home** - hero, primary/secondary actions, appearance dropdowns and a toggle.
 - **Mods** - every discovered mod as a compact Enabled/Active row, with a settings gear only on mods that declare options.
-- **Visual** - ESP, HUD and target markers, plus the Name Tags, Player HUD and Talking Players overlays as simple toggle rows with gear settings.
+- **Overlays** - twenty read-only information cards: position, altitude, attitude, velocity, hand speed, distance, jumps, room, session clock, frame time, memory, active mods, keybinds, target, room props, water/ground state, input, time scale and build stamp.
+- **Movement** - gravity, jump, friction, body-scale and time-scale mods, plus dash/rocket impulses and an auto walk.
+- **Visual** - ESP, HUD, target markers, camera/FOV changes, full-view filters (vignette, letterbox, scanlines, grain, grid, night vision), lighting and fog controls.
+- **Fun** - cosmetic trails, laser sight, orbiting/party lights, fireflies, snow, rain, confetti, fireworks and ground markers, alongside the existing lobby tools and the Construction toggle, undo, clear and its settings gear.
+- **Tools** - ruler, look distance, object inspector, world beacon, clipboard helpers, cursor and fullscreen controls.
+- **Flight** - jump jet, feather fall, rocket boots and glide.
+- **Desktop** - cursor lock/visibility and menu size/distance presets.
+- **Performance** - shadow, frame cap, culling, LOD, texture, anti-aliasing and pixel-light switches.
 - **GunLib** - state, grip gating, beam/ring appearance and the gun's settings links.
-- **Fun** - lobby tools plus the Construction toggle, undo, clear and its settings gear.
 - **Profiler** - live Name Tags, Player HUD, Talking Players, GunLib and Construction frame cost.
 - **Controls** - input, pointer and notification demonstrations.
 - **Settings** - live UI scale, distance, theme, accent and behavior settings.
@@ -156,6 +163,8 @@ CascadeMenu/
         Mod.cs                One-switch lifecycle and settings declarations
         ModRegistry.cs        Discovery, persistence, generated rows and gear pages
         ModSetting.cs         Toggle/slider/stepper/dropdown/text model for mod options
+        ModKit.cs             Shared player/camera access, materials, sprites, billboard clouds
+        ModHud.cs             Corner information card and the read-only overlay base class
       Game/
         GameplayMods.cs       Harmony installation and lifecycle
         GameplayPatches.cs    Hand-link and fly-gravity patches
@@ -163,15 +172,24 @@ CascadeMenu/
         JoystickFlyController.cs Menu-switch flight, stick mapping and gravity cache
         AcrobaticsController.cs Body-rotation mode
         NoclipController.cs   Collision bypass
+        MovementMods.cs       Gravity, jump, friction, scale, time and impulse mods
       Flight/
         WASDFly.cs            Desktop WASD free-flight
         JoystickFly.cs        One-switch wrapper for the stick flight controller
+        FlightMods.cs         Jump jet, feather fall, rocket boots and glide
+      Visual/
+        VisualMods.cs         FOV, full-view filters, lighting and ESP wrapper mods
+      Fun/
+        FunMods.cs            Trails, particles, weather and ground markers
+      Desktop/
+        DesktopMods.cs        Cursor and menu size/distance mods
       Tools/
         GunLibController.cs   Grip-gated aim, solid-surface raycast, beam and ring
         GunLibMod.cs          Thin Mod wrapper exposing the gun's Enabled/Active state
         Construction.cs       Physics pieces, welds, demolition gun and explosions
         TagTools.cs           Tag-related tools
         Screenshot.cs         One-shot PNG capture into CascadeScreenshots
+        UtilityMods.cs        Ruler, inspector, beacon, clipboard and window mods
       Overlays/
         OverlayStyles.cs      Classic, VRChat, Fortnite, Minimal and Glass appearance presets
         NameTags.cs           Pooled display-only name plates above remote rigs
@@ -185,6 +203,7 @@ CascadeMenu/
         FpsGraph.cs           Scrolling frame-rate bars
         ScreenTint.cs         Full-view colour filter
         HudOverlay.cs         Local status overlay
+        InfoOverlays.cs       Twenty read-only telemetry, room and player cards
       Player/
         PlayerActions.cs      Player list actions
         SpectateController.cs Spectate mode
