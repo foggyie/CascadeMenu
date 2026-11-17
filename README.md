@@ -14,8 +14,8 @@ The module tabs now contain real gameplay features: a toggleable hand-link block
 - Optional date-based Auto theme that picks a holiday or season at startup and whenever the menu opens.
 - Custom color editor with RGB sliders, a hex field, quick-pick swatches and a live preview. Changes repaint every open window without rebuilding it.
 - Mods are one switch: turning one on starts its effect immediately; turning it off stops it and runs cleanup.
-- **Module tabs**: every mod category has its own sidebar page - **Overlays**, **Movement**, **Visual**, **Fun**, **Tools**, **Flight**, **Desktop**, **Performance** and **Super** - so mods are grouped by purpose instead of sharing one long list.
-- **A hundred extra one-switch mods** fill the new pages. Overlays: coordinates, altitude, attitude, velocity, hand speed, distance walked, jump counter, room info, session clock, frame time, memory, active mods, keybinds, target info, room props, water state, ground state, input monitor, time scale and build stamp. Movement: gravity scale, weightless, heavy gravity, moon/super jump, jump speed, no slide, ice skates, long arms, tiny/giant body, slow motion, bullet time, bouncy feet, air dash, rocket jump, auto walk and speed cap. Visual: FOV boost/narrow, extended view, vignette, letterbox, scanlines, film grain, alignment grid, safe zone, night vision, fullbright, fog off/density, long shadows, plus chams, tracers, boxes, markers and cosmetic tags. Fun: motion/hand/rainbow trails, laser sight, orbiting orbs, party lights, fireflies, snowfall, rainfall, confetti, fireworks, ground ring, beacon light and breadcrumbs. Tools: ruler, look distance, object info, beacon, clipboard helpers for room code/player list/local id/position/room props, free cursor and fullscreen. Flight: jump jet, feather fall, rocket boots and glide. Desktop: lock/show cursor, big/compact menu and menu near. Performance: shadow off, short shadows, 60/72/90 FPS caps, player culling, LOD bias, texture quality, AA off and pixel lights. Every one of them is a single row with an immediate start/stop and a gear only when it has options.
+- **Module tabs**: every mod category has its own sidebar page - **Overlays**, **Movement**, **Visual**, **Fun**, **Snake**, **Tools**, **Flight**, **Desktop**, **Performance**, **Super**, **Game** and **Player** - so mods are grouped by purpose instead of sharing one long list.
+- **A hundred and thirteen extra one-switch mods** fill the new pages. Overlays: coordinates, altitude, attitude, velocity, hand speed, distance walked, jump counter, room info, session clock, frame time, memory, active mods, keybinds, target info, room props, water state, ground state, input monitor, time scale and build stamp. Movement: gravity scale, weightless, heavy gravity, moon/super jump, jump speed, no slide, ice skates, long arms, tiny/giant body, slow motion, bullet time, bouncy feet, air dash, rocket jump, auto walk and speed cap. Visual: FOV boost/narrow, extended view, vignette, letterbox, scanlines, film grain, alignment grid, safe zone, night vision, fullbright, fog off/density, long shadows, plus chams, tracers, boxes, markers and cosmetic tags. Fun: motion/hand/rainbow trails, laser sight, orbiting orbs, party lights, fireflies, snowfall, rainfall, confetti, fireworks, ground ring, beacon light and breadcrumbs. Snake: auto play with a risky fallback, auto restart, instant win, open/exit, a live status card, speed control, invincibility, path visualizer, set best score, pellet control, a stats tracker and a best-score notifier. Tools: ruler, look distance, object info, beacon, clipboard helpers for room code/player list/local id/position/room props, mod search, free cursor and fullscreen. Flight: jump jet, feather fall, rocket boots and glide. Desktop: lock/show cursor, big/compact menu and menu near. Performance: shadow off, short shadows, 60/72/90 FPS caps, player culling, LOD bias, texture quality, AA off and pixel lights. Game: size changer max/min, force player giant, size changer info, teleport to size changer and list size changers. Player: change name, join room code, set custom property, quick chat, teleport gun, teleport to nearest/random player, cycle players, teleport all and follow nearest. Every one of them is a single row with an immediate start/stop and a gear only when it has options.
 - **Crosshair**, **Clock**, **Session Stats** and **Screenshot**: camera-anchored overlays for a centre dot/cross/ring, a corner clock, live FPS/room/players/uptime, and a one-shot PNG capture saved to `CascadeScreenshots`.
 - **Compass**, **Speedometer**, **FPS Graph** and **Screen Tint**: more visual overlays - a sliding heading strip, local movement speed with a fill bar, sixty scrolling frame-rate bars, and a full-view colour filter.
 - **Joystick Fly**, **Noclip** and **Acrobatics** are one-switch mod rows backed by the existing movement controllers; **Unlimited FPS** removes VSync and raises the frame cap, restoring the previous values when switched off.
@@ -66,6 +66,8 @@ D:\SteamLibrary\steamapps\common\Gorilla Tag
 ```
 
 After a game update, replace `libs\Assembly-CSharp.dll` and the relevant `UnityEngine*.dll`, `Unity.TextMeshPro.dll`, and `Unity.InputSystem.dll` files with the current versions from `Gorilla Tag_Data\Managed`. Also copy the current `BepInEx.dll` and `0Harmony.dll` from `BepInEx\core`. Then rebuild. Do not copy game DLLs into `bin\Release`; they are marked `Private=false` and must be supplied by the game.
+
+The bundled `Assembly-CSharp.dll`, `Unity.TextMeshPro.dll`, `Unity.InputSystem.dll` and `UnityEngine.UI.dll` were refreshed from the 13 November 2026 game build. The older references predated the current computer Snake game, so the Snake page needs these refreshed files.
 
 ## Install
 
@@ -127,10 +129,13 @@ All of these features are local-only. The BepInEx log prints `Cascade gameplay p
 - **Movement** - gravity, jump, friction, body-scale and time-scale mods, plus dash/rocket impulses and an auto walk.
 - **Visual** - ESP, HUD, target markers, camera/FOV changes, full-view filters (vignette, letterbox, scanlines, grain, grid, night vision), lighting and fog controls.
 - **Fun** - cosmetic trails, laser sight, orbiting/party lights, fireflies, snow, rain, confetti, fireworks and ground markers, alongside the existing lobby tools and the Construction toggle, undo, clear and its settings gear.
-- **Tools** - ruler, look distance, object inspector, world beacon, clipboard helpers, cursor and fullscreen controls.
+- **Snake** - plays the computer's Snake minigame: BFS auto play with a risky fallback, auto restart, instant win, open/exit, a live state/score/best card, speed control, invincibility, a path visualizer, set best score, pellet-to-snake, a stats tracker and a best-score notifier.
+- **Tools** - ruler, look distance, object inspector, world beacon, clipboard helpers, mod search, cursor and fullscreen controls.
 - **Flight** - jump jet, feather fall, rocket boots and glide.
 - **Desktop** - cursor lock/visibility and menu size/distance presets.
 - **Performance** - shadow, frame cap, culling, LOD, texture, anti-aliasing and pixel-light switches.
+- **Game** - size changer max/min, force player giant, size changer info, teleport to size changer and list size changers.
+- **Player** - change name, join room code, set a custom property, quick chat, teleport gun, teleport to nearest/random player, cycle players, teleport all and follow nearest.
 - **GunLib** - state, grip gating, beam/ring appearance and the gun's settings links.
 - **Profiler** - live Name Tags, Player HUD, Talking Players, GunLib and Construction frame cost.
 - **Controls** - input, pointer and notification demonstrations.
@@ -181,6 +186,9 @@ CascadeMenu/
         VisualMods.cs         FOV, full-view filters, lighting and ESP wrapper mods
       Fun/
         FunMods.cs            Trails, particles, weather and ground markers
+      Snake/
+        SnakeGame.cs          Cached reflection bridge and the BFS/survival AI
+        SnakeMods.cs          Auto play/restart, instant win, controls and status card
       Desktop/
         DesktopMods.cs        Cursor and menu size/distance mods
       Tools/

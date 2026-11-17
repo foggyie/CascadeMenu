@@ -410,10 +410,10 @@ namespace CascadeMenu
             MenuReanchorDistance = config.Bind(
                 "Placement",
                 "Menu Re-anchor Distance",
-                1.6f,
+                100f,
                 new ConfigDescription(
-                    "Move the menu back in front of you when you walk further than this (metres). 0 disables it.",
-                    new AcceptableValueRange<float>(0f, 6f)));
+                    "Move the menu back in front of you when you walk further than this (metres). 0 disables it. Set high for teleportation.",
+                    new AcceptableValueRange<float>(0f, 500f)));
 
             // -----------------------------------------------------------------
             // Visuals
@@ -621,7 +621,7 @@ namespace CascadeMenu
             GunMaxDistance.Value = 30f;
             MenuHeight.Value = 1.5f;
             MenuRaiseAbove.Value = 1.8f;
-            MenuReanchorDistance.Value = 1.6f;
+            MenuReanchorDistance.Value = 100f;
             EspEnabled.Value = false;
             EspNames.Value = true;
             EspTracers.Value = false;

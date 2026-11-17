@@ -44,7 +44,7 @@ namespace CascadeMenu.Mods
         // alphabetically, so a namespace-only mod still gets a stable page.
         private static readonly string[] PreferredCategories =
         {
-            "Overlays", "Movement", "Visual", "Fun", "Tools", "Flight", "Desktop",
+            "Overlays", "Movement", "Visual", "Fun", "Snake", "Tools", "Flight", "Desktop",
             "Performance", "Super"
         };
 
@@ -370,6 +370,7 @@ namespace CascadeMenu.Mods
                 case "Movement": return CascadeIcon.Person;
                 case "Visual": return CascadeIcon.Eye;
                 case "Fun": return CascadeIcon.Sparkle;
+                case "Snake": return CascadeIcon.Sparkle;
                 case "Tools": return CascadeIcon.Gear;
                 case "Flight": return CascadeIcon.Recenter;
                 case "Desktop": return CascadeIcon.Sidebar;

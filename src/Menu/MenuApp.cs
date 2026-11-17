@@ -392,11 +392,11 @@ namespace CascadeMenu
                     () => config.MenuRaiseAbove.Value,
                     value => config.MenuRaiseAbove.Value = value,
                     value => value.ToString("0.00") + " m")
-                .Slider("Re-anchor distance", "Walk further than this and the menu comes back (0 = never)",
-                    0f, 6f,
+                .Slider("Re-anchor distance", "Walk further than this and the menu comes back (0 = never, 100+ for teleports)",
+                    0f, 500f,
                     () => config.MenuReanchorDistance.Value,
                     value => config.MenuReanchorDistance.Value = value,
-                    value => value <= 0.01f ? "off" : value.ToString("0.0") + " m")
+                    value => value <= 0.01f ? "off" : value.ToString("0") + " m")
                 .Toggle("Smooth follow", "Optional: glide after the head instead of staying put",
                     () => config.FollowHead.Value,
                     value => config.FollowHead.Value = value);
