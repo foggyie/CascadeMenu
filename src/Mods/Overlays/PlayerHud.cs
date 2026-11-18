@@ -795,9 +795,7 @@ namespace CascadeMenu.Mods
 
             try
             {
-                Shader shader = Shader.Find("UI/Default");
-                if (shader == null) shader = Shader.Find("Sprites/Default");
-                if (shader == null) shader = Shader.Find("Unlit/Color");
+                Shader shader = ShaderLookup.UiUnlit();
                 if (shader == null)
                 {
                     _materialsFailed = true;

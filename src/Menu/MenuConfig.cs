@@ -107,6 +107,9 @@ namespace CascadeMenu
         public readonly ConfigEntry<float> EspRange;
         public readonly ConfigEntry<bool> HandTapIndicator;
 
+        // Debug
+        public readonly ConfigEntry<bool> VerboseLogging;
+
         public MenuConfig(ConfigFile config)
         {
             File = config;
@@ -569,6 +572,12 @@ namespace CascadeMenu
                 string.Empty,
                 "Internal: title of the tab that was open when the menu closed.");
 
+            VerboseLogging = config.Bind(
+                "Debug",
+                "Verbose Logging",
+                false,
+                "Enable verbose debug logging (e.g., joystick input samples).");
+
         }
 
         public void ResetDefaults()
@@ -648,6 +657,7 @@ namespace CascadeMenu
             NotificationPosition.Value = 0;
             LastPageTag.Value = string.Empty;
             LastPageTitle.Value = string.Empty;
+            VerboseLogging.Value = false;
         }
     }
 }

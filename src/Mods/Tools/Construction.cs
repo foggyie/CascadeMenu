@@ -2002,9 +2002,7 @@ namespace CascadeMenu.Mods
         // ---------------------------------------------------------------
         private static Material NewUnlitMaterial(Color color, int renderQueue)
         {
-            Shader shader = Shader.Find("Sprites/Default");
-            if (shader == null) shader = Shader.Find("UI/Default");
-            if (shader == null) shader = Shader.Find("Unlit/Color");
+            Shader shader = ShaderLookup.SpriteUnlit();
             if (shader == null) return null;
 
             Material material = new Material(shader);

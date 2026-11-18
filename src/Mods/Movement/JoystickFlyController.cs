@@ -281,6 +281,8 @@ namespace CascadeMenu.Mods
         /// </summary>
         private void LogStickSample(Vector2 left, Vector2 right, Vector3 velocity)
         {
+            if (_config != null && !_config.VerboseLogging.Value) return;
+
             if (Time.unscaledTime - _lastStickLogTime < 2f)
             {
                 return;

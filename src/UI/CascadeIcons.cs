@@ -354,5 +354,20 @@ namespace CascadeMenu.UI
             }
             return inside ? -distance : distance;
         }
+
+        /// <summary>
+        /// Releases all cached icons and their textures.
+        /// </summary>
+        public static void ReleaseAll()
+        {
+            foreach (var entry in Cache)
+            {
+                if (entry.Value != null)
+                {
+                    CascadeSprites.DestroySprite(entry.Value);
+                }
+            }
+            Cache.Clear();
+        }
     }
 }

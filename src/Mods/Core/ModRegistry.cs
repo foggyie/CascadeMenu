@@ -901,12 +901,48 @@ namespace CascadeMenu.Mods
                 {
                     if (late) mod.LateUpdate();
                     else mod.Update();
+
+                    // Success: reset failure tracking
+                    mod._failureCount = 0;
+                    mod._firstFailureTime = 0f;
                 }
                 catch (Exception exception)
                 {
-                    // One broken mod should not spam the log or the frame loop.
-                    Plugin.Log?.LogError("Cascade mod \"" + mod.Name + "\" threw, disabling: " + exception);
-                    try { mod.SetEnabled(false); } catch { }
+                    float now = UnityEngine.Time.time;
+                    const float GracePeriod = 2f;
+
+                    // Track first failure
+                    if (mod._failureCount == 0)
+                    {
+                        mod._firstFailureTime = now;
+                        Plugin.Log?.LogWarning($"Cascade mod \"{mod.Name}\" threw: {exception}");
+                    }
+
+                    mod._failureCount++;
+
+                    // Check if grace period expired
+                    if (now - mod._firstFailureTime >= GracePeriod)
+                    {
+                        Plugin.Log?.LogError($"Cascade mod \"{mod.Name}\" failed {mod._failureCount} times, disabling: {exception}");
+                        
+                        try 
+                        { 
+                            mod.SetEnabled(false); 
+                        }
+                        catch (Exception disableEx)
+                        {
+                            Plugin.Log?.LogError($"Failed to disable mod \"{mod.Name}\": {disableEx}");
+                        }
+
+                        try
+                        {
+                            ModKit.Notify(mod.Name, "Turned off after repeated errors. See the BepInEx log.");
+                        }
+                        catch (Exception notifyEx)
+                        {
+                            Plugin.Log?.LogError($"Failed to notify about mod \"{mod.Name}\" disable: {notifyEx}");
+                        }
+                    }
                 }
             }
         }

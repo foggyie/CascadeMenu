@@ -18,28 +18,30 @@ namespace CascadeMenu
             Instance = this;
             Log = Logger;
 
-            Root = new GameObject("CascadeMenu_Root");
-            DontDestroyOnLoad(Root);
-            Root.AddComponent<CascadeMenuBehaviour>();
+            EnsureRoot();
 
             Log.LogInfo(PluginInfo.NAME + " v" + PluginInfo.VERSION + " loaded.");
         }
 
-        private void Start()
+        private void EnsureRoot()
         {
-            // Ensure the root exists even if Awake ran before Config loading.
-            if (Root == null)
-            {
-                Root = new GameObject("CascadeMenu_Root");
-                DontDestroyOnLoad(Root);
-                Root.AddComponent<CascadeMenuBehaviour>();
-            }
+            if (Root != null) return;
+
+            Root = new GameObject("CascadeMenu_Root");
+            DontDestroyOnLoad(Root);
+            Root.AddComponent<CascadeMenuBehaviour>();
         }
 
         private void OnDestroy()
         {
+            if (Root != null)
+            {
+                Destroy(Root);
+                Root = null;
+            }
+
+            // Keep Log assigned for other components to write during shutdown
             Instance = null;
-            Log = null;
         }
     }
 }

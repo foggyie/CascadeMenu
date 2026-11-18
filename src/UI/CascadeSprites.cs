@@ -319,5 +319,31 @@ namespace CascadeMenu.UI
             float inside = Mathf.Min(Mathf.Max(dx, dy), 0f);
             return outside + inside - radius;
         }
+
+        /// <summary>
+        /// Destroys a sprite and its texture.
+        /// </summary>
+        public static void DestroySprite(Sprite sprite)
+        {
+            if (sprite == null) return;
+            Texture2D texture = sprite.texture;
+            Object.Destroy(sprite);
+            if (texture != null) Object.Destroy(texture);
+        }
+
+        /// <summary>
+        /// Releases all cached sprites and their textures.
+        /// </summary>
+        public static void ReleaseAll()
+        {
+            foreach (var entry in Cache)
+            {
+                if (entry.Value != null)
+                {
+                    DestroySprite(entry.Value);
+                }
+            }
+            Cache.Clear();
+        }
     }
 }

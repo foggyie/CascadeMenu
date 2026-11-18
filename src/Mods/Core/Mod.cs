@@ -131,6 +131,10 @@ namespace CascadeMenu.Mods
         private bool _active;
         private bool _effectRunning;
 
+        // Failure tracking for retry logic
+        internal int _failureCount;
+        internal float _firstFailureTime;
+
         public virtual void OnEnable() { }
         public virtual void OnDisable() { }
 

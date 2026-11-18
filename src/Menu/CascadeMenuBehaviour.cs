@@ -2780,6 +2780,10 @@ namespace CascadeMenu
             {
                 Object.Destroy(_pointerDotRenderer.material);
             }
+
+            // Release cached sprites and icons
+            CascadeSprites.ReleaseAll();
+            CascadeIcons.ReleaseAll();
         }
 
     }
