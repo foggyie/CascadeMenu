@@ -84,9 +84,14 @@ namespace CascadeMenu.Mods
         {
             _config = config;
 
-            // Hidden/Internal-Colored is the one built-in shader that reliably
-            // exposes _ZTest/_ZWrite, so the ESP can ignore the depth buffer.
-            Shader shader = Shader.Find("Hidden/Internal-Colored");
+            // GUI/Text Shader is the same overlay shader the in-game ESP menus
+            // use: unlit, alpha blended and hard-coded to ZTest Always, so
+            // boxes, tracers, names and chams stay visible through walls.
+            // Hidden/Internal-Colored is the fallback because it exposes the
+            // same _ZTest/_ZWrite controls.
+            Shader shader = Shader.Find("GUI/Text Shader");
+            if (shader == null) shader = Shader.Find("Hidden/Internal-Colored");
+            if (shader == null) shader = Shader.Find("Universal Render Pipeline/Unlit");
             if (shader == null) shader = Shader.Find("Sprites/Default");
             if (shader == null) shader = Shader.Find("UI/Default");
             if (shader == null) shader = Shader.Find("Unlit/Color");
@@ -96,16 +101,9 @@ namespace CascadeMenu.Mods
                 return;
             }
 
-            _lineMaterial = new Material(shader) { color = Color.white };
-            _lineMaterial.renderQueue = 5000;
-            // Through-wall ESP: ignore the depth buffer for every overlay line.
-            MakeMaterialThroughWalls(_lineMaterial);
-            Shader highlightShader = Shader.Find("Hidden/Internal-Colored") ?? shader;
-            _highlightMaterial = new Material(highlightShader);
-            _highlightMaterial.color = HighlightColors[0];
-            _highlightMaterial.renderQueue = 5000;
-            MakeMaterialThroughWalls(_highlightMaterial);
-            Plugin.Log?.LogInfo("Cascade ESP ready. Enabled=" + config.EspEnabled.Value);
+            _lineMaterial = CreateOverlayMaterial(shader, Color.white);
+            _highlightMaterial = CreateOverlayMaterial(shader, HighlightColors[0]);
+            Plugin.Log?.LogInfo("Cascade ESP ready (" + shader.name + "). Enabled=" + config.EspEnabled.Value);
         }
 
         private void LateUpdate()
@@ -361,7 +359,11 @@ namespace CascadeMenu.Mods
                 var iconObject = new GameObject("CosmeticIcon");
                 iconObject.transform.SetParent(slot.Root.transform, false);
                 slot.CosmeticIcon = iconObject.AddComponent<SpriteRenderer>();
+                slot.CosmeticIcon.sharedMaterial = _lineMaterial;
                 slot.CosmeticIcon.rendererPriority = 5000;
+                slot.CosmeticIcon.sortingOrder = 5000;
+                slot.CosmeticIcon.shadowCastingMode = ShadowCastingMode.Off;
+                slot.CosmeticIcon.receiveShadows = false;
             }
 
             if (slot.CosmeticIconSprite != meta.Icon)
@@ -369,6 +371,8 @@ namespace CascadeMenu.Mods
                 slot.CosmeticIcon.sprite = meta.Icon;
                 slot.CosmeticIconSprite = meta.Icon;
             }
+
+            slot.CosmeticIcon.color = meta.Color;
 
             float scale = rig.scaleFactor;
             slot.CosmeticIcon.transform.position = tagPos + facing * new Vector3(-0.09f * scale, 0f, 0f);
@@ -503,6 +507,11 @@ namespace CascadeMenu.Mods
                 if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy ||
                     renderer is LineRenderer || slot.OriginalMaterials.ContainsKey(renderer)) continue;
 
+                // GUI/Text Shader multiplies the mesh's vertex colors into the
+                // overlay color. Some cosmetics store dark vertex colors, which
+                // made chams come out nearly black, so force them to white.
+                WhitenVertexColors(renderer);
+
                 Material[] originals = renderer.sharedMaterials;
                 slot.OriginalMaterials.Add(renderer, originals);
                 var replacement = new Material[originals.Length];
@@ -510,6 +519,29 @@ namespace CascadeMenu.Mods
                     replacement[materialIndex] = _highlightMaterial;
                 renderer.sharedMaterials = replacement;
             }
+        }
+
+        private static readonly HashSet<Mesh> WhitenedMeshes = new HashSet<Mesh>();
+
+        private static void WhitenVertexColors(Renderer renderer)
+        {
+            Mesh mesh = null;
+            if (renderer is SkinnedMeshRenderer skinned) mesh = skinned.sharedMesh;
+            else
+            {
+                MeshFilter filter = renderer.GetComponent<MeshFilter>();
+                if (filter != null) mesh = filter.sharedMesh;
+            }
+
+            if (mesh == null || WhitenedMeshes.Contains(mesh)) return;
+            WhitenedMeshes.Add(mesh);
+
+            Color32[] colors = mesh.colors32;
+            if (colors == null || colors.Length == 0) return;
+
+            var white = new Color32(255, 255, 255, 255);
+            for (int i = 0; i < colors.Length; i++) colors[i] = white;
+            mesh.colors32 = colors;
         }
 
         private static void RestoreChams(Slot slot)
@@ -545,23 +577,45 @@ namespace CascadeMenu.Mods
         /// Turns a material into a depth-independent overlay: no depth test, no
         /// depth write, drawn last. Walls can no longer hide the ESP.
         /// </summary>
+        private static Material CreateOverlayMaterial(Shader shader, Color color)
+        {
+            var material = new Material(shader) { color = color };
+            MakeMaterialThroughWalls(material);
+            return material;
+        }
+
         private static void MakeMaterialThroughWalls(Material material)
         {
             if (material == null) return;
 
             material.renderQueue = 5000;
-            if (material.HasProperty("_ZTest"))
-                material.SetInt("_ZTest", (int)CompareFunction.Always);
-            if (material.HasProperty("_ZWrite")) material.SetInt("_ZWrite", 0);
-            if (material.HasProperty("_Cull")) material.SetInt("_Cull", (int)CullMode.Off);
+            material.SetOverrideTag("RenderType", "Transparent");
 
-            // Hidden/Internal-Colored defaults to opaque. Enable normal alpha
-            // blending so chams keep their translucency instead of turning every
-            // player into a solid coloured block.
+            if (material.HasProperty("_ZTest"))
+                material.SetFloat("_ZTest", (float)CompareFunction.Always);
+            // TextMeshPro uses its own Z-test property name.
+            if (material.HasProperty("_ZTestMode"))
+                material.SetFloat("_ZTestMode", (float)CompareFunction.Always);
+
+            if (material.HasProperty("_ZWrite")) material.SetFloat("_ZWrite", 0f);
+            if (material.HasProperty("_Cull")) material.SetFloat("_Cull", (float)CullMode.Off);
+            if (material.HasProperty("_CullMode")) material.SetFloat("_CullMode", (float)CullMode.Off);
+
+            // URP-style shaders need their surface type switched to transparent
+            // before the blend state applies.
+            if (material.HasProperty("_Surface")) material.SetFloat("_Surface", 1f);
+            if (material.HasProperty("_Blend")) material.SetFloat("_Blend", 0f);
+            if (material.HasProperty("_AlphaClip")) material.SetFloat("_AlphaClip", 0f);
+
+            // Enable normal alpha blending so chams keep their translucency
+            // instead of turning every player into a solid coloured block.
             if (material.HasProperty("_SrcBlend"))
-                material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+                material.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
             if (material.HasProperty("_DstBlend"))
-                material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+                material.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.DisableKeyword("_ALPHATEST_ON");
         }
 
         /// <summary>
