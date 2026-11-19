@@ -846,9 +846,10 @@ namespace CascadeMenu.Mods
                     textRenderer.receiveShadows = false;
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
                 // A TMP renderer may not exist until the first layout pass.
+                LogOnce.Warn("Player HUD text renderer setup", exception);
             }
         }
 
@@ -904,9 +905,10 @@ namespace CascadeMenu.Mods
                     if (value is short) return (short)value;
                     if (value is int) return (int)value;
                 }
-                catch (Exception)
+                catch (Exception exception)
                 {
                     // Photon can be torn down with the room.
+                    LogOnce.Warn("Player HUD ping probe", exception);
                 }
                 return 0;
             }
@@ -951,9 +953,10 @@ namespace CascadeMenu.Mods
                         Type type = assemblies[i].GetType(name, false);
                         if (type != null) return type;
                     }
-                    catch (Exception)
+                    catch (Exception exception)
                     {
                         // Some dynamic assemblies cannot be searched.
+                        LogOnce.Warn("Player HUD type lookup", exception);
                     }
                 }
                 return null;
@@ -1025,9 +1028,10 @@ namespace CascadeMenu.Mods
                         return written > 0;
                     }
                 }
-                catch (Exception)
+                catch (Exception exception)
                 {
                     // A room can rewrite its properties while we are reading them.
+                    LogOnce.Warn("Player HUD custom properties", exception);
                 }
 
                 return false;
@@ -1091,9 +1095,10 @@ namespace CascadeMenu.Mods
                         Type type = assemblies[i].GetType(name, false);
                         if (type != null) return type;
                     }
-                    catch (Exception)
+                    catch (Exception exception)
                     {
                         // Some dynamic assemblies cannot be searched.
+                        LogOnce.Warn("Player HUD type lookup", exception);
                     }
                 }
                 return null;
@@ -1139,12 +1144,12 @@ namespace CascadeMenu.Mods
                     if (_tagManagerInstance != null)
                     {
                         try { available = _tagManagerInstance.GetValue(null, null) != null; }
-                        catch (Exception) { }
+                        catch (Exception exception) { LogOnce.Warn("Player HUD tag manager probe", exception); }
                     }
                     if (!available && _infectionInstance != null)
                     {
                         try { available = _infectionInstance.GetValue(null, null) != null; }
-                        catch (Exception) { }
+                        catch (Exception exception) { LogOnce.Warn("Player HUD infection manager probe", exception); }
                     }
 
                     _cachedAvailable = available;
@@ -1162,7 +1167,7 @@ namespace CascadeMenu.Mods
                 {
                     object manager = null;
                     try { manager = _tagManagerInstance.GetValue(null, null); }
-                    catch (Exception) { }
+                    catch (Exception exception) { LogOnce.Warn("Player HUD tag manager instance", exception); }
 
                     if (manager != null)
                     {
@@ -1173,7 +1178,7 @@ namespace CascadeMenu.Mods
                                 object result = _isTaggedMethod.Invoke(manager, new object[] { player });
                                 if (result is bool) { tagged = (bool)result; return true; }
                             }
-                            catch (Exception) { }
+                            catch (Exception exception) { LogOnce.Warn("Player HUD IsTagged probe", exception); }
                         }
 
                         object current = null;
@@ -1182,7 +1187,7 @@ namespace CascadeMenu.Mods
                             if (_currentTaggedField != null) current = _currentTaggedField.GetValue(manager);
                             else if (_currentTaggedProperty != null) current = _currentTaggedProperty.GetValue(manager, null);
                         }
-                        catch (Exception) { }
+                        catch (Exception exception) { LogOnce.Warn("Player HUD current tagged player", exception); }
 
                         NetPlayer taggedPlayer = current as NetPlayer;
                         if (taggedPlayer != null)
@@ -1198,7 +1203,7 @@ namespace CascadeMenu.Mods
                 {
                     object manager = null;
                     try { manager = _infectionInstance.GetValue(null, null); }
-                    catch (Exception) { }
+                    catch (Exception exception) { LogOnce.Warn("Player HUD infection manager instance", exception); }
 
                     object collection = null;
                     try
@@ -1206,7 +1211,7 @@ namespace CascadeMenu.Mods
                         if (_infectedPlayersField != null) collection = _infectedPlayersField.GetValue(manager);
                         else if (_infectedPlayersProperty != null) collection = _infectedPlayersProperty.GetValue(manager, null);
                     }
-                    catch (Exception) { }
+                    catch (Exception exception) { LogOnce.Warn("Player HUD infected players field", exception); }
 
                     IEnumerable list = collection as IEnumerable;
                     if (list != null)
@@ -1226,7 +1231,7 @@ namespace CascadeMenu.Mods
                             }
                             return false;
                         }
-                        catch (Exception) { }
+                        catch (Exception exception) { LogOnce.Warn("Player HUD infected players list", exception); }
                     }
                 }
 
@@ -1278,6 +1283,22 @@ namespace CascadeMenu.Mods
                     Plugin.Log?.LogInfo("Cascade Player HUD: tagged state unavailable: " + exception.Message);
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Logs each Player HUD lookup failure once, so a broken or missing reflection
+    /// target cannot flood the BepInEx log every frame.
+    /// </summary>
+    internal static class LogOnce
+    {
+        private static readonly HashSet<string> Keys = new HashSet<string>();
+
+        internal static void Warn(string key, Exception exception)
+        {
+            if (key == null) key = "Player HUD";
+            if (!Keys.Add(key)) return;
+            Plugin.Log?.LogWarning("Cascade " + key + " failed: " + exception.Message);
         }
     }
 }
