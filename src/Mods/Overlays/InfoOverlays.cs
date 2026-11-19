@@ -478,7 +478,7 @@ namespace CascadeMenu.Mods
                           "Running  " + active;
 
             if (_names.Count == 0) return text + "\nnothing running";
-            return text + "\n" + string.Join("\n", _names.ToArray());
+            return text + "\n" + string.Join("\n", _names);
         }
     }
 
@@ -514,7 +514,7 @@ namespace CascadeMenu.Mods
             }
 
             if (_lines.Count == 0) return "<b>KEYBINDS</b>\nno armed mod has a key";
-            return "<b>KEYBINDS</b>\n" + string.Join("\n", _lines.ToArray());
+            return "<b>KEYBINDS</b>\n" + string.Join("\n", _lines);
         }
     }
 

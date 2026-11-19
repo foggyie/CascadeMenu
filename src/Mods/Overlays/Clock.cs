@@ -145,28 +145,11 @@ namespace CascadeMenu.Mods
 
             _camera = CascadeMenuBehaviour.ResolveViewCamera();
 
-            GameObject root = new GameObject("CascadeClock",
-                typeof(RectTransform), typeof(Canvas), typeof(CanvasGroup));
-            Transform parent = _camera != null
-                ? _camera.transform
-                : (Plugin.Root != null ? Plugin.Root.transform : null);
-            root.transform.SetParent(parent, false);
-
-            _canvas = root.GetComponent<Canvas>();
-            _canvas.renderMode = RenderMode.WorldSpace;
-            _canvas.sortingOrder = 225;
-            _canvas.worldCamera = _camera;
-
-            _canvasRect = (RectTransform)root.transform;
-            _canvasRect.anchorMin = _canvasRect.anchorMax = new Vector2(0.5f, 0.5f);
-            _canvasRect.sizeDelta = new Vector2(CanvasWidth, CanvasHeight);
-            _canvasRect.localScale = Vector3.one * (CanvasScale * Mathf.Max(0.1f, _size));
-            _canvasRect.localRotation = Quaternion.identity;
-
-            CanvasGroup group = root.GetComponent<CanvasGroup>();
-            group.alpha = 1f;
-            group.blocksRaycasts = false;
-            group.interactable = false;
+            Transform fallback = Plugin.Root != null ? Plugin.Root.transform : null;
+            _canvas = OverlayCanvas.Create("CascadeClock", _camera, fallback, 225,
+                new Vector2(CanvasWidth, CanvasHeight),
+                CanvasScale * Mathf.Max(0.1f, _size),
+                Vector3.zero, out _canvasRect, out _);
 
             RectTransform background = CascadeUI.Rect("Background", _canvasRect);
             CascadeUI.Stretch(background);
@@ -207,13 +190,13 @@ namespace CascadeMenu.Mods
             {
                 time = _showSeconds ? now.ToString("h:mm:ss tt") : now.ToString("h:mm tt");
             }
-            _timeLabel.text = time;
+            OverlayText.Set(_timeLabel, time);
 
             if (_dateLabel != null)
             {
                 bool show = _showDate;
                 _dateLabel.gameObject.SetActive(show);
-                if (show) _dateLabel.text = now.ToString("ddd, MMM d");
+                if (show) OverlayText.Set(_dateLabel, now.ToString("ddd, MMM d"));
             }
         }
 

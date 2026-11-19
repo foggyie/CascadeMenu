@@ -108,30 +108,10 @@ namespace CascadeMenu.Mods
 
             _camera = CascadeMenuBehaviour.ResolveViewCamera();
 
-            GameObject root = new GameObject("CascadeScreenTint",
-                typeof(RectTransform), typeof(Canvas), typeof(CanvasGroup));
-            Transform parent = _camera != null
-                ? _camera.transform
-                : (Plugin.Root != null ? Plugin.Root.transform : null);
-            root.transform.SetParent(parent, false);
-
-            _canvas = root.GetComponent<Canvas>();
-            _canvas.renderMode = RenderMode.WorldSpace;
-            _canvas.sortingOrder = 190;
-            _canvas.worldCamera = _camera;
-
-            _canvasRect = (RectTransform)root.transform;
-            _canvasRect.anchorMin = _canvasRect.anchorMax = new Vector2(0.5f, 0.5f);
-            _canvasRect.pivot = new Vector2(0.5f, 0.5f);
-            _canvasRect.sizeDelta = new Vector2(CanvasSize, CanvasSize);
-            _canvasRect.localScale = Vector3.one * CanvasScale;
-            _canvasRect.localPosition = new Vector3(0f, 0f, ViewDistance);
-            _canvasRect.localRotation = Quaternion.identity;
-
-            CanvasGroup group = root.GetComponent<CanvasGroup>();
-            group.alpha = 1f;
-            group.blocksRaycasts = false;
-            group.interactable = false;
+            Transform fallback = Plugin.Root != null ? Plugin.Root.transform : null;
+            _canvas = OverlayCanvas.Create("CascadeScreenTint", _camera, fallback, 190,
+                new Vector2(CanvasSize, CanvasSize), CanvasScale,
+                new Vector3(0f, 0f, ViewDistance), out _canvasRect, out _);
 
             RectTransform rect = CascadeUI.Rect("Tint", _canvasRect);
             CascadeUI.Stretch(rect);

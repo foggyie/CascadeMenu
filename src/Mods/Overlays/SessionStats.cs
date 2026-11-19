@@ -45,6 +45,7 @@ namespace CascadeMenu.Mods
         private float _fps;
         private float _startedAt;
         private float _nextStats;
+        private float _nextText;
         private int _lastLines = -1;
 
         private int _playerCount;
@@ -134,7 +135,8 @@ namespace CascadeMenu.Mods
                 RefreshRoom();
             }
 
-            RebuildText();
+            if (OverlayText.Due(ref _nextText)) RebuildText();
+            ApplyOpacity();
         }
 
         private void CreateHud()
@@ -232,7 +234,7 @@ namespace CascadeMenu.Mods
 
             if (lines == 0) AppendLine("Session Stats", ref lines);
 
-            _label.text = _builder.ToString();
+            OverlayText.Set(_label, _builder.ToString());
 
             if (lines != _lastLines)
             {
@@ -240,8 +242,6 @@ namespace CascadeMenu.Mods
                 float height = Padding * 2f + lines * LineHeight;
                 _panelRect.sizeDelta = new Vector2(CanvasWidth, height);
             }
-
-            ApplyOpacity();
         }
 
         private void AppendLine(string text, ref int lines)

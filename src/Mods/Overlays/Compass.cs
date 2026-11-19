@@ -126,30 +126,11 @@ namespace CascadeMenu.Mods
 
             _camera = CascadeMenuBehaviour.ResolveViewCamera();
 
-            GameObject root = new GameObject("CascadeCompass",
-                typeof(RectTransform), typeof(Canvas), typeof(CanvasGroup));
-            Transform parent = _camera != null
-                ? _camera.transform
-                : (Plugin.Root != null ? Plugin.Root.transform : null);
-            root.transform.SetParent(parent, false);
-
-            _canvas = root.GetComponent<Canvas>();
-            _canvas.renderMode = RenderMode.WorldSpace;
-            _canvas.sortingOrder = 224;
-            _canvas.worldCamera = _camera;
-
-            _canvasRect = (RectTransform)root.transform;
-            _canvasRect.anchorMin = _canvasRect.anchorMax = new Vector2(0.5f, 0.5f);
-            _canvasRect.pivot = new Vector2(0.5f, 0.5f);
-            _canvasRect.sizeDelta = new Vector2(CanvasWidth, CanvasHeight);
-            _canvasRect.localScale = Vector3.one * (CanvasScale * Mathf.Max(0.1f, _size));
-            _canvasRect.localPosition = CameraOffset;
-            _canvasRect.localRotation = Quaternion.identity;
-
-            CanvasGroup group = root.GetComponent<CanvasGroup>();
-            group.alpha = 1f;
-            group.blocksRaycasts = false;
-            group.interactable = false;
+            Transform fallback = Plugin.Root != null ? Plugin.Root.transform : null;
+            _canvas = OverlayCanvas.Create("CascadeCompass", _camera, fallback, 224,
+                new Vector2(CanvasWidth, CanvasHeight),
+                CanvasScale * Mathf.Max(0.1f, _size),
+                CameraOffset, out _canvasRect, out _);
 
             RectTransform background = CascadeUI.Rect("Background", _canvasRect);
             CascadeUI.Stretch(background);
@@ -218,9 +199,9 @@ namespace CascadeMenu.Mods
             {
                 int index = Mathf.RoundToInt(heading / 45f) % 8;
                 if (index < 0) index += 8;
-                _headingLabel.text = _showDegrees
+                OverlayText.Set(_headingLabel, _showDegrees
                     ? Cardinals[index] + "  " + heading + "°"
-                    : Cardinals[index];
+                    : Cardinals[index]);
             }
         }
 

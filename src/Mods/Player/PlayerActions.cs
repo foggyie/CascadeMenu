@@ -392,7 +392,7 @@ namespace CascadeMenu.Mods
             List<string> props = RoomCustomProps();
             if (props.Count == 0) return "None";
             int shown = Mathf.Min(3, props.Count);
-            return props.Count + ": " + string.Join(", ", props.GetRange(0, shown).ToArray());
+            return props.Count + ": " + string.Join(", ", props.GetRange(0, shown));
         }
 
         /// <summary>
@@ -423,7 +423,7 @@ namespace CascadeMenu.Mods
                 if (names.Count < 3) names.Add(SafeName(players[i]));
             }
             if (count == 0) return "None";
-            string text = string.Join(", ", names.ToArray());
+            string text = string.Join(", ", names);
             if (count > names.Count) text += ", ...";
             return count + ": " + text;
         }
@@ -448,21 +448,21 @@ namespace CascadeMenu.Mods
                 if (verifiedRoles.Count > 0)
                 {
                     verified.Add(SafeName(player) + " (" +
-                                 string.Join(", ", verifiedRoles.ToArray()) + ")");
+                                 string.Join(", ", verifiedRoles) + ")");
                 }
                 if (fakeRoles.Count > 0)
                 {
                     fakes.Add(SafeName(player) + " (" +
-                              string.Join(", ", fakeRoles.ToArray()) + ")");
+                              string.Join(", ", fakeRoles) + ")");
                 }
             }
 
             verifiedText = verified.Count == 0
                 ? "None"
-                : verified.Count + ": " + string.Join(", ", TruncateList(verified, 3).ToArray());
+                : verified.Count + ": " + string.Join(", ", TruncateList(verified, 3));
             fakeText = fakes.Count == 0
                 ? "None"
-                : fakes.Count + ": " + string.Join(", ", TruncateList(fakes, 3).ToArray());
+                : fakes.Count + ": " + string.Join(", ", TruncateList(fakes, 3));
         }
 
         private static List<string> TruncateList(List<string> items, int max)

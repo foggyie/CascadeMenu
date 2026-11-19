@@ -36,6 +36,7 @@ namespace CascadeMenu.Mods
         private float _fpsAccum;
         private int _fpsFrames;
         private float _fps;
+        private float _nextText;
 
         // Reused buffer so the HUD does not allocate every frame.
         private readonly List<string> _lines = new List<string>();
@@ -56,23 +57,9 @@ namespace CascadeMenu.Mods
         {
             _camera = CascadeMenuBehaviour.ResolveViewCamera();
 
-            GameObject root = new GameObject("CascadeHUD", typeof(RectTransform), typeof(Canvas));
-
-            Transform parent = _camera != null ? _camera.transform : transform;
-            root.transform.SetParent(parent, false);
-
-            _canvas = root.GetComponent<Canvas>();
-            _canvas.renderMode = RenderMode.WorldSpace;
-            _canvas.sortingOrder = 200;
-            _canvas.worldCamera = _camera;
-
-            _canvasRect = (RectTransform)root.transform;
-            _canvasRect.sizeDelta = new Vector2(CanvasWidth, CanvasHeight);
-            _canvasRect.localScale = Vector3.one * CanvasScale;
-            _canvasRect.anchorMin = _canvasRect.anchorMax = new Vector2(0.5f, 0.5f);
-            _canvasRect.pivot = new Vector2(0.5f, 0.5f);
-            _canvasRect.localPosition = CameraOffset;
-            _canvasRect.localRotation = Quaternion.identity;
+            _canvas = OverlayCanvas.Create("CascadeHUD", _camera, transform, 200,
+                new Vector2(CanvasWidth, CanvasHeight), CanvasScale,
+                CameraOffset, out _canvasRect, out _);
 
             // Rounded dark glass background.
             RectTransform backgroundRect = CascadeUI.Rect("Background", _canvasRect);
@@ -96,13 +83,8 @@ namespace CascadeMenu.Mods
             _label.textWrappingMode = TextWrappingModes.NoWrap;
             _label.overflowMode = TextOverflowModes.Overflow;
 
-            CanvasGroup group = root.AddComponent<CanvasGroup>();
-            group.alpha = 1f;
-            group.blocksRaycasts = false;
-            group.interactable = false;
-
             // Hidden until the first LateUpdate decides the config state.
-            root.SetActive(false);
+            _canvas.gameObject.SetActive(false);
         }
 
         // -----------------------------------------------------------------
@@ -139,7 +121,7 @@ namespace CascadeMenu.Mods
             }
 
             UpdateFps();
-            RebuildText();
+            if (OverlayText.Due(ref _nextText)) RebuildText();
         }
 
         private void UpdateFps()
@@ -171,7 +153,7 @@ namespace CascadeMenu.Mods
             if (_config.HudArrayList.Value)
             {
                 CollectActiveMods();
-                _lines.Add("Active: " + (_activeMods.Count > 0 ? string.Join(", ", _activeMods.ToArray()) : "None"));
+                _lines.Add("Active: " + (_activeMods.Count > 0 ? string.Join(", ", _activeMods) : "None"));
 
                 if (JoystickFlyController.IsFlying)
                 {
@@ -187,7 +169,7 @@ namespace CascadeMenu.Mods
                 if (i > 0) _builder.Append('\n');
                 _builder.Append(_lines[i]);
             }
-            _label.text = _builder.ToString();
+            OverlayText.Set(_label, _builder.ToString());
         }
 
         /// <summary>Everything the HUD lists under "Active:". Add new mods here.</summary>

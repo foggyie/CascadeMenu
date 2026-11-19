@@ -49,6 +49,7 @@ namespace CascadeMenu.Mods
         private float _speed;
         private float _smoothed;
         private float _maxSpeed;
+        private float _nextText;
 
         public Speedometer()
         {
@@ -237,9 +238,12 @@ namespace CascadeMenu.Mods
             float value = Convert(_smoothed);
             float max = Convert(_maxSpeed);
 
-            _valueLabel.text = value.ToString("0.0");
-            _unitLabel.text = UnitNames[Mathf.Clamp(_unit, 0, UnitNames.Length - 1)];
-            _maxLabel.text = _showMax ? "MAX " + max.ToString("0.0") : string.Empty;
+            if (OverlayText.Due(ref _nextText))
+            {
+                OverlayText.Set(_valueLabel, value.ToString("0.0"));
+                OverlayText.Set(_unitLabel, UnitNames[Mathf.Clamp(_unit, 0, UnitNames.Length - 1)]);
+                OverlayText.Set(_maxLabel, _showMax ? "MAX " + max.ToString("0.0") : string.Empty);
+            }
 
             float ratio = Mathf.Clamp01(_smoothed / MaxDisplaySpeed);
             _fillRect.sizeDelta = new Vector2(BarWidth * ratio, 8f);
