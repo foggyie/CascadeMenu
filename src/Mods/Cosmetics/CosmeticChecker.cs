@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using GorillaNetworking;
 using UnityEngine;
@@ -109,8 +110,9 @@ namespace CascadeMenu.Mods
         }
 
         // Known creator / staff cosmetics. This mirrors the ids VisualsController
-        // already tags in the ESP overlay.
-        private static readonly KeyValuePair<string, string>[] SpecialIds =
+        // already tags in the ESP overlay. These stay in code as the fallback when
+        // the embedded roles.json resource cannot be read.
+        private static readonly KeyValuePair<string, string>[] DefaultSpecialIds =
         {
             new KeyValuePair<string, string>("LBAAD.", "Administrator"),
             new KeyValuePair<string, string>("LBAAK.", "Forest Guide"),
@@ -119,6 +121,74 @@ namespace CascadeMenu.Mods
             new KeyValuePair<string, string>("LMAPY.", "Forest Guide"),
             new KeyValuePair<string, string>("LBANI.", "AA Creator")
         };
+
+        // Prefix-to-role table loaded from the embedded roles.json resource.
+        private static readonly KeyValuePair<string, string>[] SpecialIds = LoadSpecialIds();
+
+        [Serializable]
+        private sealed class RoleTable
+        {
+            public RoleEntry[] roles = null;
+        }
+
+        [Serializable]
+        private sealed class RoleEntry
+        {
+            public string prefix = null;
+            public string role = null;
+        }
+
+        private static KeyValuePair<string, string>[] LoadSpecialIds()
+        {
+            const string resource = "CascadeMenu.roles.json";
+            try
+            {
+                using (Stream stream = typeof(CosmeticChecker).Assembly.GetManifestResourceStream(resource))
+                {
+                    if (stream == null)
+                    {
+                        Plugin.Log?.LogWarning(
+                            "Cascade cosmetic roles resource is missing; using built-in defaults.");
+                        return DefaultSpecialIds;
+                    }
+
+                    using (var reader = new StreamReader(stream, Encoding.UTF8))
+                    {
+                        RoleTable table = JsonUtility.FromJson<RoleTable>(reader.ReadToEnd());
+                        if (table == null || table.roles == null || table.roles.Length == 0)
+                        {
+                            Plugin.Log?.LogWarning(
+                                "Cascade cosmetic roles resource is empty; using built-in defaults.");
+                            return DefaultSpecialIds;
+                        }
+
+                        var entries = new List<KeyValuePair<string, string>>(table.roles.Length);
+                        for (int i = 0; i < table.roles.Length; i++)
+                        {
+                            RoleEntry entry = table.roles[i];
+                            if (entry == null || string.IsNullOrEmpty(entry.prefix) || entry.role == null)
+                                continue;
+                            entries.Add(new KeyValuePair<string, string>(entry.prefix, entry.role));
+                        }
+
+                        if (entries.Count == 0)
+                        {
+                            Plugin.Log?.LogWarning(
+                                "Cascade cosmetic roles resource has no usable entries; using built-in defaults.");
+                            return DefaultSpecialIds;
+                        }
+
+                        return entries.ToArray();
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                Plugin.Log?.LogWarning(
+                    "Cascade cosmetic roles load failed; using built-in defaults: " + exception.Message);
+                return DefaultSpecialIds;
+            }
+        }
 
         private static readonly string[] SpecialWords =
         {

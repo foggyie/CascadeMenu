@@ -225,4 +225,8 @@
     </Reference>
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="src\Mods\Cosmetics\roles.json" LogicalName="CascadeMenu.roles.json" />
+  </ItemGroup>
+
 </Project>

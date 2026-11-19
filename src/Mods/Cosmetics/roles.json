@@ -1,0 +1,10 @@
+{
+  "roles": [
+    { "prefix": "LBAAD.", "role": "Administrator" },
+    { "prefix": "LBAAK.", "role": "Forest Guide" },
+    { "prefix": "LBADE.", "role": "Finger Painter" },
+    { "prefix": "LBAGS.", "role": "Illustrator" },
+    { "prefix": "LMAPY.", "role": "Forest Guide" },
+    { "prefix": "LBANI.", "role": "AA Creator" }
+  ]
+}
