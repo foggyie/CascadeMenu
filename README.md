@@ -37,7 +37,7 @@ The module tabs now contain real gameplay features: a toggleable hand-link block
 
 - Gorilla Tag with BepInEx 5 (x64). BepInEx's included `0Harmony.dll` provides the gameplay patches.
 - .NET SDK 8.0 or newer to build. The project was built with .NET SDK 10.
-- The referenced game/BepInEx assemblies are already in `libs`, so no Unity editor is required.
+- Game and BepInEx assemblies, supplied either by `GORILLA_TAG_DIR` or by a local `libs/` folder. No Unity editor is required.
 
 The project targets `netstandard2.1`.
 
@@ -57,17 +57,29 @@ bin\Release\CascadeMenu.dll
 
 The build currently succeeds with zero warnings and zero errors.
 
-### Refreshing the game references
+### Build references
 
-The DLLs in `libs` are local copies of the assemblies from the current Gorilla Tag installation:
+Game DLLs are not committed. The project finds them in one of two ways:
 
-```text
-D:\SteamLibrary\steamapps\common\Gorilla Tag
-```
+1. Set `GORILLA_TAG_DIR` to the Gorilla Tag install folder before building:
 
-After a game update, replace `libs\Assembly-CSharp.dll` and the relevant `UnityEngine*.dll`, `Unity.TextMeshPro.dll`, and `Unity.InputSystem.dll` files with the current versions from `Gorilla Tag_Data\Managed`. Also copy the current `BepInEx.dll` and `0Harmony.dll` from `BepInEx\core`. Then rebuild. Do not copy game DLLs into `bin\Release`; they are marked `Private=false` and must be supplied by the game.
+   ```powershell
+   $env:GORILLA_TAG_DIR = 'C:\Path\To\Gorilla Tag'
+   dotnet build -c Release
+   ```
 
-The bundled `Assembly-CSharp.dll`, `Unity.TextMeshPro.dll`, `Unity.InputSystem.dll` and `UnityEngine.UI.dll` were refreshed from the 13 November 2026 game build. The older references predated the current computer Snake game, so the Snake page needs these refreshed files.
+   The project then references `$(GORILLA_TAG_DIR)\Gorilla Tag_Data\Managed` for the game assemblies and `$(GORILLA_TAG_DIR)\BepInEx\core` for `BepInEx.dll` and `0Harmony.dll`.
+
+2. Leave `GORILLA_TAG_DIR` unset and copy the same DLLs into `libs/`:
+
+   - From `Gorilla Tag_Data\Managed`: `Assembly-CSharp.dll`, `Unity.TextMeshPro.dll`, `Unity.InputSystem.dll` and the `UnityEngine*.dll` files the project references.
+   - From `BepInEx\core`: `BepInEx.dll` and `0Harmony.dll`.
+
+   `libs/` is ignored by git, so this copy is local to your machine.
+
+After a game update, refresh the references from the current install (or point `GORILLA_TAG_DIR` at it) and rebuild. Do not copy game DLLs into `bin\Release`; they are marked `Private=false` and must be supplied by the game.
+
+The current references were refreshed from the 13 November 2026 game build. The older references predated the computer Snake game, so the Snake page needs these refreshed files.
 
 ## Install
 
@@ -75,7 +87,7 @@ The bundled `Assembly-CSharp.dll`, `Unity.TextMeshPro.dll`, `Unity.InputSystem.d
 2. Copy `bin\Release\CascadeMenu.dll` into:
 
    ```text
-   D:\SteamLibrary\steamapps\common\Gorilla Tag\BepInEx\plugins
+   <Gorilla Tag>\BepInEx\plugins
    ```
 
    A subfolder such as `BepInEx\plugins\CascadeMenu\` also works.
@@ -95,7 +107,7 @@ The menu starts hidden and its config is reloaded on the next launch.
 | Action | Desktop | VR |
 |---|---|---|
 | Open / close | F1, Insert, Tab | B or Y |
-| Point | Mouse (custom cursor) | Right-hand ray + ring cursor |
+| Point | Mouse | Right-hand ray + pointer line |
 | Select | Left click | Right trigger or A |
 | Scroll | Mouse wheel | Right stick up/down |
 | Toggle joystick fly | Movement toggle or Mods page | One switch; F5 also toggles it |
@@ -149,7 +161,7 @@ Use the sidebar search field to filter rows by their title, subtitle or search t
 ```text
 CascadeMenu/
   CascadeMenu.csproj
-  libs/                       Local game and BepInEx references
+  libs/                       Optional local game and BepInEx references (ignored by git)
   src/
     Plugin.cs                 BepInEx entry point
     PluginInfo.cs
@@ -308,15 +320,15 @@ The following mods currently expose extra options: **WASD Fly** (speed multiplie
 - **The plugin is not listed in the BepInEx log.** Confirm the game is 64-bit, BepInEx 5 is installed at the game root, and `CascadeMenu.dll` is under `BepInEx\plugins`.
 - **The menu loads but text is missing or blurry.** The UI builds its own high-resolution SDF font and keeps the game's localized TMP font as a fallback. The BepInEx log prints the active font and atlas at startup (`[Cascade] UI font: ...`). If a custom font fails to load, Cascade falls back automatically.
 - **The menu appears in the wrong place or is hard to read.** Press the green traffic light or **Re-center window** on the Home page. Use **Settings → UI scale** to enlarge the whole window. By default the menu spawns level in front of you and stays anchored in world space; **Settings → Smooth follow** enables optional head following. The default distance is 0.7 m, fixed height is 1.5 m, and the height raise threshold is configurable.
-- **The pointer is hard to see.** In VR, aim with the right controller: a colored laser and a white ring with an accent center follow the hit point. On desktop, a custom high-contrast cursor is drawn at the mouse position. Input does not work in VR until the player has spawned and `GorillaTagger.Instance.rightHandTransform` exists.
+- **The pointer is hard to see.** In VR, aim with the right controller: a colored line runs from your hand to the hit point. On desktop, the normal system mouse pointer is used. Input does not work in VR until the player has spawned and `GorillaTagger.Instance.rightHandTransform` exists.
 - **Fly does nothing.** Check that `Joystick fly` is on in the Movement page and that the game is running in VR with tracked controllers. The log prints `Cascade fly is waiting for the local GTPlayer` if the player has not spawned. Use the direction source option and deadzone setting to tune the feel.
 - **Hand links still move me.** Confirm `Block hand link` is on and the log contains `Cascade gameplay patches installed`. Toggle the setting once to force the patch state to refresh.
-- **A game update broke loading.** Re-copy the current game assemblies into `libs`, rebuild, and reinstall.
+- **A game update broke loading.** Refresh the game references (set `GORILLA_TAG_DIR`, or re-copy them into `libs`), rebuild, and reinstall.
 
 ## Notes
 
 - Gameplay patches are local-only and can be turned off from their module tabs or the BepInEx config.
-- `libs` is included so the project builds without locating the game installation from MSBuild.
+- `libs/` is optional and ignored by git, so the project can build without locating the game installation from MSBuild. Set `GORILLA_TAG_DIR` instead if you prefer.
 - Build outputs live under `bin/Release` and are not committed.
 
 ## Contributors
