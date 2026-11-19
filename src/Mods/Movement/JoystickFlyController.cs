@@ -16,6 +16,10 @@ namespace CascadeMenu.Mods
     [DefaultExecutionOrder(10000)]
     internal sealed class JoystickFlyController : MonoBehaviour
     {
+        // Diagonal movement (forward + strafe or vertical) can combine two full
+        // speed components, so the clamp allows sqrt(2) times the base speed.
+        private const float DiagonalSpeedFactor = 1.41421356f;
+
         private static JoystickFlyController _instance;
 
         private MenuConfig _config;
@@ -253,6 +257,9 @@ namespace CascadeMenu.Mods
             Vector3 flatForward = Vector3.ProjectOnPlane(forward, Vector3.up);
             if (flatForward.sqrMagnitude < 0.0001f) flatForward = player.transform.forward;
             flatForward.Normalize();
+            Vector3 forwardComponent = _config != null && _config.FlyForwardHorizontal.Value
+                ? flatForward
+                : forward;
             Vector3 rightVector = Vector3.Cross(Vector3.up, flatForward);
             if (rightVector.sqrMagnitude < 0.0001f)
             {
@@ -266,9 +273,9 @@ namespace CascadeMenu.Mods
             Vector3 velocity =
                 rightVector * (strafe * speed) +
                 Vector3.up * (vertical * verticalSpeed) +
-                forward * (forwardInput * speed);
+                forwardComponent * (forwardInput * speed);
 
-            float maxSpeed = Mathf.Max(speed, verticalSpeed) * 1.414f;
+            float maxSpeed = Mathf.Max(speed, verticalSpeed) * DiagonalSpeedFactor;
             if (velocity.magnitude > maxSpeed) velocity = velocity.normalized * maxSpeed;
 
             LogStickSample(left, right, velocity);

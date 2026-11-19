@@ -224,7 +224,7 @@ namespace CascadeMenu
             FlyForwardHorizontal = config.Bind(
                 "Gameplay",
                 "Fly Forward Is Flat",
-                true,
+                false,
                 "Fly forward along the floor instead of diving when looking down.");
 
             FlyStickLayout = config.Bind(
@@ -601,7 +601,7 @@ namespace CascadeMenu
             FlyInvertVertical.Value = true;
             FlyInvertForward.Value = false;
             FlyInvertStrafe.Value = false;
-            FlyForwardHorizontal.Value = true;
+            FlyForwardHorizontal.Value = false;
             FlyStickLayout.Value = 0;
             Acrobatics.Value = false;
             AcrobaticsSmoothing.Value = 5f;
