@@ -217,10 +217,11 @@ namespace CascadeMenu.Mods
             {
                 try
                 {
-                    ResolveGameManagerApi();
-                    if (_staticFindRigMethod != null)
+                    GameApi.Resolve();
+                    MethodInfo findRig = GameApi.StaticFindRigForPlayer;
+                    if (findRig != null)
                     {
-                        VRRig rig = _staticFindRigMethod.Invoke(null, new object[] { player }) as VRRig;
+                        VRRig rig = findRig.Invoke(null, new object[] { player }) as VRRig;
                         if (rig != null) return rig;
                     }
                 }
@@ -237,41 +238,20 @@ namespace CascadeMenu.Mods
         // Appearance
         // -----------------------------------------------------------------
 
-        private static FieldInfo _playerColorField;
-        private static PropertyInfo _playerColorProperty;
-        private static bool _playerColorResolved;
-
-        private static void ResolvePlayerColor()
-        {
-            if (_playerColorResolved) return;
-            _playerColorResolved = true;
-
-            Type type = typeof(VRRig);
-            _playerColorField = type.GetField(
-                "playerColor",
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            if (_playerColorField != null && _playerColorField.FieldType != typeof(Color))
-                _playerColorField = null;
-
-            _playerColorProperty = type.GetProperty(
-                "playerColor",
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            if (_playerColorProperty != null && _playerColorProperty.PropertyType != typeof(Color))
-                _playerColorProperty = null;
-        }
-
         /// <summary>Live gorilla color for a remote rig, with safe fallbacks.</summary>
         internal static Color GetRigColor(VRRig rig)
         {
             if (rig == null) return Color.white;
 
-            ResolvePlayerColor();
+            GameApi.Resolve();
             try
             {
-                if (_playerColorField != null)
-                    return (Color)_playerColorField.GetValue(rig);
-                if (_playerColorProperty != null)
-                    return (Color)_playerColorProperty.GetValue(rig, null);
+                FieldInfo colorField = GameApi.RigColorField;
+                if (colorField != null)
+                    return (Color)colorField.GetValue(rig);
+                PropertyInfo colorProperty = GameApi.RigColorProperty;
+                if (colorProperty != null)
+                    return (Color)colorProperty.GetValue(rig, null);
             }
             catch (Exception)
             {
@@ -313,10 +293,6 @@ namespace CascadeMenu.Mods
         // Room information
         // -----------------------------------------------------------------
 
-        private static Type _photonType;
-
-        private static bool _photonTypeSearched;
-
         /// <summary>
         /// Photon server address (usually IP:port), read through reflection so the
         /// project does not need a hard reference to PhotonUnityNetworking.
@@ -325,9 +301,9 @@ namespace CascadeMenu.Mods
         {
             try
             {
-                Type type = PhotonType();
-                if (type == null) return "unknown";
-                PropertyInfo property = type.GetProperty("ServerAddress", BindingFlags.Public | BindingFlags.Static);
+                GameApi.Resolve();
+                if (GameApi.PhotonNetworkType == null) return "unknown";
+                PropertyInfo property = GameApi.PhotonServerAddress;
                 string address = property != null ? property.GetValue(null, null) as string : null;
                 return string.IsNullOrEmpty(address) ? "offline" : address;
             }
@@ -335,31 +311,6 @@ namespace CascadeMenu.Mods
             {
                 return "unknown";
             }
-        }
-
-        private static Type PhotonType()
-        {
-            if (_photonType != null || _photonTypeSearched) return _photonType;
-            _photonTypeSearched = true;
-            try
-            {
-                Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
-                for (int i = 0; i < assemblies.Length; i++)
-                {
-                    Type type = assemblies[i].GetType("Photon.Pun.PhotonNetwork", false);
-                    if (type != null)
-                    {
-                        _photonType = type;
-                        break;
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                // Reflection is only a convenience here; the UI falls back to
-                // "unknown" when the assembly is not loaded yet.
-            }
-            return _photonType;
         }
 
         /// <summary>Name of the current master client, with "(you)" for the local host.</summary>
@@ -409,8 +360,8 @@ namespace CascadeMenu.Mods
             IDictionary props = null;
             try
             {
-                PropertyInfo property = typeof(RoomConfig).GetProperty(
-                    "CustomProps", BindingFlags.Public | BindingFlags.Instance);
+                GameApi.Resolve();
+                PropertyInfo property = GameApi.RoomCustomProps;
                 props = property != null ? property.GetValue(system.CurrentRoom, null) as IDictionary : null;
             }
             catch (Exception)
@@ -618,38 +569,6 @@ namespace CascadeMenu.Mods
             CustomPropObjects.Remove(id);
             CustomPropIndexes.Remove(id);
             return true;
-        }
-
-        // -----------------------------------------------------------------
-        // Game-manager rig lookup (reflection)
-        // -----------------------------------------------------------------
-
-        private static MethodInfo _staticFindRigMethod;
-        private static bool _gameManagerApiResolved;
-
-        private static void ResolveGameManagerApi()
-        {
-            if (_gameManagerApiResolved) return;
-            _gameManagerApiResolved = true;
-
-            try
-            {
-                Assembly assembly = typeof(GorillaTagger).Assembly;
-                Type managerType = assembly.GetType("GorillaGameManager");
-                if (managerType != null)
-                {
-                    _staticFindRigMethod = managerType.GetMethod(
-                        "StaticFindRigForPlayer",
-                        BindingFlags.Public | BindingFlags.Static,
-                        null,
-                        new[] { typeof(NetPlayer) },
-                        null);
-                }
-            }
-            catch (Exception exception)
-            {
-                Plugin.Log?.LogWarning("Cascade could not resolve the game-manager rig API: " + exception.Message);
-            }
         }
 
         /// <summary>

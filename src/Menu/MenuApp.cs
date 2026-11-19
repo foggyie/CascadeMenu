@@ -461,7 +461,8 @@ namespace CascadeMenu
                 .Hero("Cascade Menu", "macOS Sequoia style for Gorilla Tag", "v1.0")
                 .Label("Cascade UI", "Original Luau interface library", "cascadeui")
                 .Label("Built for", "Gorilla Tag + BepInEx", "VR / Desktop")
-                .Label("Renderer", "World-space Unity Canvas", "No EventSystem");
+                .Label("Renderer", "World-space Unity Canvas", "No EventSystem")
+                .Label("Game API", "Reflection targets for game data", GameApi.Summary);
 
             about.Section("Contributors", "People and tools behind this build")
                 .Label("Maintainer", "Cascade Menu project", "foggyie")

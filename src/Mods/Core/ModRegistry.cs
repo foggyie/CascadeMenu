@@ -957,6 +957,7 @@ namespace CascadeMenu.Mods
         {
             ModRegistry.UpdateInput();
             ModRegistry.Tick(false);
+            GameApi.VerifyWhenReady();
         }
 
         private void LateUpdate()
