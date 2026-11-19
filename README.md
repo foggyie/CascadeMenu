@@ -131,7 +131,16 @@ Traffic lights follow macOS conventions: green re-centers the window, yellow clo
 - **Talking Players** also sits on the **Visual** page as one toggle. Its gear page sets which screen edge the compact list hangs from (right center is the default), size, opacity, sensitivity, linger time, maximum rows, showing your own mic and the speaker icon. The row color is always the speaker's gorilla color; the text can be automatic (dark on light, white on dark), plain white, dark, or the rig color itself on a dark chip.
 - **Disconnect** is in the titlebar. It asks for confirmation unless either VR grip is held while pressing the button.
 
-All of these features are local-only. The BepInEx log prints `Cascade gameplay patches installed` when the Harmony patches load.
+The menu itself, the Harmony patches and the visual overlays run only on your client: ESP, chams, name tags, Player HUD, Talking Players, overlay cards, Construction, trails, lasers, particles, the movement/flight mods, performance switches, desktop helpers and the Snake tools never send anything to other players. Normal game replication still shows other players your gorilla moving, flying or teleporting while those mods are active.
+
+A few rows call the game's own networking APIs and therefore do affect the room or other players:
+
+- **Tag gun** and **Tag all players** send a real tag through the game mode. The master client applies it, which changes the target's infected state, and tags outside the server's range check are skipped.
+- **Report** on a player page submits through Gorilla Tag's own report API, so it reaches the server exactly like a scoreboard report.
+- **Spawn Resource (Gun)** only works when the local client has Super Infection authority, and the resources it creates are networked entities other players receive.
+- Player navigation tools (select, teleport gun/nearest/random/cycle, follow nearest, mute) act on your own rig or local player list. Mutes and selections stay on your machine, but your movement is replicated because it is your normal gorilla position.
+
+The BepInEx log prints `Cascade gameplay patches installed` when the Harmony patches load.
 
 ## Pages
 
