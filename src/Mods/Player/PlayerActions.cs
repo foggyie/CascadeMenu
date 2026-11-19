@@ -217,7 +217,7 @@ namespace CascadeMenu.Mods
             {
                 try
                 {
-                    ResolveGameModeApi();
+                    ResolveGameManagerApi();
                     if (_staticFindRigMethod != null)
                     {
                         VRRig rig = _staticFindRigMethod.Invoke(null, new object[] { player }) as VRRig;
@@ -620,119 +620,17 @@ namespace CascadeMenu.Mods
             return true;
         }
 
-        /// <summary>
-        /// Sends a real tag through the game mode. The master client applies it,
-        /// so the tag survives after the menu closes (unlike the old local-only
-        /// <c>PlayTaggedEffect</c> call).
-        ///
-        /// A master client can call <c>HitPlayer</c> directly, which tags without
-        /// a distance check. Other clients use the same RPC a hand tag uses, so
-        /// the server still validates range.
-        ///
-        /// The game-mode API is reached through reflection because
-        /// GorillaGameManager inherits a Photon type that this project does not
-        /// reference directly.
-        /// </summary>
-        internal static bool TagPlayer(NetPlayer player)
-        {
-            if (player == null) return false;
-
-            NetworkSystem system = NetworkSystem.Instance;
-            NetPlayer local = system != null ? system.LocalPlayer : null;
-            if (system == null || !system.InRoom || local == null || player.UserId == local.UserId)
-                return false;
-
-            ResolveGameModeApi();
-            if (_gameManagerInstanceProperty == null) return false;
-
-            object manager;
-            try
-            {
-                manager = _gameManagerInstanceProperty.GetValue(null, null);
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-            if (manager == null) return false;
-
-            VRRig targetRig = FindRigObject(player);
-
-            // Non-master tags go through the game's RPC, and the master's
-            // anti-cheat check reports tags sent from far away. Only send when
-            // the server will accept it; the master path is unrestricted.
-            if (!system.IsMasterClient)
-            {
-                VRRig localRig = VRRig.LocalRig;
-                if (localRig == null || targetRig == null) return false;
-                if (Vector3.Distance(localRig.transform.position, targetRig.transform.position) > 5.5f)
-                {
-                    Plugin.Log?.LogInfo("Cascade tag skipped: " + SafeName(player) + " is outside the server tag range.");
-                    return false;
-                }
-            }
-
-            try
-            {
-                // Keep the local game-mode event/cooldown in sync with a hand tag.
-                if (_localTagMethod != null)
-                    _localTagMethod.Invoke(manager, new object[] { player, local, false, false });
-
-                if (system.IsMasterClient)
-                {
-                    // Direct, server-authoritative tag that ignores range.
-                    if (_hitPlayerMethod != null)
-                        _hitPlayerMethod.Invoke(manager, new object[] { player });
-                }
-                else
-                {
-                    // Same RPC the game sends for a hand tag. The master validates
-                    // that the tagger is actually near the target.
-                    if (_reportTagMethod != null)
-                        _reportTagMethod.Invoke(null, new object[] { player });
-                }
-            }
-            catch (Exception exception)
-            {
-                Plugin.Log?.LogWarning("Cascade tag failed for " + SafeName(player) + ": " + exception.Message);
-                return false;
-            }
-
-            if (targetRig != null) GunLibController.MarkTarget(targetRig);
-            Select(player.UserId);
-            return true;
-        }
-
-        /// <summary>
-        /// Tags everyone else in the room through the same real game-mode path.
-        /// Returns how many players the request was sent for.
-        /// </summary>
-        internal static int TagAll()
-        {
-            List<NetPlayer> players = GetPlayers();
-            int tagged = 0;
-            for (int i = 0; i < players.Count; i++)
-            {
-                if (TagPlayer(players[i])) tagged++;
-            }
-            return tagged;
-        }
-
         // -----------------------------------------------------------------
-        // Game-mode API (reflection)
+        // Game-manager rig lookup (reflection)
         // -----------------------------------------------------------------
 
-        private static PropertyInfo _gameManagerInstanceProperty;
-        private static MethodInfo _localTagMethod;
-        private static MethodInfo _hitPlayerMethod;
-        private static MethodInfo _reportTagMethod;
         private static MethodInfo _staticFindRigMethod;
-        private static bool _gameModeApiResolved;
+        private static bool _gameManagerApiResolved;
 
-        private static void ResolveGameModeApi()
+        private static void ResolveGameManagerApi()
         {
-            if (_gameModeApiResolved) return;
-            _gameModeApiResolved = true;
+            if (_gameManagerApiResolved) return;
+            _gameManagerApiResolved = true;
 
             try
             {
@@ -740,34 +638,8 @@ namespace CascadeMenu.Mods
                 Type managerType = assembly.GetType("GorillaGameManager");
                 if (managerType != null)
                 {
-                    _gameManagerInstanceProperty = managerType.GetProperty(
-                        "instance",
-                        BindingFlags.Public | BindingFlags.Static);
-                    _localTagMethod = managerType.GetMethod(
-                        "LocalTag",
-                        BindingFlags.Public | BindingFlags.Instance,
-                        null,
-                        new[] { typeof(NetPlayer), typeof(NetPlayer), typeof(bool), typeof(bool) },
-                        null);
-                    _hitPlayerMethod = managerType.GetMethod(
-                        "HitPlayer",
-                        BindingFlags.Public | BindingFlags.Instance,
-                        null,
-                        new[] { typeof(NetPlayer) },
-                        null);
                     _staticFindRigMethod = managerType.GetMethod(
                         "StaticFindRigForPlayer",
-                        BindingFlags.Public | BindingFlags.Static,
-                        null,
-                        new[] { typeof(NetPlayer) },
-                        null);
-                }
-
-                Type gameModeType = assembly.GetType("GorillaGameModes.GameMode");
-                if (gameModeType != null)
-                {
-                    _reportTagMethod = gameModeType.GetMethod(
-                        "ReportTag",
                         BindingFlags.Public | BindingFlags.Static,
                         null,
                         new[] { typeof(NetPlayer) },
@@ -776,7 +648,7 @@ namespace CascadeMenu.Mods
             }
             catch (Exception exception)
             {
-                Plugin.Log?.LogWarning("Cascade could not resolve the game-mode tag API: " + exception.Message);
+                Plugin.Log?.LogWarning("Cascade could not resolve the game-manager rig API: " + exception.Message);
             }
         }
 
@@ -1127,14 +999,6 @@ namespace CascadeMenu.Mods
             page.Section("Tools", "Refresh the list or copy session data")
                 .Button("Refresh player list", "Re-scan the current room", "Refresh",
                     menu.RefreshPlayerList, false)
-                .Button("Tag all players", "Send a real tag for everyone in the room", "Tag all",
-                    () =>
-                    {
-                        int tagged = TagAll();
-                        menu.ShowToast("Tag all", tagged == 0
-                            ? "No tags sent - no players or outside tag range."
-                            : "Sent tags for " + tagged + " player(s).");
-                    }, false)
                 .Button("Copy room info", "Clipboard: room, master, region, server and HWID", "Copy",
                     () => Copy(
                         "Home / room: " + room.Name + "\n" +
@@ -1199,14 +1063,6 @@ namespace CascadeMenu.Mods
                 .Label("Selected", "Highlighted in the player list", IsSelected(player) ? "Yes" : "No");
 
             CascadeSection actions = page.Section("Player actions", "Client-side tools aimed at this player");
-            actions.Button("Tag with tag gun", "Send a real tag through the game mode", "Tag",
-                () =>
-                {
-                    bool ok = TagPlayer(player);
-                    menu.ShowToast("Tag gun", ok
-                        ? name + " tagged."
-                        : "Rig not ready, or they are outside tag range.");
-                }, true);
             actions.Button("Spectate player", "Live first- or third-person view of their gorilla", "Spectate",
                 () => menu.StartSpectating(player), false);
             actions.Button("Teleport to player", "Move next to them without disabling collisions", "Teleport",

@@ -135,7 +135,6 @@ The menu itself, the Harmony patches and the visual overlays run only on your cl
 
 A few rows call the game's own networking APIs and therefore do affect the room or other players:
 
-- **Tag gun** and **Tag all players** send a real tag through the game mode. The master client applies it, which changes the target's infected state, and tags outside the server's range check are skipped.
 - **Report** on a player page submits through Gorilla Tag's own report API, so it reaches the server exactly like a scoreboard report.
 - **Spawn Resource (Gun)** only works when the local client has Super Infection authority, and the resources it creates are networked entities other players receive.
 - Player navigation tools (select, teleport gun/nearest/random/cycle, follow nearest, mute) act on your own rig or local player list. Mutes and selections stay on your machine, but your movement is replicated because it is your normal gorilla position.
@@ -216,7 +215,6 @@ CascadeMenu/
         GunLibController.cs   Grip-gated aim, solid-surface raycast, beam and ring
         GunLibMod.cs          Thin Mod wrapper exposing the gun's Enabled/Active state
         Construction.cs       Physics pieces, welds, demolition gun and explosions
-        TagTools.cs           Tag-related tools
         Screenshot.cs         One-shot PNG capture into CascadeScreenshots
         UtilityMods.cs        Ruler, inspector, beacon, clipboard and window mods
       Overlays/
@@ -322,7 +320,7 @@ Only mods that declare settings show a gear. A mod opts in by calling `AddSettin
 
 Changing a value updates the panel in place and keeps its scroll position; only one settings page is open at a time.
 
-The following mods currently expose extra options: **WASD Fly** (speed multiplier), **Tag gun** (cooldown), **Teleport (Gun)** (cooldown), **Spawn Resource (Gun)** (cooldown), **Orbit Ghost (Gun)** (radius, speed and height), **Name Tags** (style preset, name color, size, range, height, opacity, platform line, hide-self and off-screen fade), **Player HUD** (style preset, name color, every card line, size, range, height and opacity), **Talking Players** (position, name color, size, opacity, sensitivity, linger, range, rows, include-self and speaker icon), **Crosshair** (style, color and size), **Clock** (position, 24-hour time, seconds, date and size), **Session Stats** (FPS, players, room, uptime, size and opacity), **Screenshot** (supersize), **Compass** (degrees, size and opacity), **Speedometer** (units, maximum, size and opacity), **FPS Graph** (position, scale, size and opacity), **Screen Tint** (color and opacity), **Joystick Fly** (speed, vertical speed, acceleration and aim), **Acrobatics** (smoothing), **Unlimited FPS** (target cap), **Construction** (tool, piece, size, color style, textures, snapping, rotation, static pieces, auto-weld radius, weld range/strength, explosion radius/force, destroy radius, max pieces, grip hand, desktop grip, aim range, projectile speed and cooldown) and **GunLib** (keybind and Active state). ESP, HUD, Gun, Cosmetics, Flight and Acrobatics expose their settings through the existing Settings modules; the GunLib tab links to both.
+The following mods currently expose extra options: **WASD Fly** (speed multiplier), **Teleport (Gun)** (cooldown), **Spawn Resource (Gun)** (cooldown), **Orbit Ghost (Gun)** (radius, speed and height), **Name Tags** (style preset, name color, size, range, height, opacity, platform line, hide-self and off-screen fade), **Player HUD** (style preset, name color, every card line, size, range, height and opacity), **Talking Players** (position, name color, size, opacity, sensitivity, linger, range, rows, include-self and speaker icon), **Crosshair** (style, color and size), **Clock** (position, 24-hour time, seconds, date and size), **Session Stats** (FPS, players, room, uptime, size and opacity), **Screenshot** (supersize), **Compass** (degrees, size and opacity), **Speedometer** (units, maximum, size and opacity), **FPS Graph** (position, scale, size and opacity), **Screen Tint** (color and opacity), **Joystick Fly** (speed, vertical speed, acceleration and aim), **Acrobatics** (smoothing), **Unlimited FPS** (target cap), **Construction** (tool, piece, size, color style, textures, snapping, rotation, static pieces, auto-weld radius, weld range/strength, explosion radius/force, destroy radius, max pieces, grip hand, desktop grip, aim range, projectile speed and cooldown) and **GunLib** (keybind and Active state). ESP, HUD, Gun, Cosmetics, Flight and Acrobatics expose their settings through the existing Settings modules; the GunLib tab links to both.
 
 ## Troubleshooting
 
