@@ -99,13 +99,28 @@ namespace CascadeMenu
         public readonly ConfigEntry<bool> EspEnabled;
         public readonly ConfigEntry<bool> EspNames;
         public readonly ConfigEntry<bool> EspTracers;
+        public readonly ConfigEntry<bool> EspSkeleton;
+        public readonly ConfigEntry<bool> EspSkeletonFingers;
         public readonly ConfigEntry<bool> EspChams;
         public readonly ConfigEntry<bool> EspMarker;
+        public readonly ConfigEntry<bool> EspMatchPlayerColor;
+        public readonly ConfigEntry<bool> EspShowDistance;
+        public readonly ConfigEntry<int> EspTracerOrigin;
+        public readonly ConfigEntry<int> EspBoxStyle;
+        public readonly ConfigEntry<float> EspLineWidth;
+        public readonly ConfigEntry<int> EspFilterMode;
+        public readonly ConfigEntry<bool> EspInfectedColor;
+        public readonly ConfigEntry<bool> EspShowInfectedTag;
         public readonly ConfigEntry<bool> EspCosmeticTags;
         public readonly ConfigEntry<bool> CosmeticNotifications;
         public readonly ConfigEntry<int> EspColorIndex;
         public readonly ConfigEntry<float> EspRange;
         public readonly ConfigEntry<bool> HandTapIndicator;
+
+        // Debug
+        public readonly ConfigEntry<bool> VerboseLogging;
+        public readonly ConfigEntry<bool> DebugConsoleEnabled;
+        public readonly ConfigEntry<string> DebugConsolePlacement;
 
         public MenuConfig(ConfigFile config)
         {
@@ -221,7 +236,7 @@ namespace CascadeMenu
             FlyForwardHorizontal = config.Bind(
                 "Gameplay",
                 "Fly Forward Is Flat",
-                true,
+                false,
                 "Fly forward along the floor instead of diving when looking down.");
 
             FlyStickLayout = config.Bind(
@@ -436,13 +451,65 @@ namespace CascadeMenu
                 false,
                 "Draw a line from your hand to every tracked player.");
 
+            EspSkeleton = config.Bind(
+                "Visual",
+                "ESP Skeleton",
+                false,
+                "Draw a bone skeleton (head, spine, shoulders, arms, hands and legs) on every tracked player.");
+
+            EspSkeletonFingers = config.Bind(
+                "Visual",
+                "ESP Skeleton Fingers",
+                true,
+                "Draw individual finger bone chains (thumb, index, middle) on the ESP skeleton.");
+
             EspChams = config.Bind("Visual", "ESP Chams", false, "Highlight player bodies through walls.");
             EspMarker = config.Bind("Visual", "ESP Marker", false, "Show a through-wall diamond above each player.");
+            EspMatchPlayerColor = config.Bind(
+                "Visual",
+                "ESP Match Player Color",
+                true,
+                "Color ESP boxes, tracers, skeletons, markers, names and chams with each player's gorilla color.");
+            EspShowDistance = config.Bind(
+                "Visual",
+                "ESP Show Distance",
+                true,
+                "Append distance in metres to ESP player names.");
+            EspTracerOrigin = config.Bind(
+                "Visual",
+                "ESP Tracer Origin",
+                0,
+                new ConfigDescription("0 = Right hand, 1 = Left hand, 2 = Screen bottom, 3 = Screen center", new AcceptableValueRange<int>(0, 3)));
+            EspBoxStyle = config.Bind(
+                "Visual",
+                "ESP Box Style",
+                0,
+                new ConfigDescription("0 = 3D Box, 1 = 3D Corner Box, 2 = 2D Billboard Box", new AcceptableValueRange<int>(0, 2)));
+            EspLineWidth = config.Bind(
+                "Visual",
+                "ESP Line Width",
+                1f,
+                new ConfigDescription("Line thickness multiplier for boxes, skeletons and tracers", new AcceptableValueRange<float>(0.4f, 3f)));
+            EspFilterMode = config.Bind(
+                "Visual",
+                "ESP Player Filter",
+                0,
+                new ConfigDescription("0 = All players, 1 = Infected / Tagged only, 2 = Not Infected (Survivors) only", new AcceptableValueRange<int>(0, 2)));
+            EspInfectedColor = config.Bind(
+                "Visual",
+                "ESP Highlight Infected",
+                true,
+                "Highlight infected / tagged players in fiery red-orange so they stand out from survivors.");
+            EspShowInfectedTag = config.Bind(
+                "Visual",
+                "ESP Show Infected Tag",
+                true,
+                "Append [INFECTED] or [TAGGED] badge to infected players' ESP name tags.");
             EspCosmeticTags = config.Bind("Visual", "Cosmetic ESP", false, "Show special cosmetic role tags above players.");
             CosmeticNotifications = config.Bind("Visual", "Cosmetic Notifications", false, "Show a standalone Cascade notification when a special cosmetic is detected.");
             EspColorIndex = config.Bind(
                 "Visual", "ESP Highlight Color", 0,
-                new ConfigDescription("0 = cyan, 1 = green, 2 = orange, 3 = magenta", new AcceptableValueRange<int>(0, 3)));
+                new ConfigDescription("0 = cyan, 1 = green, 2 = orange, 3 = magenta, 4 = theme accent, 5 = rainbow", new AcceptableValueRange<int>(0, 5)));
 
             EspRange = config.Bind(
                 "Visual",
@@ -569,6 +636,25 @@ namespace CascadeMenu
                 string.Empty,
                 "Internal: title of the tab that was open when the menu closed.");
 
+            VerboseLogging = config.Bind(
+                "Debug",
+                "Verbose Logging",
+                false,
+                "Master switch for all Plugin.Log output. When off, no Plugin.Log messages print.");
+            CascadeLogger.Enabled = VerboseLogging.Value;
+
+            DebugConsoleEnabled = config.Bind(
+                "Debug",
+                "Debug Console Tab",
+                true,
+                "Show the in-menu log console tab.");
+
+            DebugConsolePlacement = config.Bind(
+                "Debug",
+                "Console Section",
+                "Debug",
+                "Sidebar section the Debug Console tab appears in: Main, Fun, Movement, Visual, Cosmetics, Tools, Debug, System.");
+
         }
 
         public void ResetDefaults()
@@ -592,7 +678,7 @@ namespace CascadeMenu
             FlyInvertVertical.Value = true;
             FlyInvertForward.Value = false;
             FlyInvertStrafe.Value = false;
-            FlyForwardHorizontal.Value = true;
+            FlyForwardHorizontal.Value = false;
             FlyStickLayout.Value = 0;
             Acrobatics.Value = false;
             AcrobaticsSmoothing.Value = 5f;
@@ -625,8 +711,18 @@ namespace CascadeMenu
             EspEnabled.Value = false;
             EspNames.Value = true;
             EspTracers.Value = false;
+            EspSkeleton.Value = false;
+            EspSkeletonFingers.Value = true;
             EspChams.Value = false;
             EspMarker.Value = false;
+            EspMatchPlayerColor.Value = true;
+            EspShowDistance.Value = true;
+            EspTracerOrigin.Value = 0;
+            EspBoxStyle.Value = 0;
+            EspLineWidth.Value = 1f;
+            EspFilterMode.Value = 0;
+            EspInfectedColor.Value = true;
+            EspShowInfectedTag.Value = true;
             EspCosmeticTags.Value = false;
             CosmeticNotifications.Value = false;
             EspColorIndex.Value = 0;
@@ -648,6 +744,10 @@ namespace CascadeMenu
             NotificationPosition.Value = 0;
             LastPageTag.Value = string.Empty;
             LastPageTitle.Value = string.Empty;
+            VerboseLogging.Value = false;
+            CascadeLogger.Enabled = false;
+            DebugConsoleEnabled.Value = true;
+            DebugConsolePlacement.Value = "Debug";
         }
     }
 }

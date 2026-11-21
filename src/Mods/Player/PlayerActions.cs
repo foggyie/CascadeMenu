@@ -209,6 +209,27 @@ namespace CascadeMenu.Mods
             RigContainer container = FindRig(player != null ? player.UserId : null);
             if (container != null && container.Rig != null) return container.Rig;
 
+            if (player != null)
+            {
+                IReadOnlyList<RigContainer> active = VRRigCache.ActiveRigContainers;
+                if (active != null)
+                {
+                    for (int i = 0; i < active.Count; i++)
+                    {
+                        RigContainer c = active[i];
+                        if (c == null || c.Rig == null) continue;
+                        NetPlayer creator = c.Creator ?? c.Rig.Creator;
+                        if (creator == null) continue;
+                        if (creator == player ||
+                            (player.ActorNumber != 0 && creator.ActorNumber == player.ActorNumber) ||
+                            (!string.IsNullOrEmpty(player.UserId) && creator.UserId == player.UserId))
+                        {
+                            return c.Rig;
+                        }
+                    }
+                }
+            }
+
             // Fallback for the short window where the cache has not caught up
             // with the game manager's roster entry. Called through reflection
             // because GorillaGameManager inherits a Photon type that this project
@@ -217,10 +238,11 @@ namespace CascadeMenu.Mods
             {
                 try
                 {
-                    ResolveGameModeApi();
-                    if (_staticFindRigMethod != null)
+                    GameApi.Resolve();
+                    MethodInfo findRig = GameApi.StaticFindRigForPlayer;
+                    if (findRig != null)
                     {
-                        VRRig rig = _staticFindRigMethod.Invoke(null, new object[] { player }) as VRRig;
+                        VRRig rig = findRig.Invoke(null, new object[] { player }) as VRRig;
                         if (rig != null) return rig;
                     }
                 }
@@ -233,45 +255,68 @@ namespace CascadeMenu.Mods
             return null;
         }
 
+        private static readonly HashSet<VRRig> _remoteRigsSet = new HashSet<VRRig>();
+        private static readonly List<VRRig> _remoteRigsBuffer = new List<VRRig>(16);
+        private static int _remoteRigsFrame = -1;
+
+        /// <summary>
+        /// Collects every active remote VRRig in the scene. Cached per frame so
+        /// multiple visual and HUD mods calling it in the same frame share one pass.
+        /// </summary>
+        internal static List<VRRig> GetRemoteRigs()
+        {
+            if (_remoteRigsFrame == Time.frameCount)
+            {
+                return _remoteRigsBuffer;
+            }
+            _remoteRigsFrame = Time.frameCount;
+            _remoteRigsBuffer.Clear();
+            _remoteRigsSet.Clear();
+
+            IReadOnlyList<RigContainer> active = VRRigCache.ActiveRigContainers;
+            if (active != null)
+            {
+                for (int i = 0; i < active.Count; i++)
+                {
+                    RigContainer c = active[i];
+                    if (c == null || c.Rig == null) continue;
+                    VRRig rig = c.Rig;
+                    if (rig == VRRig.LocalRig || rig.isOfflineVRRig) continue;
+                    if (rig.gameObject == null || !rig.gameObject.activeInHierarchy) continue;
+                    if (_remoteRigsSet.Add(rig)) _remoteRigsBuffer.Add(rig);
+                }
+            }
+
+            List<NetPlayer> players = GetPlayers();
+            for (int i = 0; i < players.Count; i++)
+            {
+                VRRig rig = FindRigObject(players[i]);
+                if (rig == null || rig == VRRig.LocalRig || rig.isOfflineVRRig) continue;
+                if (rig.gameObject == null || !rig.gameObject.activeInHierarchy) continue;
+                if (_remoteRigsSet.Add(rig)) _remoteRigsBuffer.Add(rig);
+            }
+
+            return _remoteRigsBuffer;
+        }
+
         // -----------------------------------------------------------------
         // Appearance
         // -----------------------------------------------------------------
-
-        private static FieldInfo _playerColorField;
-        private static PropertyInfo _playerColorProperty;
-        private static bool _playerColorResolved;
-
-        private static void ResolvePlayerColor()
-        {
-            if (_playerColorResolved) return;
-            _playerColorResolved = true;
-
-            Type type = typeof(VRRig);
-            _playerColorField = type.GetField(
-                "playerColor",
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            if (_playerColorField != null && _playerColorField.FieldType != typeof(Color))
-                _playerColorField = null;
-
-            _playerColorProperty = type.GetProperty(
-                "playerColor",
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            if (_playerColorProperty != null && _playerColorProperty.PropertyType != typeof(Color))
-                _playerColorProperty = null;
-        }
 
         /// <summary>Live gorilla color for a remote rig, with safe fallbacks.</summary>
         internal static Color GetRigColor(VRRig rig)
         {
             if (rig == null) return Color.white;
 
-            ResolvePlayerColor();
+            GameApi.Resolve();
             try
             {
-                if (_playerColorField != null)
-                    return (Color)_playerColorField.GetValue(rig);
-                if (_playerColorProperty != null)
-                    return (Color)_playerColorProperty.GetValue(rig, null);
+                FieldInfo colorField = GameApi.RigColorField;
+                if (colorField != null)
+                    return (Color)colorField.GetValue(rig);
+                PropertyInfo colorProperty = GameApi.RigColorProperty;
+                if (colorProperty != null)
+                    return (Color)colorProperty.GetValue(rig, null);
             }
             catch (Exception)
             {
@@ -296,6 +341,109 @@ namespace CascadeMenu.Mods
             return GetRigColor(FindRigObject(player));
         }
 
+        // -----------------------------------------------------------------
+        // Infected / Tagged Detection
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Checks whether a remote gorilla rig / player is currently infected or tagged.
+        /// Combines fast material / setMatIndex checks on the VRRig with GorillaTagManager
+        /// and GorillaInfectionManager reflection fallbacks.
+        /// </summary>
+        internal static bool IsInfected(VRRig rig, NetPlayer player = null)
+        {
+            if (rig != null)
+            {
+                try
+                {
+                    if (rig.setMatIndex > 0) return true;
+
+                    if (rig.mainSkin != null && rig.mainSkin.sharedMaterial != null)
+                    {
+                        string matName = rig.mainSkin.sharedMaterial.name;
+                        if (!string.IsNullOrEmpty(matName))
+                        {
+                            string lower = matName.ToLowerInvariant();
+                            if (lower.Contains("infected") || lower.Contains("it") ||
+                                lower.Contains("lava") || lower.Contains("rock") ||
+                                lower.Contains("ice") || lower.Contains("tag") ||
+                                lower.Contains("hunter"))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    // Fall through to manager checks.
+                }
+            }
+
+            if (player == null && rig != null)
+            {
+                player = GunLibController.GetPlayerFromRig(rig);
+            }
+            if (player == null) return false;
+
+            GameApi.Resolve();
+            try
+            {
+                PropertyInfo tagManagerInstance = GameApi.TagManagerInstance;
+                if (tagManagerInstance != null)
+                {
+                    object manager = tagManagerInstance.GetValue(null, null);
+                    if (manager != null)
+                    {
+                        MethodInfo isTaggedMethod = GameApi.IsTaggedMethod;
+                        if (isTaggedMethod != null)
+                        {
+                            object result = isTaggedMethod.Invoke(manager, new object[] { player });
+                            if (result is bool b) return b;
+                        }
+
+                        object current = GameApi.CurrentTaggedField != null
+                            ? GameApi.CurrentTaggedField.GetValue(manager)
+                            : (GameApi.CurrentTaggedProperty != null ? GameApi.CurrentTaggedProperty.GetValue(manager, null) : null);
+                        if (current is NetPlayer taggedPlayer)
+                        {
+                            if (taggedPlayer.UserId == player.UserId || taggedPlayer.ActorNumber == player.ActorNumber)
+                                return true;
+                        }
+                    }
+                }
+
+                PropertyInfo infectionManagerInstance = GameApi.InfectionManagerInstance;
+                if (infectionManagerInstance != null)
+                {
+                    object manager = infectionManagerInstance.GetValue(null, null);
+                    if (manager != null)
+                    {
+                        object collection = GameApi.InfectedPlayersField != null
+                            ? GameApi.InfectedPlayersField.GetValue(manager)
+                            : (GameApi.InfectedPlayersProperty != null ? GameApi.InfectedPlayersProperty.GetValue(manager, null) : null);
+                        if (collection is IEnumerable list)
+                        {
+                            foreach (object item in list)
+                            {
+                                if (item is NetPlayer infected &&
+                                    (infected.UserId == player.UserId || infected.ActorNumber == player.ActorNumber))
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Ignore room teardown races.
+            }
+
+            return false;
+        }
+
         internal static string ColorHex(Color color)
         {
             return "#" + ColorUtility.ToHtmlStringRGB(color);
@@ -313,10 +461,6 @@ namespace CascadeMenu.Mods
         // Room information
         // -----------------------------------------------------------------
 
-        private static Type _photonType;
-
-        private static bool _photonTypeSearched;
-
         /// <summary>
         /// Photon server address (usually IP:port), read through reflection so the
         /// project does not need a hard reference to PhotonUnityNetworking.
@@ -325,9 +469,9 @@ namespace CascadeMenu.Mods
         {
             try
             {
-                Type type = PhotonType();
-                if (type == null) return "unknown";
-                PropertyInfo property = type.GetProperty("ServerAddress", BindingFlags.Public | BindingFlags.Static);
+                GameApi.Resolve();
+                if (GameApi.PhotonNetworkType == null) return "unknown";
+                PropertyInfo property = GameApi.PhotonServerAddress;
                 string address = property != null ? property.GetValue(null, null) as string : null;
                 return string.IsNullOrEmpty(address) ? "offline" : address;
             }
@@ -335,31 +479,6 @@ namespace CascadeMenu.Mods
             {
                 return "unknown";
             }
-        }
-
-        private static Type PhotonType()
-        {
-            if (_photonType != null || _photonTypeSearched) return _photonType;
-            _photonTypeSearched = true;
-            try
-            {
-                Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
-                for (int i = 0; i < assemblies.Length; i++)
-                {
-                    Type type = assemblies[i].GetType("Photon.Pun.PhotonNetwork", false);
-                    if (type != null)
-                    {
-                        _photonType = type;
-                        break;
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                // Reflection is only a convenience here; the UI falls back to
-                // "unknown" when the assembly is not loaded yet.
-            }
-            return _photonType;
         }
 
         /// <summary>Name of the current master client, with "(you)" for the local host.</summary>
@@ -409,8 +528,8 @@ namespace CascadeMenu.Mods
             IDictionary props = null;
             try
             {
-                PropertyInfo property = typeof(RoomConfig).GetProperty(
-                    "CustomProps", BindingFlags.Public | BindingFlags.Instance);
+                GameApi.Resolve();
+                PropertyInfo property = GameApi.RoomCustomProps;
                 props = property != null ? property.GetValue(system.CurrentRoom, null) as IDictionary : null;
             }
             catch (Exception)
@@ -441,7 +560,7 @@ namespace CascadeMenu.Mods
             List<string> props = RoomCustomProps();
             if (props.Count == 0) return "None";
             int shown = Mathf.Min(3, props.Count);
-            return props.Count + ": " + string.Join(", ", props.GetRange(0, shown).ToArray());
+            return props.Count + ": " + string.Join(", ", props.GetRange(0, shown));
         }
 
         /// <summary>
@@ -472,7 +591,7 @@ namespace CascadeMenu.Mods
                 if (names.Count < 3) names.Add(SafeName(players[i]));
             }
             if (count == 0) return "None";
-            string text = string.Join(", ", names.ToArray());
+            string text = string.Join(", ", names);
             if (count > names.Count) text += ", ...";
             return count + ": " + text;
         }
@@ -497,21 +616,21 @@ namespace CascadeMenu.Mods
                 if (verifiedRoles.Count > 0)
                 {
                     verified.Add(SafeName(player) + " (" +
-                                 string.Join(", ", verifiedRoles.ToArray()) + ")");
+                                 string.Join(", ", verifiedRoles) + ")");
                 }
                 if (fakeRoles.Count > 0)
                 {
                     fakes.Add(SafeName(player) + " (" +
-                              string.Join(", ", fakeRoles.ToArray()) + ")");
+                              string.Join(", ", fakeRoles) + ")");
                 }
             }
 
             verifiedText = verified.Count == 0
                 ? "None"
-                : verified.Count + ": " + string.Join(", ", TruncateList(verified, 3).ToArray());
+                : verified.Count + ": " + string.Join(", ", TruncateList(verified, 3));
             fakeText = fakes.Count == 0
                 ? "None"
-                : fakes.Count + ": " + string.Join(", ", TruncateList(fakes, 3).ToArray());
+                : fakes.Count + ": " + string.Join(", ", TruncateList(fakes, 3));
         }
 
         private static List<string> TruncateList(List<string> items, int max)
@@ -618,166 +737,6 @@ namespace CascadeMenu.Mods
             CustomPropObjects.Remove(id);
             CustomPropIndexes.Remove(id);
             return true;
-        }
-
-        /// <summary>
-        /// Sends a real tag through the game mode. The master client applies it,
-        /// so the tag survives after the menu closes (unlike the old local-only
-        /// <c>PlayTaggedEffect</c> call).
-        ///
-        /// A master client can call <c>HitPlayer</c> directly, which tags without
-        /// a distance check. Other clients use the same RPC a hand tag uses, so
-        /// the server still validates range.
-        ///
-        /// The game-mode API is reached through reflection because
-        /// GorillaGameManager inherits a Photon type that this project does not
-        /// reference directly.
-        /// </summary>
-        internal static bool TagPlayer(NetPlayer player)
-        {
-            if (player == null) return false;
-
-            NetworkSystem system = NetworkSystem.Instance;
-            NetPlayer local = system != null ? system.LocalPlayer : null;
-            if (system == null || !system.InRoom || local == null || player.UserId == local.UserId)
-                return false;
-
-            ResolveGameModeApi();
-            if (_gameManagerInstanceProperty == null) return false;
-
-            object manager;
-            try
-            {
-                manager = _gameManagerInstanceProperty.GetValue(null, null);
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-            if (manager == null) return false;
-
-            VRRig targetRig = FindRigObject(player);
-
-            // Non-master tags go through the game's RPC, and the master's
-            // anti-cheat check reports tags sent from far away. Only send when
-            // the server will accept it; the master path is unrestricted.
-            if (!system.IsMasterClient)
-            {
-                VRRig localRig = VRRig.LocalRig;
-                if (localRig == null || targetRig == null) return false;
-                if (Vector3.Distance(localRig.transform.position, targetRig.transform.position) > 5.5f)
-                {
-                    Plugin.Log?.LogInfo("Cascade tag skipped: " + SafeName(player) + " is outside the server tag range.");
-                    return false;
-                }
-            }
-
-            try
-            {
-                // Keep the local game-mode event/cooldown in sync with a hand tag.
-                if (_localTagMethod != null)
-                    _localTagMethod.Invoke(manager, new object[] { player, local, false, false });
-
-                if (system.IsMasterClient)
-                {
-                    // Direct, server-authoritative tag that ignores range.
-                    if (_hitPlayerMethod != null)
-                        _hitPlayerMethod.Invoke(manager, new object[] { player });
-                }
-                else
-                {
-                    // Same RPC the game sends for a hand tag. The master validates
-                    // that the tagger is actually near the target.
-                    if (_reportTagMethod != null)
-                        _reportTagMethod.Invoke(null, new object[] { player });
-                }
-            }
-            catch (Exception exception)
-            {
-                Plugin.Log?.LogWarning("Cascade tag failed for " + SafeName(player) + ": " + exception.Message);
-                return false;
-            }
-
-            if (targetRig != null) GunLibController.MarkTarget(targetRig);
-            Select(player.UserId);
-            return true;
-        }
-
-        /// <summary>
-        /// Tags everyone else in the room through the same real game-mode path.
-        /// Returns how many players the request was sent for.
-        /// </summary>
-        internal static int TagAll()
-        {
-            List<NetPlayer> players = GetPlayers();
-            int tagged = 0;
-            for (int i = 0; i < players.Count; i++)
-            {
-                if (TagPlayer(players[i])) tagged++;
-            }
-            return tagged;
-        }
-
-        // -----------------------------------------------------------------
-        // Game-mode API (reflection)
-        // -----------------------------------------------------------------
-
-        private static PropertyInfo _gameManagerInstanceProperty;
-        private static MethodInfo _localTagMethod;
-        private static MethodInfo _hitPlayerMethod;
-        private static MethodInfo _reportTagMethod;
-        private static MethodInfo _staticFindRigMethod;
-        private static bool _gameModeApiResolved;
-
-        private static void ResolveGameModeApi()
-        {
-            if (_gameModeApiResolved) return;
-            _gameModeApiResolved = true;
-
-            try
-            {
-                Assembly assembly = typeof(GorillaTagger).Assembly;
-                Type managerType = assembly.GetType("GorillaGameManager");
-                if (managerType != null)
-                {
-                    _gameManagerInstanceProperty = managerType.GetProperty(
-                        "instance",
-                        BindingFlags.Public | BindingFlags.Static);
-                    _localTagMethod = managerType.GetMethod(
-                        "LocalTag",
-                        BindingFlags.Public | BindingFlags.Instance,
-                        null,
-                        new[] { typeof(NetPlayer), typeof(NetPlayer), typeof(bool), typeof(bool) },
-                        null);
-                    _hitPlayerMethod = managerType.GetMethod(
-                        "HitPlayer",
-                        BindingFlags.Public | BindingFlags.Instance,
-                        null,
-                        new[] { typeof(NetPlayer) },
-                        null);
-                    _staticFindRigMethod = managerType.GetMethod(
-                        "StaticFindRigForPlayer",
-                        BindingFlags.Public | BindingFlags.Static,
-                        null,
-                        new[] { typeof(NetPlayer) },
-                        null);
-                }
-
-                Type gameModeType = assembly.GetType("GorillaGameModes.GameMode");
-                if (gameModeType != null)
-                {
-                    _reportTagMethod = gameModeType.GetMethod(
-                        "ReportTag",
-                        BindingFlags.Public | BindingFlags.Static,
-                        null,
-                        new[] { typeof(NetPlayer) },
-                        null);
-                }
-            }
-            catch (Exception exception)
-            {
-                Plugin.Log?.LogWarning("Cascade could not resolve the game-mode tag API: " + exception.Message);
-            }
         }
 
         /// <summary>
@@ -1127,14 +1086,6 @@ namespace CascadeMenu.Mods
             page.Section("Tools", "Refresh the list or copy session data")
                 .Button("Refresh player list", "Re-scan the current room", "Refresh",
                     menu.RefreshPlayerList, false)
-                .Button("Tag all players", "Send a real tag for everyone in the room", "Tag all",
-                    () =>
-                    {
-                        int tagged = TagAll();
-                        menu.ShowToast("Tag all", tagged == 0
-                            ? "No tags sent - no players or outside tag range."
-                            : "Sent tags for " + tagged + " player(s).");
-                    }, false)
                 .Button("Copy room info", "Clipboard: room, master, region, server and HWID", "Copy",
                     () => Copy(
                         "Home / room: " + room.Name + "\n" +
@@ -1199,14 +1150,6 @@ namespace CascadeMenu.Mods
                 .Label("Selected", "Highlighted in the player list", IsSelected(player) ? "Yes" : "No");
 
             CascadeSection actions = page.Section("Player actions", "Client-side tools aimed at this player");
-            actions.Button("Tag with tag gun", "Send a real tag through the game mode", "Tag",
-                () =>
-                {
-                    bool ok = TagPlayer(player);
-                    menu.ShowToast("Tag gun", ok
-                        ? name + " tagged."
-                        : "Rig not ready, or they are outside tag range.");
-                }, true);
             actions.Button("Spectate player", "Live first- or third-person view of their gorilla", "Spectate",
                 () => menu.StartSpectating(player), false);
             actions.Button("Teleport to player", "Move next to them without disabling collisions", "Teleport",

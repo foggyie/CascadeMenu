@@ -24,7 +24,20 @@ namespace CascadeMenu.UI
         Sidebar,
         Recenter,
         Sparkle,
-        Speaker
+        Speaker,
+        Bolt,
+        Gamepad,
+        Wrench,
+        Bell,
+        Terminal,
+        Bag,
+        Palette,
+        Keyboard,
+        ArrowUp,
+        Backspace,
+        Chart,
+        Cube,
+        Folder
     }
 
     /// <summary>
@@ -299,6 +312,167 @@ namespace CascadeMenu.UI
                         return Mathf.Min(Mathf.Min(body, cone), Mathf.Min(wave1, wave2));
                     };
                 }
+                case CascadeIcon.Bolt:
+                {
+                    var bolt = new[]
+                    {
+                        new Vector2(0.18f, 0.9f), new Vector2(-0.46f, -0.06f), new Vector2(-0.04f, -0.06f),
+                        new Vector2(-0.2f, -0.9f), new Vector2(0.5f, 0.14f), new Vector2(0.08f, 0.14f)
+                    };
+                    return (x, y) => Polygon(x, y, bolt);
+                }
+
+                case CascadeIcon.Gamepad:
+                {
+                    return (x, y) =>
+                    {
+                        float body = RoundedBox(x, y, 0f, 0f, 0.88f, 0.48f, 0.3f);
+                        float cuts = Segment(x, y, -0.42f, 0.22f, -0.42f, -0.12f, 0.07f);
+                        cuts = Mathf.Min(cuts, Segment(x, y, -0.59f, 0.05f, -0.25f, 0.05f, 0.07f));
+                        cuts = Mathf.Min(cuts, Circle(x, y, 0.36f, 0.14f, 0.09f));
+                        cuts = Mathf.Min(cuts, Circle(x, y, 0.54f, -0.04f, 0.09f));
+                        return Mathf.Max(body, -cuts);
+                    };
+                }
+
+                case CascadeIcon.Wrench:
+                {
+                    return (x, y) =>
+                    {
+                        float handle = Segment(x, y, -0.68f, -0.68f, 0.2f, 0.2f, 0.13f);
+                        float head = Mathf.Abs(Circle(x, y, 0.4f, 0.4f, 0.3f)) - 0.11f;
+                        return Mathf.Min(handle, head);
+                    };
+                }
+
+                case CascadeIcon.Bell:
+                {
+                    var skirt = new[]
+                    {
+                        new Vector2(-0.5f, 0.15f), new Vector2(0.5f, 0.15f),
+                        new Vector2(0.74f, -0.4f), new Vector2(-0.74f, -0.4f)
+                    };
+                    return (x, y) =>
+                    {
+                        float result = Mathf.Min(Circle(x, y, 0f, 0.15f, 0.5f), Polygon(x, y, skirt));
+                        result = Mathf.Min(result, Circle(x, y, 0f, -0.64f, 0.14f));
+                        return Mathf.Min(result, Circle(x, y, 0f, 0.7f, 0.09f));
+                    };
+                }
+
+                case CascadeIcon.Terminal:
+                {
+                    return (x, y) =>
+                    {
+                        float box = Mathf.Abs(RoundedBox(x, y, 0f, 0f, 0.84f, 0.66f, 0.14f)) - 0.06f;
+                        float chevron = Mathf.Min(
+                            Segment(x, y, -0.46f, 0.22f, -0.14f, 0f, 0.06f),
+                            Segment(x, y, -0.14f, 0f, -0.46f, -0.22f, 0.06f));
+                        float cursor = Segment(x, y, 0f, -0.22f, 0.4f, -0.22f, 0.06f);
+                        return Mathf.Min(box, Mathf.Min(chevron, cursor));
+                    };
+                }
+
+                case CascadeIcon.Bag:
+                {
+                    return (x, y) =>
+                    {
+                        float body = RoundedBox(x, y, 0f, -0.14f, 0.64f, 0.56f, 0.1f);
+                        float handle = Mathf.Max(Mathf.Abs(Circle(x, y, 0f, 0.36f, 0.3f)) - 0.07f, 0.36f - y);
+                        return Mathf.Min(body, handle);
+                    };
+                }
+
+                case CascadeIcon.Palette:
+                {
+                    return (x, y) =>
+                    {
+                        float disc = Circle(x, y, 0f, 0f, 0.82f);
+                        float holes = Circle(x, y, -0.32f, 0.26f, 0.12f);
+                        holes = Mathf.Min(holes, Circle(x, y, 0.04f, 0.44f, 0.12f));
+                        holes = Mathf.Min(holes, Circle(x, y, 0.4f, 0.2f, 0.12f));
+                        holes = Mathf.Min(holes, Circle(x, y, 0.18f, -0.36f, 0.17f));
+                        return Mathf.Max(disc, -holes);
+                    };
+                }
+
+                case CascadeIcon.Keyboard:
+                {
+                    return (x, y) =>
+                    {
+                        float box = Mathf.Abs(RoundedBox(x, y, 0f, 0f, 0.86f, 0.54f, 0.12f)) - 0.06f;
+                        float keys = float.MaxValue;
+                        for (int i = 0; i < 4; i++) keys = Mathf.Min(keys, Circle(x, y, -0.5f + i * 0.33f, 0.16f, 0.07f));
+                        for (int i = 0; i < 3; i++) keys = Mathf.Min(keys, Circle(x, y, -0.33f + i * 0.33f, -0.06f, 0.07f));
+                        keys = Mathf.Min(keys, Segment(x, y, -0.34f, -0.3f, 0.34f, -0.3f, 0.06f));
+                        return Mathf.Min(box, keys);
+                    };
+                }
+
+                case CascadeIcon.ArrowUp:
+                {
+                    var arrow = new[]
+                    {
+                        new Vector2(0f, 0.82f), new Vector2(0.62f, 0.06f), new Vector2(0.26f, 0.06f),
+                        new Vector2(0.26f, -0.72f), new Vector2(-0.26f, -0.72f), new Vector2(-0.26f, 0.06f),
+                        new Vector2(-0.62f, 0.06f)
+                    };
+                    return (x, y) => Polygon(x, y, arrow);
+                }
+
+                case CascadeIcon.Backspace:
+                {
+                    var tag = new[]
+                    {
+                        new Vector2(-0.86f, 0f), new Vector2(-0.4f, 0.6f), new Vector2(0.86f, 0.6f),
+                        new Vector2(0.86f, -0.6f), new Vector2(-0.4f, -0.6f)
+                    };
+                    return (x, y) =>
+                    {
+                        float outline = Mathf.Abs(Polygon(x, y, tag)) - 0.06f;
+                        float cross = Mathf.Min(
+                            Segment(x, y, -0.04f, 0.2f, 0.46f, -0.2f, 0.06f),
+                            Segment(x, y, 0.46f, 0.2f, -0.04f, -0.2f, 0.06f));
+                        return Mathf.Min(outline, cross);
+                    };
+                }
+
+                case CascadeIcon.Chart:
+                {
+                    return (x, y) =>
+                    {
+                        float result = RoundedBox(x, y, -0.5f, -0.45f, 0.14f, 0.25f, 0.03f);
+                        result = Mathf.Min(result, RoundedBox(x, y, 0f, -0.3f, 0.14f, 0.4f, 0.03f));
+                        return Mathf.Min(result, RoundedBox(x, y, 0.5f, -0.1f, 0.14f, 0.6f, 0.03f));
+                    };
+                }
+
+                case CascadeIcon.Cube:
+                {
+                    var hex = new[]
+                    {
+                        new Vector2(0f, 0.86f), new Vector2(0.74f, 0.43f), new Vector2(0.74f, -0.43f),
+                        new Vector2(0f, -0.86f), new Vector2(-0.74f, -0.43f), new Vector2(-0.74f, 0.43f)
+                    };
+                    return (x, y) =>
+                    {
+                        float outline = Mathf.Abs(Polygon(x, y, hex)) - 0.06f;
+                        float inner = Segment(x, y, 0f, 0f, -0.74f, 0.43f, 0.05f);
+                        inner = Mathf.Min(inner, Segment(x, y, 0f, 0f, 0.74f, 0.43f, 0.05f));
+                        inner = Mathf.Min(inner, Segment(x, y, 0f, 0f, 0f, -0.86f, 0.05f));
+                        return Mathf.Min(outline, inner);
+                    };
+                }
+
+                case CascadeIcon.Folder:
+                {
+                    return (x, y) =>
+                    {
+                        float body = RoundedBox(x, y, 0f, -0.1f, 0.82f, 0.5f, 0.1f);
+                        float tab = RoundedBox(x, y, -0.42f, 0.46f, 0.32f, 0.16f, 0.05f);
+                        return Mathf.Min(body, tab);
+                    };
+                }
             }
             return (x, y) => 1f;
         }
@@ -353,6 +527,21 @@ namespace CascadeMenu.UI
                 if (((b.y > y) != (a.y > y)) && (x < (a.x - b.x) * (y - b.y) / (a.y - b.y) + b.x)) inside = !inside;
             }
             return inside ? -distance : distance;
+        }
+
+        /// <summary>
+        /// Releases all cached icons and their textures.
+        /// </summary>
+        public static void ReleaseAll()
+        {
+            foreach (var entry in Cache)
+            {
+                if (entry.Value != null)
+                {
+                    CascadeSprites.DestroySprite(entry.Value);
+                }
+            }
+            Cache.Clear();
         }
     }
 }

@@ -11,3 +11,5 @@ obj/
 # Logs and local crash dumps
 *.log
 *.dmp
+# Game DLLs (users provide these locally)
+libs/

@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using GorillaNetworking;
 using UnityEngine;
 
-namespace CascadeMenu.Mods.Performance
+namespace CascadeMenu.Mods
 {
     /// <summary>
     /// Hides the cosmetic renderers on other players' rigs to save performance.

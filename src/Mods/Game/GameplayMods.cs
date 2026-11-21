@@ -13,6 +13,21 @@ namespace CascadeMenu.Mods
         private static Harmony _harmony;
         private static bool _initialized;
 
+        private static bool TryPatch(Type patchType, string feature)
+        {
+            try
+            {
+                _harmony.CreateClassProcessor(patchType).Patch();
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Plugin.Log?.LogWarning(
+                    "Cascade: " + feature + " disabled, patch target not found (game update?). " + exception.Message);
+                return false;
+            }
+        }
+
         internal static void Initialize(MenuConfig config, GameObject host)
         {
             if (_initialized)
@@ -22,15 +37,20 @@ namespace CascadeMenu.Mods
 
             _initialized = true;
 
-            try
+            _harmony = new Harmony(PluginInfo.GUID + ".gameplay");
+            bool handLink = TryPatch(typeof(HandLinkBlockPatch), "hand link block");
+            bool flyGravity = TryPatch(typeof(FlyGravityPatch), "fly gravity");
+            if (handLink && flyGravity)
             {
-                _harmony = new Harmony(PluginInfo.GUID + ".gameplay");
-                _harmony.PatchAll(typeof(GameplayMods).Assembly);
                 Plugin.Log?.LogInfo("Cascade gameplay patches installed (hand link + fly gravity).");
             }
-            catch (Exception exception)
+            else if (handLink)
             {
-                Plugin.Log?.LogError("Cascade could not install gameplay patches: " + exception);
+                Plugin.Log?.LogInfo("Cascade gameplay patches installed (hand link only).");
+            }
+            else if (flyGravity)
+            {
+                Plugin.Log?.LogInfo("Cascade gameplay patches installed (fly gravity only).");
             }
 
             JoystickFlyController controller = host.AddComponent<JoystickFlyController>();

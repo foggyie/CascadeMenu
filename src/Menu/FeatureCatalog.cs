@@ -73,16 +73,19 @@ namespace CascadeMenu
                     value => CascadeMenu.Mods.NoclipController.SetActive(value)),
 
                 // ---------------------------------------------------------
-                // Visual (switches only; tuning lives in the gear pages)
+                // Visual (switches only; each visual mod has its own gear panel)
                 // ---------------------------------------------------------
-                FeatureOf("Visual", "ESP", "ESP Box", "Box around each player", config.EspEnabled, settings: "esp"),
-                FeatureOf("Visual", "ESP", "ESP names", "Name above each player", config.EspNames, settings: "esp"),
-                FeatureOf("Visual", "ESP", "ESP tracers", "Line from your hand to each player", config.EspTracers, settings: "esp"),
-                FeatureOf("Visual", "ESP", "ESP chams", "Highlight bodies through walls", config.EspChams, settings: "esp"),
-                FeatureOf("Visual", "ESP", "ESP marker", "Through-wall diamond above each player", config.EspMarker, settings: "esp"),
+                FeatureOf("Visual", "ESP", "ESP Box", "3D, corner or 2D box around each player", config.EspEnabled, settings: "esp.box"),
+                FeatureOf("Visual", "ESP", "ESP Skeleton", "Bone skeleton and animated finger joints on each player", config.EspSkeleton, settings: "esp.skeleton"),
+                FeatureOf("Visual", "ESP", "ESP Names", "Name, distance and infected badge above each player", config.EspNames, settings: "esp.names"),
+                FeatureOf("Visual", "ESP", "ESP Tracers", "Snapline from your hand or screen to each player", config.EspTracers, settings: "esp.tracers"),
+                FeatureOf("Visual", "ESP", "ESP Chams", "Highlight player bodies through walls", config.EspChams, settings: "esp.chams"),
+                FeatureOf("Visual", "ESP", "ESP Marker", "Through-wall diamond beacon above each player", config.EspMarker, settings: "esp.marker"),
+                FeatureOf("Visual", "ESP", "Match Player Color", "Color ESP with each player's gorilla color", config.EspMatchPlayerColor, settings: "esp"),
+                FeatureOf("Visual", "ESP", "Highlight Infected", "Color infected / tagged players in fiery red-orange", config.EspInfectedColor, settings: "esp"),
                 FeatureOf("Visual", "Cosmetics", "Cosmetic ESP", "Show recognized special cosmetic roles above players", config.EspCosmeticTags, settings: "cosmetics"),
-                FeatureOf("Visual", "Cosmetics", "Cosmetic notifications", "Show a standalone toast when a role cosmetic is detected", config.CosmeticNotifications, settings: "cosmetics"),
-                FeatureOf("Visual", "ESP", "Hand tap badge", "Show TAP in the player list", config.HandTapIndicator, settings: "esp"),
+                FeatureOf("Visual", "Cosmetics", "Cosmetic Notifications", "Show a standalone toast when a role cosmetic is detected", config.CosmeticNotifications, settings: "cosmetics"),
+                FeatureOf("Visual", "ESP", "Hand Tap Badge", "Show TAP in the player list", config.HandTapIndicator, settings: "esp"),
             };
         }
 

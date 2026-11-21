@@ -15,7 +15,7 @@ The module tabs now contain real gameplay features: a toggleable hand-link block
 - Custom color editor with RGB sliders, a hex field, quick-pick swatches and a live preview. Changes repaint every open window without rebuilding it.
 - Mods are one switch: turning one on starts its effect immediately; turning it off stops it and runs cleanup.
 - **Module tabs**: every mod category has its own sidebar page - **Overlays**, **Movement**, **Visual**, **Fun**, **Snake**, **Tools**, **Flight**, **Desktop**, **Performance**, **Super**, **Game** and **Player** - so mods are grouped by purpose instead of sharing one long list.
-- **A hundred and thirteen extra one-switch mods** fill the new pages. Overlays: coordinates, altitude, attitude, velocity, hand speed, distance walked, jump counter, room info, session clock, frame time, memory, active mods, keybinds, target info, room props, water state, ground state, input monitor, time scale and build stamp. Movement: gravity scale, weightless, heavy gravity, moon/super jump, jump speed, no slide, ice skates, long arms, tiny/giant body, slow motion, bullet time, bouncy feet, air dash, rocket jump, auto walk and speed cap. Visual: FOV boost/narrow, extended view, vignette, letterbox, scanlines, film grain, alignment grid, safe zone, night vision, fullbright, fog off/density, long shadows, plus chams, tracers, boxes, markers and cosmetic tags. Fun: motion/hand/rainbow trails, laser sight, orbiting orbs, party lights, fireflies, snowfall, rainfall, confetti, fireworks, ground ring, beacon light and breadcrumbs. Snake: auto play with a risky fallback, auto restart, instant win, open/exit, a live status card, speed control, invincibility, path visualizer, set best score, pellet control, a stats tracker and a best-score notifier. Tools: ruler, look distance, object info, beacon, clipboard helpers for room code/player list/local id/position/room props, mod search, free cursor and fullscreen. Flight: jump jet, feather fall, rocket boots and glide. Desktop: lock/show cursor, big/compact menu and menu near. Performance: shadow off, short shadows, 60/72/90 FPS caps, player culling, LOD bias, texture quality, AA off and pixel lights. Game: size changer max/min, force player giant, size changer info, teleport to size changer and list size changers. Player: change name, join room code, set custom property, quick chat, teleport gun, teleport to nearest/random player, cycle players, teleport all and follow nearest. Every one of them is a single row with an immediate start/stop and a gear only when it has options.
+- **Over a hundred extra one-switch mods** fill the new pages. Overlays: coordinates, altitude, attitude, velocity, hand speed, distance walked, jump counter, room info, session clock, frame time, memory, active mods, keybinds, target info, room props, water state, ground state, input monitor, time scale and build stamp. Movement: gravity scale, weightless, heavy gravity, moon/super jump, jump speed, no slide, ice skates, long arms, tiny/giant body, slow motion, bullet time, bouncy feet, air dash, rocket jump, auto walk and speed cap. Visual: FOV boost/narrow, extended view, vignette, letterbox, scanlines, film grain, alignment grid, safe zone, night vision, fullbright, fog off/density, long shadows, plus chams, tracers, boxes, markers and cosmetic tags. Fun: motion/hand/rainbow trails, laser sight, orbiting orbs, party lights, fireflies, snowfall, rainfall, confetti, fireworks, ground ring, beacon light and breadcrumbs. Snake: auto play with a risky fallback, auto restart, instant win, open/exit, a live status card, speed control, invincibility, path visualizer, set best score, pellet control, a stats tracker and a best-score notifier. Tools: ruler, look distance, object info, beacon, clipboard helpers for room code/player list/local id/position/room props, mod search, free cursor and fullscreen. Flight: jump jet, feather fall, rocket boots and glide. Desktop: lock/show cursor, big/compact menu and menu near. Performance: shadow off, short shadows, 60/72/90 FPS caps, player culling, LOD bias, texture quality, AA off and pixel lights. Game: size changer max/min, force player giant, size changer info, teleport to size changer and list size changers. Player: change name, join room code, set custom property, quick chat, teleport gun, teleport to nearest/random player, cycle players and follow nearest. Every one of them is a single row with an immediate start/stop and a gear only when it has options.
 - **Crosshair**, **Clock**, **Session Stats** and **Screenshot**: camera-anchored overlays for a centre dot/cross/ring, a corner clock, live FPS/room/players/uptime, and a one-shot PNG capture saved to `CascadeScreenshots`.
 - **Compass**, **Speedometer**, **FPS Graph** and **Screen Tint**: more visual overlays - a sliding heading strip, local movement speed with a fill bar, sixty scrolling frame-rate bars, and a full-view colour filter.
 - **Joystick Fly**, **Noclip** and **Acrobatics** are one-switch mod rows backed by the existing movement controllers; **Unlimited FPS** removes VSync and raises the frame cap, restoring the previous values when switched off.
@@ -37,7 +37,7 @@ The module tabs now contain real gameplay features: a toggleable hand-link block
 
 - Gorilla Tag with BepInEx 5 (x64). BepInEx's included `0Harmony.dll` provides the gameplay patches.
 - .NET SDK 8.0 or newer to build. The project was built with .NET SDK 10.
-- The referenced game/BepInEx assemblies are already in `libs`, so no Unity editor is required.
+- Game and BepInEx assemblies, supplied either by `GORILLA_TAG_DIR` or by a local `libs/` folder. No Unity editor is required.
 
 The project targets `netstandard2.1`.
 
@@ -57,17 +57,29 @@ bin\Release\CascadeMenu.dll
 
 The build currently succeeds with zero warnings and zero errors.
 
-### Refreshing the game references
+### Build references
 
-The DLLs in `libs` are local copies of the assemblies from the current Gorilla Tag installation:
+Game DLLs are not committed. The project finds them in one of two ways:
 
-```text
-D:\SteamLibrary\steamapps\common\Gorilla Tag
-```
+1. Set `GORILLA_TAG_DIR` to the Gorilla Tag install folder before building:
 
-After a game update, replace `libs\Assembly-CSharp.dll` and the relevant `UnityEngine*.dll`, `Unity.TextMeshPro.dll`, and `Unity.InputSystem.dll` files with the current versions from `Gorilla Tag_Data\Managed`. Also copy the current `BepInEx.dll` and `0Harmony.dll` from `BepInEx\core`. Then rebuild. Do not copy game DLLs into `bin\Release`; they are marked `Private=false` and must be supplied by the game.
+   ```powershell
+   $env:GORILLA_TAG_DIR = 'C:\Path\To\Gorilla Tag'
+   dotnet build -c Release
+   ```
 
-The bundled `Assembly-CSharp.dll`, `Unity.TextMeshPro.dll`, `Unity.InputSystem.dll` and `UnityEngine.UI.dll` were refreshed from the 13 November 2026 game build. The older references predated the current computer Snake game, so the Snake page needs these refreshed files.
+   The project then references `$(GORILLA_TAG_DIR)\Gorilla Tag_Data\Managed` for the game assemblies and `$(GORILLA_TAG_DIR)\BepInEx\core` for `BepInEx.dll` and `0Harmony.dll`.
+
+2. Leave `GORILLA_TAG_DIR` unset and copy the same DLLs into `libs/`:
+
+   - From `Gorilla Tag_Data\Managed`: `Assembly-CSharp.dll`, `Unity.TextMeshPro.dll`, `Unity.InputSystem.dll` and the `UnityEngine*.dll` files the project references.
+   - From `BepInEx\core`: `BepInEx.dll` and `0Harmony.dll`.
+
+   `libs/` is ignored by git, so this copy is local to your machine.
+
+After a game update, refresh the references from the current install (or point `GORILLA_TAG_DIR` at it) and rebuild. Do not copy game DLLs into `bin\Release`; they are marked `Private=false` and must be supplied by the game.
+
+The current references were refreshed from the 13 November 2026 game build. The older references predated the computer Snake game, so the Snake page needs these refreshed files.
 
 ## Install
 
@@ -75,7 +87,7 @@ The bundled `Assembly-CSharp.dll`, `Unity.TextMeshPro.dll`, `Unity.InputSystem.d
 2. Copy `bin\Release\CascadeMenu.dll` into:
 
    ```text
-   D:\SteamLibrary\steamapps\common\Gorilla Tag\BepInEx\plugins
+   <Gorilla Tag>\BepInEx\plugins
    ```
 
    A subfolder such as `BepInEx\plugins\CascadeMenu\` also works.
@@ -95,7 +107,7 @@ The menu starts hidden and its config is reloaded on the next launch.
 | Action | Desktop | VR |
 |---|---|---|
 | Open / close | F1, Insert, Tab | B or Y |
-| Point | Mouse (custom cursor) | Right-hand ray + ring cursor |
+| Point | Mouse | Right-hand ray + pointer line |
 | Select | Left click | Right trigger or A |
 | Scroll | Mouse wheel | Right stick up/down |
 | Toggle joystick fly | Movement toggle or Mods page | One switch; F5 also toggles it |
@@ -119,7 +131,15 @@ Traffic lights follow macOS conventions: green re-centers the window, yellow clo
 - **Talking Players** also sits on the **Visual** page as one toggle. Its gear page sets which screen edge the compact list hangs from (right center is the default), size, opacity, sensitivity, linger time, maximum rows, showing your own mic and the speaker icon. The row color is always the speaker's gorilla color; the text can be automatic (dark on light, white on dark), plain white, dark, or the rig color itself on a dark chip.
 - **Disconnect** is in the titlebar. It asks for confirmation unless either VR grip is held while pressing the button.
 
-All of these features are local-only. The BepInEx log prints `Cascade gameplay patches installed` when the Harmony patches load.
+The menu itself, the Harmony patches and the visual overlays run only on your client: ESP, chams, name tags, Player HUD, Talking Players, overlay cards, Construction, trails, lasers, particles, the movement/flight mods, performance switches, desktop helpers and the Snake tools never send anything to other players. Normal game replication still shows other players your gorilla moving, flying or teleporting while those mods are active.
+
+A few rows call the game's own networking APIs and therefore do affect the room or other players:
+
+- **Report** on a player page submits through Gorilla Tag's own report API, so it reaches the server exactly like a scoreboard report.
+- **Spawn Resource (Gun)** only works when the local client has Super Infection authority, and the resources it creates are networked entities other players receive.
+- Player navigation tools (select, teleport gun/nearest/random/cycle, follow nearest, mute) act on your own rig or local player list. Mutes and selections stay on your machine, but your movement is replicated because it is your normal gorilla position.
+
+The BepInEx log prints `Cascade gameplay patches installed` when the Harmony patches load.
 
 ## Pages
 
@@ -135,7 +155,7 @@ All of these features are local-only. The BepInEx log prints `Cascade gameplay p
 - **Desktop** - cursor lock/visibility and menu size/distance presets.
 - **Performance** - shadow, frame cap, culling, LOD, texture, anti-aliasing and pixel-light switches.
 - **Game** - size changer max/min, force player giant, size changer info, teleport to size changer and list size changers.
-- **Player** - change name, join room code, set a custom property, quick chat, teleport gun, teleport to nearest/random player, cycle players, teleport all and follow nearest.
+- **Player** - change name, join room code, set a custom property, quick chat, teleport gun, teleport to nearest/random player, cycle players and follow nearest.
 - **GunLib** - state, grip gating, beam/ring appearance and the gun's settings links.
 - **Profiler** - live Name Tags, Player HUD, Talking Players, GunLib and Construction frame cost.
 - **Controls** - input, pointer and notification demonstrations.
@@ -149,7 +169,7 @@ Use the sidebar search field to filter rows by their title, subtitle or search t
 ```text
 CascadeMenu/
   CascadeMenu.csproj
-  libs/                       Local game and BepInEx references
+  libs/                       Optional local game and BepInEx references (ignored by git)
   src/
     Plugin.cs                 BepInEx entry point
     PluginInfo.cs
@@ -195,7 +215,6 @@ CascadeMenu/
         GunLibController.cs   Grip-gated aim, solid-surface raycast, beam and ring
         GunLibMod.cs          Thin Mod wrapper exposing the gun's Enabled/Active state
         Construction.cs       Physics pieces, welds, demolition gun and explosions
-        TagTools.cs           Tag-related tools
         Screenshot.cs         One-shot PNG capture into CascadeScreenshots
         UtilityMods.cs        Ruler, inspector, beacon, clipboard and window mods
       Overlays/
@@ -301,22 +320,22 @@ Only mods that declare settings show a gear. A mod opts in by calling `AddSettin
 
 Changing a value updates the panel in place and keeps its scroll position; only one settings page is open at a time.
 
-The following mods currently expose extra options: **WASD Fly** (speed multiplier), **Tag gun** (cooldown), **Teleport (Gun)** (cooldown), **Spawn Resource (Gun)** (cooldown), **Orbit Ghost (Gun)** (radius, speed and height), **Name Tags** (style preset, name color, size, range, height, opacity, platform line, hide-self and off-screen fade), **Player HUD** (style preset, name color, every card line, size, range, height and opacity), **Talking Players** (position, name color, size, opacity, sensitivity, linger, range, rows, include-self and speaker icon), **Crosshair** (style, color and size), **Clock** (position, 24-hour time, seconds, date and size), **Session Stats** (FPS, players, room, uptime, size and opacity), **Screenshot** (supersize), **Compass** (degrees, size and opacity), **Speedometer** (units, maximum, size and opacity), **FPS Graph** (position, scale, size and opacity), **Screen Tint** (color and opacity), **Joystick Fly** (speed, vertical speed, acceleration and aim), **Acrobatics** (smoothing), **Unlimited FPS** (target cap), **Construction** (tool, piece, size, color style, textures, snapping, rotation, static pieces, auto-weld radius, weld range/strength, explosion radius/force, destroy radius, max pieces, grip hand, desktop grip, aim range, projectile speed and cooldown) and **GunLib** (keybind and Active state). ESP, HUD, Gun, Cosmetics, Flight and Acrobatics expose their settings through the existing Settings modules; the GunLib tab links to both.
+The following mods currently expose extra options: **WASD Fly** (speed multiplier), **Teleport (Gun)** (cooldown), **Spawn Resource (Gun)** (cooldown), **Orbit Ghost (Gun)** (radius, speed and height), **Name Tags** (style preset, name color, size, range, height, opacity, platform line, hide-self and off-screen fade), **Player HUD** (style preset, name color, every card line, size, range, height and opacity), **Talking Players** (position, name color, size, opacity, sensitivity, linger, range, rows, include-self and speaker icon), **Crosshair** (style, color and size), **Clock** (position, 24-hour time, seconds, date and size), **Session Stats** (FPS, players, room, uptime, size and opacity), **Screenshot** (supersize), **Compass** (degrees, size and opacity), **Speedometer** (units, maximum, size and opacity), **FPS Graph** (position, scale, size and opacity), **Screen Tint** (color and opacity), **Joystick Fly** (speed, vertical speed, acceleration and aim), **Acrobatics** (smoothing), **Unlimited FPS** (target cap), **Construction** (tool, piece, size, color style, textures, snapping, rotation, static pieces, auto-weld radius, weld range/strength, explosion radius/force, destroy radius, max pieces, grip hand, desktop grip, aim range, projectile speed and cooldown) and **GunLib** (keybind and Active state). ESP, HUD, Gun, Cosmetics, Flight and Acrobatics expose their settings through the existing Settings modules; the GunLib tab links to both.
 
 ## Troubleshooting
 
 - **The plugin is not listed in the BepInEx log.** Confirm the game is 64-bit, BepInEx 5 is installed at the game root, and `CascadeMenu.dll` is under `BepInEx\plugins`.
 - **The menu loads but text is missing or blurry.** The UI builds its own high-resolution SDF font and keeps the game's localized TMP font as a fallback. The BepInEx log prints the active font and atlas at startup (`[Cascade] UI font: ...`). If a custom font fails to load, Cascade falls back automatically.
 - **The menu appears in the wrong place or is hard to read.** Press the green traffic light or **Re-center window** on the Home page. Use **Settings → UI scale** to enlarge the whole window. By default the menu spawns level in front of you and stays anchored in world space; **Settings → Smooth follow** enables optional head following. The default distance is 0.7 m, fixed height is 1.5 m, and the height raise threshold is configurable.
-- **The pointer is hard to see.** In VR, aim with the right controller: a colored laser and a white ring with an accent center follow the hit point. On desktop, a custom high-contrast cursor is drawn at the mouse position. Input does not work in VR until the player has spawned and `GorillaTagger.Instance.rightHandTransform` exists.
+- **The pointer is hard to see.** In VR, aim with the right controller: a colored line runs from your hand to the hit point. On desktop, the normal system mouse pointer is used. Input does not work in VR until the player has spawned and `GorillaTagger.Instance.rightHandTransform` exists.
 - **Fly does nothing.** Check that `Joystick fly` is on in the Movement page and that the game is running in VR with tracked controllers. The log prints `Cascade fly is waiting for the local GTPlayer` if the player has not spawned. Use the direction source option and deadzone setting to tune the feel.
 - **Hand links still move me.** Confirm `Block hand link` is on and the log contains `Cascade gameplay patches installed`. Toggle the setting once to force the patch state to refresh.
-- **A game update broke loading.** Re-copy the current game assemblies into `libs`, rebuild, and reinstall.
+- **A game update broke loading.** Refresh the game references (set `GORILLA_TAG_DIR`, or re-copy them into `libs`), rebuild, and reinstall.
 
 ## Notes
 
 - Gameplay patches are local-only and can be turned off from their module tabs or the BepInEx config.
-- `libs` is included so the project builds without locating the game installation from MSBuild.
+- `libs/` is optional and ignored by git, so the project can build without locating the game installation from MSBuild. Set `GORILLA_TAG_DIR` instead if you prefer.
 - Build outputs live under `bin/Release` and are not committed.
 
 ## Contributors

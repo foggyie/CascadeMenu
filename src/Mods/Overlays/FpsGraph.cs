@@ -49,6 +49,7 @@ namespace CascadeMenu.Mods
         private int _fpsFrames;
         private float _fps;
         private float _nextSample;
+        private float _nextText;
         private int _head;
 
         public FpsGraph()
@@ -138,9 +139,9 @@ namespace CascadeMenu.Mods
                 PushSample(_fps);
             }
 
-            if (_valueLabel != null)
+            if (_valueLabel != null && OverlayText.Due(ref _nextText))
             {
-                _valueLabel.text = _fps > 0f ? Mathf.RoundToInt(_fps).ToString() : "-";
+                OverlayText.Set(_valueLabel, _fps > 0f ? Mathf.RoundToInt(_fps).ToString() : "-");
             }
         }
 
@@ -150,28 +151,11 @@ namespace CascadeMenu.Mods
 
             _camera = CascadeMenuBehaviour.ResolveViewCamera();
 
-            GameObject root = new GameObject("CascadeFpsGraph",
-                typeof(RectTransform), typeof(Canvas), typeof(CanvasGroup));
-            Transform parent = _camera != null
-                ? _camera.transform
-                : (Plugin.Root != null ? Plugin.Root.transform : null);
-            root.transform.SetParent(parent, false);
-
-            _canvas = root.GetComponent<Canvas>();
-            _canvas.renderMode = RenderMode.WorldSpace;
-            _canvas.sortingOrder = 221;
-            _canvas.worldCamera = _camera;
-
-            _canvasRect = (RectTransform)root.transform;
-            _canvasRect.anchorMin = _canvasRect.anchorMax = new Vector2(0.5f, 0.5f);
-            _canvasRect.sizeDelta = new Vector2(CanvasWidth, CanvasHeight);
-            _canvasRect.localScale = Vector3.one * (CanvasScale * Mathf.Max(0.1f, _size));
-            _canvasRect.localRotation = Quaternion.identity;
-
-            CanvasGroup group = root.GetComponent<CanvasGroup>();
-            group.alpha = 1f;
-            group.blocksRaycasts = false;
-            group.interactable = false;
+            Transform fallback = Plugin.Root != null ? Plugin.Root.transform : null;
+            _canvas = OverlayCanvas.Create("CascadeFpsGraph", _camera, fallback, 221,
+                new Vector2(CanvasWidth, CanvasHeight),
+                CanvasScale * Mathf.Max(0.1f, _size),
+                Vector3.zero, out _canvasRect, out _);
 
             RectTransform background = CascadeUI.Rect("Background", _canvasRect);
             CascadeUI.Stretch(background);

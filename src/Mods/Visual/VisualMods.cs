@@ -810,28 +810,43 @@ namespace CascadeMenu.Mods
     }
 
     // -------------------------------------------------------------------------
-    // ESP wrappers around the existing visual controller
+    // ESP wrappers around VisualsController (each links to its own dedicated UI panel)
     // -------------------------------------------------------------------------
 
     [PluginToggleable]
     [ModCategory("Visual")]
-    public sealed class ChamsEspMod : Mod
+    public sealed class PlayerChamsEspMod : Mod
     {
-        private bool _previous;
-        private bool _saved;
-
-        public ChamsEspMod()
+        public PlayerChamsEspMod()
         {
             Name = "Player Chams";
             isToggle = true;
+
+            AddSetting(ModSetting.Toggle("matchColor", "Match player color",
+                "Color chams with each player's gorilla color",
+                () => CurrentConfig() != null && CurrentConfig().EspMatchPlayerColor.Value,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspMatchPlayerColor.Value = v; }));
+            AddSetting(ModSetting.Toggle("infectedColor", "Highlight infected in red-orange",
+                "Highlight infected / tagged players in fiery red-orange",
+                () => CurrentConfig() != null && CurrentConfig().EspInfectedColor.Value,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspInfectedColor.Value = v; }));
+            AddSetting(ModSetting.Dropdown("filter", "Player filter",
+                "Filter players by infection status",
+                new[] { "All Players", "Infected Only", "Not Infected (Survivors) Only" },
+                () => CurrentConfig() != null ? CurrentConfig().EspFilterMode.Value : 0,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspFilterMode.Value = v; }));
+            AddSetting(ModSetting.Slider("range", "Chams range",
+                "Maximum distance in metres",
+                3f, 80f,
+                () => CurrentConfig() != null ? CurrentConfig().EspRange.Value : 30f,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspRange.Value = v; },
+                v => v.ToString("0") + " m"));
         }
 
         public override void OnEnable()
         {
             MenuConfig config = CurrentConfig();
             if (config == null) return;
-            _previous = config.EspChams.Value;
-            _saved = true;
             config.EspChams.Value = true;
             Plugin.Log?.LogInfo("Cascade Player Chams active.");
         }
@@ -839,8 +854,19 @@ namespace CascadeMenu.Mods
         public override void OnDisable()
         {
             MenuConfig config = CurrentConfig();
-            if (config != null && _saved) config.EspChams.Value = _previous;
-            _saved = false;
+            if (config != null) config.EspChams.Value = false;
+        }
+
+        internal static void Sync(MenuConfig config)
+        {
+            Mod mod = ModRegistry.Find("Player Chams");
+            if (mod == null || config == null) return;
+            bool val = config.EspChams.Value;
+            if (mod.Enabled != val || mod.IsActive != val)
+            {
+                mod.SetEnabled(val);
+                if (val) mod.SetActive(true);
+            }
         }
 
         private static MenuConfig CurrentConfig()
@@ -852,23 +878,43 @@ namespace CascadeMenu.Mods
 
     [PluginToggleable]
     [ModCategory("Visual")]
-    public sealed class TracerEspMod : Mod
+    public sealed class PlayerTracerEspMod : Mod
     {
-        private bool _previous;
-        private bool _saved;
-
-        public TracerEspMod()
+        public PlayerTracerEspMod()
         {
             Name = "Player Tracers";
             isToggle = true;
+
+            AddSetting(ModSetting.Dropdown("origin", "Tracer origin",
+                "Where tracer lines start from",
+                new[] { "Right Hand", "Left Hand", "Screen Bottom", "Screen Center" },
+                () => CurrentConfig() != null ? CurrentConfig().EspTracerOrigin.Value : 0,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspTracerOrigin.Value = v; }));
+            AddSetting(ModSetting.Slider("width", "Line thickness",
+                "Thickness multiplier for tracer beams",
+                0.4f, 3f,
+                () => CurrentConfig() != null ? CurrentConfig().EspLineWidth.Value : 1f,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspLineWidth.Value = v; },
+                v => v.ToString("0.00") + "x"));
+            AddSetting(ModSetting.Toggle("matchColor", "Match player color",
+                "Color tracers with each player's gorilla color",
+                () => CurrentConfig() != null && CurrentConfig().EspMatchPlayerColor.Value,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspMatchPlayerColor.Value = v; }));
+            AddSetting(ModSetting.Toggle("infectedColor", "Highlight infected in red-orange",
+                "Highlight infected / tagged players in fiery red-orange",
+                () => CurrentConfig() != null && CurrentConfig().EspInfectedColor.Value,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspInfectedColor.Value = v; }));
+            AddSetting(ModSetting.Dropdown("filter", "Player filter",
+                "Filter players by infection status",
+                new[] { "All Players", "Infected Only", "Not Infected (Survivors) Only" },
+                () => CurrentConfig() != null ? CurrentConfig().EspFilterMode.Value : 0,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspFilterMode.Value = v; }));
         }
 
         public override void OnEnable()
         {
             MenuConfig config = CurrentConfig();
             if (config == null) return;
-            _previous = config.EspTracers.Value;
-            _saved = true;
             config.EspTracers.Value = true;
             Plugin.Log?.LogInfo("Cascade Player Tracers active.");
         }
@@ -876,8 +922,19 @@ namespace CascadeMenu.Mods
         public override void OnDisable()
         {
             MenuConfig config = CurrentConfig();
-            if (config != null && _saved) config.EspTracers.Value = _previous;
-            _saved = false;
+            if (config != null) config.EspTracers.Value = false;
+        }
+
+        internal static void Sync(MenuConfig config)
+        {
+            Mod mod = ModRegistry.Find("Player Tracers");
+            if (mod == null || config == null) return;
+            bool val = config.EspTracers.Value;
+            if (mod.Enabled != val || mod.IsActive != val)
+            {
+                mod.SetEnabled(val);
+                if (val) mod.SetActive(true);
+            }
         }
 
         private static MenuConfig CurrentConfig()
@@ -889,23 +946,43 @@ namespace CascadeMenu.Mods
 
     [PluginToggleable]
     [ModCategory("Visual")]
-    public sealed class BoxEspMod : Mod
+    public sealed class PlayerBoxEspMod : Mod
     {
-        private bool _previous;
-        private bool _saved;
-
-        public BoxEspMod()
+        public PlayerBoxEspMod()
         {
             Name = "Player Boxes";
             isToggle = true;
+
+            AddSetting(ModSetting.Dropdown("boxStyle", "Box style",
+                "3D wireframe, 3D corner brackets or 2D camera-facing box",
+                new[] { "3D Box", "3D Corner Box", "2D Billboard Box" },
+                () => CurrentConfig() != null ? CurrentConfig().EspBoxStyle.Value : 0,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspBoxStyle.Value = v; }));
+            AddSetting(ModSetting.Slider("width", "Line thickness",
+                "Thickness multiplier for box edges",
+                0.4f, 3f,
+                () => CurrentConfig() != null ? CurrentConfig().EspLineWidth.Value : 1f,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspLineWidth.Value = v; },
+                v => v.ToString("0.00") + "x"));
+            AddSetting(ModSetting.Toggle("matchColor", "Match player color",
+                "Color boxes with each player's gorilla color",
+                () => CurrentConfig() != null && CurrentConfig().EspMatchPlayerColor.Value,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspMatchPlayerColor.Value = v; }));
+            AddSetting(ModSetting.Toggle("infectedColor", "Highlight infected in red-orange",
+                "Highlight infected / tagged players in fiery red-orange",
+                () => CurrentConfig() != null && CurrentConfig().EspInfectedColor.Value,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspInfectedColor.Value = v; }));
+            AddSetting(ModSetting.Dropdown("filter", "Player filter",
+                "Filter players by infection status",
+                new[] { "All Players", "Infected Only", "Not Infected (Survivors) Only" },
+                () => CurrentConfig() != null ? CurrentConfig().EspFilterMode.Value : 0,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspFilterMode.Value = v; }));
         }
 
         public override void OnEnable()
         {
             MenuConfig config = CurrentConfig();
             if (config == null) return;
-            _previous = config.EspEnabled.Value;
-            _saved = true;
             config.EspEnabled.Value = true;
             Plugin.Log?.LogInfo("Cascade Player Boxes active.");
         }
@@ -913,8 +990,19 @@ namespace CascadeMenu.Mods
         public override void OnDisable()
         {
             MenuConfig config = CurrentConfig();
-            if (config != null && _saved) config.EspEnabled.Value = _previous;
-            _saved = false;
+            if (config != null) config.EspEnabled.Value = false;
+        }
+
+        internal static void Sync(MenuConfig config)
+        {
+            Mod mod = ModRegistry.Find("Player Boxes");
+            if (mod == null || config == null) return;
+            bool val = config.EspEnabled.Value;
+            if (mod.Enabled != val || mod.IsActive != val)
+            {
+                mod.SetEnabled(val);
+                if (val) mod.SetActive(true);
+            }
         }
 
         private static MenuConfig CurrentConfig()
@@ -926,23 +1014,38 @@ namespace CascadeMenu.Mods
 
     [PluginToggleable]
     [ModCategory("Visual")]
-    public sealed class MarkerEspMod : Mod
+    public sealed class PlayerMarkerEspMod : Mod
     {
-        private bool _previous;
-        private bool _saved;
-
-        public MarkerEspMod()
+        public PlayerMarkerEspMod()
         {
             Name = "Player Markers";
             isToggle = true;
+
+            AddSetting(ModSetting.Slider("width", "Line thickness",
+                "Thickness multiplier for overhead diamond markers",
+                0.4f, 3f,
+                () => CurrentConfig() != null ? CurrentConfig().EspLineWidth.Value : 1f,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspLineWidth.Value = v; },
+                v => v.ToString("0.00") + "x"));
+            AddSetting(ModSetting.Toggle("matchColor", "Match player color",
+                "Color markers with each player's gorilla color",
+                () => CurrentConfig() != null && CurrentConfig().EspMatchPlayerColor.Value,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspMatchPlayerColor.Value = v; }));
+            AddSetting(ModSetting.Toggle("infectedColor", "Highlight infected in red-orange",
+                "Highlight infected / tagged players in fiery red-orange",
+                () => CurrentConfig() != null && CurrentConfig().EspInfectedColor.Value,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspInfectedColor.Value = v; }));
+            AddSetting(ModSetting.Dropdown("filter", "Player filter",
+                "Filter players by infection status",
+                new[] { "All Players", "Infected Only", "Not Infected (Survivors) Only" },
+                () => CurrentConfig() != null ? CurrentConfig().EspFilterMode.Value : 0,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspFilterMode.Value = v; }));
         }
 
         public override void OnEnable()
         {
             MenuConfig config = CurrentConfig();
             if (config == null) return;
-            _previous = config.EspMarker.Value;
-            _saved = true;
             config.EspMarker.Value = true;
             Plugin.Log?.LogInfo("Cascade Player Markers active.");
         }
@@ -950,8 +1053,19 @@ namespace CascadeMenu.Mods
         public override void OnDisable()
         {
             MenuConfig config = CurrentConfig();
-            if (config != null && _saved) config.EspMarker.Value = _previous;
-            _saved = false;
+            if (config != null) config.EspMarker.Value = false;
+        }
+
+        internal static void Sync(MenuConfig config)
+        {
+            Mod mod = ModRegistry.Find("Player Markers");
+            if (mod == null || config == null) return;
+            bool val = config.EspMarker.Value;
+            if (mod.Enabled != val || mod.IsActive != val)
+            {
+                mod.SetEnabled(val);
+                if (val) mod.SetActive(true);
+            }
         }
 
         private static MenuConfig CurrentConfig()
@@ -963,23 +1077,94 @@ namespace CascadeMenu.Mods
 
     [PluginToggleable]
     [ModCategory("Visual")]
-    public sealed class CosmeticEspMod : Mod
+    public sealed class PlayerSkeletonEspMod : Mod
     {
-        private bool _previous;
-        private bool _saved;
-
-        public CosmeticEspMod()
+        public PlayerSkeletonEspMod()
         {
-            Name = "Cosmetic Tags";
+            Name = "Player Skeleton";
             isToggle = true;
+
+            AddSetting(ModSetting.Toggle("fingers", "Finger bone chains",
+                "Draw 3-joint thumb, index and middle finger skeletons on both hands",
+                () => CurrentConfig() != null && CurrentConfig().EspSkeletonFingers.Value,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspSkeletonFingers.Value = v; }));
+            AddSetting(ModSetting.Slider("width", "Bone line thickness",
+                "Thickness multiplier for body and finger bones",
+                0.4f, 3f,
+                () => CurrentConfig() != null ? CurrentConfig().EspLineWidth.Value : 1f,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspLineWidth.Value = v; },
+                v => v.ToString("0.00") + "x"));
+            AddSetting(ModSetting.Toggle("matchColor", "Match player color",
+                "Color skeleton with each player's gorilla color",
+                () => CurrentConfig() != null && CurrentConfig().EspMatchPlayerColor.Value,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspMatchPlayerColor.Value = v; }));
+            AddSetting(ModSetting.Toggle("infectedColor", "Highlight infected in red-orange",
+                "Highlight infected / tagged players in fiery red-orange",
+                () => CurrentConfig() != null && CurrentConfig().EspInfectedColor.Value,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspInfectedColor.Value = v; }));
+            AddSetting(ModSetting.Dropdown("filter", "Player filter",
+                "Filter players by infection status",
+                new[] { "All Players", "Infected Only", "Not Infected (Survivors) Only" },
+                () => CurrentConfig() != null ? CurrentConfig().EspFilterMode.Value : 0,
+                v => { if (CurrentConfig() != null) CurrentConfig().EspFilterMode.Value = v; }));
         }
 
         public override void OnEnable()
         {
             MenuConfig config = CurrentConfig();
             if (config == null) return;
-            _previous = config.EspCosmeticTags.Value;
-            _saved = true;
+            config.EspSkeleton.Value = true;
+            Plugin.Log?.LogInfo("Cascade Player Skeleton active.");
+        }
+
+        public override void OnDisable()
+        {
+            MenuConfig config = CurrentConfig();
+            if (config != null) config.EspSkeleton.Value = false;
+        }
+
+        internal static void Sync(MenuConfig config)
+        {
+            Mod mod = ModRegistry.Find("Player Skeleton");
+            if (mod == null || config == null) return;
+            bool val = config.EspSkeleton.Value;
+            if (mod.Enabled != val || mod.IsActive != val)
+            {
+                mod.SetEnabled(val);
+                if (val) mod.SetActive(true);
+            }
+        }
+
+        private static MenuConfig CurrentConfig()
+        {
+            CascadeMenuBehaviour menu = CascadeMenuBehaviour.Instance;
+            return menu != null ? menu.Config : null;
+        }
+    }
+
+    [PluginToggleable]
+    [ModCategory("Visual")]
+    public sealed class CosmeticTagsEspMod : Mod
+    {
+        public CosmeticTagsEspMod()
+        {
+            Name = "Cosmetic Tags";
+            isToggle = true;
+
+            AddSetting(ModSetting.Toggle("notify", "Cosmetic notifications",
+                "Show a standalone toast when a special cosmetic is detected",
+                () => CurrentConfig() != null && CurrentConfig().CosmeticNotifications.Value,
+                v => { if (CurrentConfig() != null) CurrentConfig().CosmeticNotifications.Value = v; }));
+            AddSetting(ModSetting.Toggle("spoof", "Spoof checker on player pages",
+                "Flag unknown, duplicate or mismatched cosmetics",
+                () => CurrentConfig() != null && CurrentConfig().CosmeticCheck.Value,
+                v => { if (CurrentConfig() != null) CurrentConfig().CosmeticCheck.Value = v; }));
+        }
+
+        public override void OnEnable()
+        {
+            MenuConfig config = CurrentConfig();
+            if (config == null) return;
             config.EspCosmeticTags.Value = true;
             Plugin.Log?.LogInfo("Cascade Cosmetic Tags active.");
         }
@@ -987,8 +1172,19 @@ namespace CascadeMenu.Mods
         public override void OnDisable()
         {
             MenuConfig config = CurrentConfig();
-            if (config != null && _saved) config.EspCosmeticTags.Value = _previous;
-            _saved = false;
+            if (config != null) config.EspCosmeticTags.Value = false;
+        }
+
+        internal static void Sync(MenuConfig config)
+        {
+            Mod mod = ModRegistry.Find("Cosmetic Tags");
+            if (mod == null || config == null) return;
+            bool val = config.EspCosmeticTags.Value;
+            if (mod.Enabled != val || mod.IsActive != val)
+            {
+                mod.SetEnabled(val);
+                if (val) mod.SetActive(true);
+            }
         }
 
         private static MenuConfig CurrentConfig()

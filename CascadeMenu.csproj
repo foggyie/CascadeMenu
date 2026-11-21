@@ -6,106 +6,227 @@
     <RootNamespace>CascadeMenu</RootNamespace>
     <LangVersion>9.0</LangVersion>
     <Nullable>disable</Nullable>
-    <Version>1.0.0</Version>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    
+    <!-- Game directory: set GORILLA_TAG_DIR environment variable, or copy DLLs into libs/ -->
+    <GameDir Condition="'$(GORILLA_TAG_DIR)' != ''">$(GORILLA_TAG_DIR)</GameDir>
+    <GameDir Condition="'$(GORILLA_TAG_DIR)' == ''">.</GameDir>
   </PropertyGroup>
 
-  <!-- Game + BepInEx assemblies. All are copied into .\libs so the project builds
-       without needing Gorilla Tag installed at a fixed path. -->
+  <!-- Game + BepInEx assemblies -->
   <ItemGroup>
-    <Reference Include="BepInEx">
+    <Reference Include="BepInEx" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\BepInEx\core\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\BepInEx.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="0Harmony">
+    
+    <Reference Include="0Harmony" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\BepInEx\core\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="Assembly-CSharp">
+    
+    <Reference Include="Assembly-CSharp" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="Unity.TextMeshPro">
+    
+    <Reference Include="Unity.TextMeshPro" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="Unity.InputSystem">
+    
+    <Reference Include="Unity.InputSystem" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\Unity.InputSystem.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.InputSystem" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\Unity.InputSystem.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine">
+    
+    <Reference Include="UnityEngine" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.CoreModule">
+    
+    <Reference Include="UnityEngine.CoreModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.UI">
+    
+    <Reference Include="UnityEngine.UI" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.UI.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.UIModule">
+    
+    <Reference Include="UnityEngine.UIModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.UIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.TextCoreFontEngineModule">
+    
+    <Reference Include="UnityEngine.TextCoreFontEngineModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.TextCoreFontEngineModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextCoreFontEngineModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.TextCoreFontEngineModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.TextCoreTextEngineModule">
+    
+    <Reference Include="UnityEngine.TextCoreTextEngineModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.TextCoreTextEngineModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextCoreTextEngineModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.TextCoreTextEngineModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.TextRenderingModule">
+    
+    <Reference Include="UnityEngine.TextRenderingModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.TextRenderingModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.InputLegacyModule">
+    
+    <Reference Include="UnityEngine.InputLegacyModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.InputLegacyModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.InputModule">
+    
+    <Reference Include="UnityEngine.InputModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.InputModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.InputModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.PhysicsModule">
+    
+    <Reference Include="UnityEngine.PhysicsModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.AnimationModule">
+    
+    <Reference Include="UnityEngine.AnimationModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.AnimationModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AnimationModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.AnimationModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.XRModule">
+    
+    <Reference Include="UnityEngine.XRModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.XRModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.XRModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.XRModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.VRModule">
+    
+    <Reference Include="UnityEngine.VRModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.VRModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.VRModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.VRModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.ParticleSystemModule">
+    
+    <Reference Include="UnityEngine.ParticleSystemModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.ParticleSystemModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ParticleSystemModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.ParticleSystemModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.IMGUIModule">
+    
+    <Reference Include="UnityEngine.IMGUIModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.IMGUIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.ImageConversionModule">
+    
+    <Reference Include="UnityEngine.ImageConversionModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.ImageConversionModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.JSONSerializeModule">
+    
+    <Reference Include="UnityEngine.JSONSerializeModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.JSONSerializeModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.JSONSerializeModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.JSONSerializeModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.AssetBundleModule">
+    
+    <Reference Include="UnityEngine.AssetBundleModule" Condition="'$(GORILLA_TAG_DIR)' != ''">
+      <HintPath>$(GameDir)\Gorilla Tag_Data\Managed\UnityEngine.AssetBundleModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AssetBundleModule" Condition="'$(GORILLA_TAG_DIR)' == ''">
       <HintPath>libs\UnityEngine.AssetBundleModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="src\Mods\Cosmetics\roles.json" LogicalName="CascadeMenu.roles.json" />
   </ItemGroup>
 
 </Project>

@@ -266,7 +266,7 @@ namespace CascadeMenu.Mods
 
                 bool inRange = card.Distance <= _maxDistance;
                 bool onScreen = !_hideOffscreen || IsOnScreen(camera, head);
-                bool taggedAllowed = !_taggedOnly || !TagProbe.Available || card.Tagged;
+                bool taggedAllowed = !_taggedOnly || card.Tagged;
 
                 float targetAlpha = 0f;
                 if (inRange && onScreen && taggedAllowed) targetAlpha = _opacity;
@@ -513,8 +513,8 @@ namespace CascadeMenu.Mods
 
             Color rigColor = card.Rig != null ? PlayerActions.GetRigColor(card.Rig) : Color.white;
 
-            bool tagged = false;
-            bool taggedKnown = TagProbe.TryIsTagged(player, out tagged);
+            bool tagged = PlayerActions.IsInfected(card.Rig, player);
+            bool taggedKnown = true;
             card.Tagged = tagged;
             card.TaggedKnown = taggedKnown;
 
@@ -795,9 +795,7 @@ namespace CascadeMenu.Mods
 
             try
             {
-                Shader shader = Shader.Find("UI/Default");
-                if (shader == null) shader = Shader.Find("Sprites/Default");
-                if (shader == null) shader = Shader.Find("Unlit/Color");
+                Shader shader = ShaderLookup.UiUnlit();
                 if (shader == null)
                 {
                     _materialsFailed = true;
@@ -848,9 +846,10 @@ namespace CascadeMenu.Mods
                     textRenderer.receiveShadows = false;
                 }
             }
-            catch (Exception)
+            catch (Exception exception)
             {
                 // A TMP renderer may not exist until the first layout pass.
+                LogOnce.Warn("Player HUD text renderer setup", exception);
             }
         }
 
@@ -877,9 +876,6 @@ namespace CascadeMenu.Mods
         /// </summary>
         private static class PingProbe
         {
-            private static bool _resolved;
-            private static bool _failed;
-            private static MethodInfo _getPing;
             private static float _nextRead;
             private static int _cached;
 
@@ -897,68 +893,22 @@ namespace CascadeMenu.Mods
 
             private static int Read()
             {
-                Resolve();
-                if (_failed || _getPing == null) return 0;
+                GameApi.Resolve();
+                MethodInfo getPing = GameApi.PhotonGetPing;
+                if (getPing == null) return 0;
 
                 try
                 {
-                    object value = _getPing.Invoke(null, null);
+                    object value = getPing.Invoke(null, null);
                     if (value is short) return (short)value;
                     if (value is int) return (int)value;
                 }
-                catch (Exception)
-                {
-                    // Photon can be torn down with the room.
-                }
-                return 0;
-            }
-
-            private static void Resolve()
-            {
-                if (_resolved) return;
-                _resolved = true;
-
-                try
-                {
-                    Type networkType = FindType("Photon.Pun.PhotonNetwork");
-                    if (networkType == null)
-                    {
-                        _failed = true;
-                        return;
-                    }
-
-                    _getPing = networkType.GetMethod("GetPing",
-                        BindingFlags.Public | BindingFlags.Static,
-                        null, Type.EmptyTypes, null);
-                    if (_getPing == null)
-                    {
-                        _failed = true;
-                        Plugin.Log?.LogInfo("Cascade Player HUD: Photon ping not available.");
-                    }
-                }
                 catch (Exception exception)
                 {
-                    _failed = true;
-                    Plugin.Log?.LogInfo("Cascade Player HUD: ping unavailable: " + exception.Message);
+                    // Photon can be torn down with the room.
+                    LogOnce.Warn("Player HUD ping probe", exception);
                 }
-            }
-
-            private static Type FindType(string name)
-            {
-                Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
-                for (int i = 0; i < assemblies.Length; i++)
-                {
-                    try
-                    {
-                        Type type = assemblies[i].GetType(name, false);
-                        if (type != null) return type;
-                    }
-                    catch (Exception)
-                    {
-                        // Some dynamic assemblies cannot be searched.
-                    }
-                }
-                return null;
+                return 0;
             }
         }
 
@@ -974,23 +924,18 @@ namespace CascadeMenu.Mods
         /// </summary>
         private static class PhotonProps
         {
-            private static bool _resolved;
-            private static bool _failed;
-            private static PropertyInfo _playerListProperty;
-            private static PropertyInfo _actorNumberProperty;
-            private static PropertyInfo _customPropertiesProperty;
-
             internal static bool Fill(NetPlayer player, HashSet<string> allowed, bool all,
                 int max, StringBuilder output)
             {
                 if (player == null || output == null) return false;
-                Resolve();
-                if (_failed || _playerListProperty == null) return false;
+                GameApi.Resolve();
+                PropertyInfo playerListProperty = GameApi.PhotonPlayerList;
+                if (playerListProperty == null) return false;
 
                 IEnumerable list;
                 try
                 {
-                    list = _playerListProperty.GetValue(null, null) as IEnumerable;
+                    list = playerListProperty.GetValue(null, null) as IEnumerable;
                 }
                 catch (Exception)
                 {
@@ -1005,8 +950,9 @@ namespace CascadeMenu.Mods
                         if (entry == null) continue;
                         if (!MatchesActor(entry, player.ActorNumber)) continue;
 
-                        IDictionary props = _customPropertiesProperty != null
-                            ? _customPropertiesProperty.GetValue(entry, null) as IDictionary
+                        PropertyInfo customPropertiesProperty = GameApi.PhotonCustomProperties;
+                        IDictionary props = customPropertiesProperty != null
+                            ? customPropertiesProperty.GetValue(entry, null) as IDictionary
                             : null;
                         if (props == null) return false;
 
@@ -1027,9 +973,10 @@ namespace CascadeMenu.Mods
                         return written > 0;
                     }
                 }
-                catch (Exception)
+                catch (Exception exception)
                 {
                     // A room can rewrite its properties while we are reading them.
+                    LogOnce.Warn("Player HUD custom properties", exception);
                 }
 
                 return false;
@@ -1037,68 +984,17 @@ namespace CascadeMenu.Mods
 
             private static bool MatchesActor(object photonPlayer, int actorNumber)
             {
-                if (_actorNumberProperty == null) return false;
+                PropertyInfo actorNumberProperty = GameApi.PhotonActorNumber;
+                if (actorNumberProperty == null) return false;
                 try
                 {
-                    object value = _actorNumberProperty.GetValue(photonPlayer, null);
+                    object value = actorNumberProperty.GetValue(photonPlayer, null);
                     return value is int && (int)value == actorNumber;
                 }
                 catch (Exception)
                 {
                     return false;
                 }
-            }
-
-            private static void Resolve()
-            {
-                if (_resolved) return;
-                _resolved = true;
-
-                try
-                {
-                    Type networkType = FindType("Photon.Pun.PhotonNetwork");
-                    Type playerType = FindType("Photon.Realtime.Player");
-                    if (networkType == null || playerType == null)
-                    {
-                        _failed = true;
-                        Plugin.Log?.LogInfo("Cascade Player HUD: Photon player properties not available.");
-                        return;
-                    }
-
-                    _playerListProperty = networkType.GetProperty(
-                        "PlayerList",
-                        BindingFlags.Public | BindingFlags.Static);
-                    _actorNumberProperty = playerType.GetProperty(
-                        "ActorNumber",
-                        BindingFlags.Public | BindingFlags.Instance);
-                    _customPropertiesProperty = playerType.GetProperty(
-                        "CustomProperties",
-                        BindingFlags.Public | BindingFlags.Instance);
-                    _failed = _playerListProperty == null || _actorNumberProperty == null;
-                }
-                catch (Exception exception)
-                {
-                    _failed = true;
-                    Plugin.Log?.LogWarning("Cascade Player HUD: Photon properties unavailable: " + exception.Message);
-                }
-            }
-
-            private static Type FindType(string name)
-            {
-                Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
-                for (int i = 0; i < assemblies.Length; i++)
-                {
-                    try
-                    {
-                        Type type = assemblies[i].GetType(name, false);
-                        if (type != null) return type;
-                    }
-                    catch (Exception)
-                    {
-                        // Some dynamic assemblies cannot be searched.
-                    }
-                }
-                return null;
             }
         }
 
@@ -1114,14 +1010,6 @@ namespace CascadeMenu.Mods
         /// </summary>
         private static class TagProbe
         {
-            private static bool _resolved;
-            private static PropertyInfo _tagManagerInstance;
-            private static MethodInfo _isTaggedMethod;
-            private static FieldInfo _currentTaggedField;
-            private static PropertyInfo _currentTaggedProperty;
-            private static PropertyInfo _infectionInstance;
-            private static FieldInfo _infectedPlayersField;
-            private static PropertyInfo _infectedPlayersProperty;
             private static float _nextCheck;
             private static bool _cachedAvailable;
 
@@ -1135,18 +1023,20 @@ namespace CascadeMenu.Mods
                     if (now < _nextCheck) return _cachedAvailable;
 
                     _nextCheck = now + 1f;
-                    Resolve();
+                    GameApi.Resolve();
 
                     bool available = false;
-                    if (_tagManagerInstance != null)
+                    PropertyInfo tagManagerInstance = GameApi.TagManagerInstance;
+                    if (tagManagerInstance != null)
                     {
-                        try { available = _tagManagerInstance.GetValue(null, null) != null; }
-                        catch (Exception) { }
+                        try { available = tagManagerInstance.GetValue(null, null) != null; }
+                        catch (Exception exception) { LogOnce.Warn("Player HUD tag manager probe", exception); }
                     }
-                    if (!available && _infectionInstance != null)
+                    PropertyInfo infectionInstance = GameApi.InfectionManagerInstance;
+                    if (!available && infectionInstance != null)
                     {
-                        try { available = _infectionInstance.GetValue(null, null) != null; }
-                        catch (Exception) { }
+                        try { available = infectionInstance.GetValue(null, null) != null; }
+                        catch (Exception exception) { LogOnce.Warn("Player HUD infection manager probe", exception); }
                     }
 
                     _cachedAvailable = available;
@@ -1158,33 +1048,37 @@ namespace CascadeMenu.Mods
             {
                 tagged = false;
                 if (player == null) return false;
-                Resolve();
+                GameApi.Resolve();
 
-                if (_tagManagerInstance != null)
+                PropertyInfo tagManagerInstance = GameApi.TagManagerInstance;
+                if (tagManagerInstance != null)
                 {
                     object manager = null;
-                    try { manager = _tagManagerInstance.GetValue(null, null); }
-                    catch (Exception) { }
+                    try { manager = tagManagerInstance.GetValue(null, null); }
+                    catch (Exception exception) { LogOnce.Warn("Player HUD tag manager instance", exception); }
 
                     if (manager != null)
                     {
-                        if (_isTaggedMethod != null)
+                        MethodInfo isTaggedMethod = GameApi.IsTaggedMethod;
+                        if (isTaggedMethod != null)
                         {
                             try
                             {
-                                object result = _isTaggedMethod.Invoke(manager, new object[] { player });
+                                object result = isTaggedMethod.Invoke(manager, new object[] { player });
                                 if (result is bool) { tagged = (bool)result; return true; }
                             }
-                            catch (Exception) { }
+                            catch (Exception exception) { LogOnce.Warn("Player HUD IsTagged probe", exception); }
                         }
 
                         object current = null;
                         try
                         {
-                            if (_currentTaggedField != null) current = _currentTaggedField.GetValue(manager);
-                            else if (_currentTaggedProperty != null) current = _currentTaggedProperty.GetValue(manager, null);
+                            FieldInfo currentTaggedField = GameApi.CurrentTaggedField;
+                            PropertyInfo currentTaggedProperty = GameApi.CurrentTaggedProperty;
+                            if (currentTaggedField != null) current = currentTaggedField.GetValue(manager);
+                            else if (currentTaggedProperty != null) current = currentTaggedProperty.GetValue(manager, null);
                         }
-                        catch (Exception) { }
+                        catch (Exception exception) { LogOnce.Warn("Player HUD current tagged player", exception); }
 
                         NetPlayer taggedPlayer = current as NetPlayer;
                         if (taggedPlayer != null)
@@ -1196,19 +1090,22 @@ namespace CascadeMenu.Mods
                     }
                 }
 
-                if (_infectionInstance != null)
+                PropertyInfo infectionManagerInstance = GameApi.InfectionManagerInstance;
+                if (infectionManagerInstance != null)
                 {
                     object manager = null;
-                    try { manager = _infectionInstance.GetValue(null, null); }
-                    catch (Exception) { }
+                    try { manager = infectionManagerInstance.GetValue(null, null); }
+                    catch (Exception exception) { LogOnce.Warn("Player HUD infection manager instance", exception); }
 
                     object collection = null;
                     try
                     {
-                        if (_infectedPlayersField != null) collection = _infectedPlayersField.GetValue(manager);
-                        else if (_infectedPlayersProperty != null) collection = _infectedPlayersProperty.GetValue(manager, null);
+                        FieldInfo infectedPlayersField = GameApi.InfectedPlayersField;
+                        PropertyInfo infectedPlayersProperty = GameApi.InfectedPlayersProperty;
+                        if (infectedPlayersField != null) collection = infectedPlayersField.GetValue(manager);
+                        else if (infectedPlayersProperty != null) collection = infectedPlayersProperty.GetValue(manager, null);
                     }
-                    catch (Exception) { }
+                    catch (Exception exception) { LogOnce.Warn("Player HUD infected players field", exception); }
 
                     IEnumerable list = collection as IEnumerable;
                     if (list != null)
@@ -1228,58 +1125,28 @@ namespace CascadeMenu.Mods
                             }
                             return false;
                         }
-                        catch (Exception) { }
+                        catch (Exception exception) { LogOnce.Warn("Player HUD infected players list", exception); }
                     }
                 }
 
                 return false;
             }
+        }
+    }
 
-            private static void Resolve()
-            {
-                if (_resolved) return;
-                _resolved = true;
+    /// <summary>
+    /// Logs each Player HUD lookup failure once, so a broken or missing reflection
+    /// target cannot flood the BepInEx log every frame.
+    /// </summary>
+    internal static class LogOnce
+    {
+        private static readonly HashSet<string> Keys = new HashSet<string>();
 
-                try
-                {
-                    Assembly assembly = typeof(GorillaTagger).Assembly;
-
-                    Type tagType = assembly.GetType("GorillaTagManager");
-                    if (tagType != null)
-                    {
-                        _tagManagerInstance = tagType.GetProperty("instance",
-                            BindingFlags.Public | BindingFlags.Static) ??
-                            tagType.GetProperty("Instance",
-                                BindingFlags.Public | BindingFlags.Static);
-
-                        _isTaggedMethod = tagType.GetMethod("IsTagged",
-                            BindingFlags.Public | BindingFlags.Instance,
-                            null, new[] { typeof(NetPlayer) }, null);
-
-                        _currentTaggedField = tagType.GetField("currentTaggedPlayer",
-                            BindingFlags.Public | BindingFlags.Instance);
-                        _currentTaggedProperty = tagType.GetProperty("currentTaggedPlayer",
-                            BindingFlags.Public | BindingFlags.Instance);
-                    }
-
-                    Type infectionType = assembly.GetType("GorillaInfectionManager");
-                    if (infectionType != null)
-                    {
-                        _infectionInstance = infectionType.GetProperty("instance",
-                            BindingFlags.Public | BindingFlags.Static) ??
-                            infectionType.GetProperty("Instance",
-                                BindingFlags.Public | BindingFlags.Static);
-                        _infectedPlayersField = infectionType.GetField("infectedPlayers",
-                            BindingFlags.Public | BindingFlags.Instance);
-                        _infectedPlayersProperty = infectionType.GetProperty("infectedPlayers",
-                            BindingFlags.Public | BindingFlags.Instance);
-                    }
-                }
-                catch (Exception exception)
-                {
-                    Plugin.Log?.LogInfo("Cascade Player HUD: tagged state unavailable: " + exception.Message);
-                }
-            }
+        internal static void Warn(string key, Exception exception)
+        {
+            if (key == null) key = "Player HUD";
+            if (!Keys.Add(key)) return;
+            Plugin.Log?.LogWarning("Cascade " + key + " failed: " + exception.Message);
         }
     }
 }

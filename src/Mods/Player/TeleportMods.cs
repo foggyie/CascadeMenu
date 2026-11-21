@@ -290,41 +290,6 @@ namespace CascadeMenu.Mods
         }
     }
 
-    /// <summary>Teleport all players to you (master client only).</summary>
-    [PluginToggleable]
-    [ModCategory("Player")]
-    public sealed class TeleportAllToMeMod : Mod
-    {
-        public TeleportAllToMeMod()
-        {
-            Name = "Teleport All To Me";
-            isToggle = false;
-        }
-
-        public override void Execute()
-        {
-            // Check if we have network authority using reflection
-            var networkSystem = NetworkSystem.Instance;
-            if (networkSystem == null || !networkSystem.InRoom)
-            {
-                ModKit.Notify("Teleport", "Not in a room");
-                return;
-            }
-
-            Transform localPlayer = GorillaTagger.Instance?.transform;
-            if (localPlayer == null)
-            {
-                ModKit.Notify("Teleport", "Player not found");
-                return;
-            }
-
-            // This would need RPC implementation to actually move other players
-            // For now, just notify that you need master permissions
-            ModKit.Notify("Teleport", "RPC teleport requires custom networking");
-            Plugin.Log?.LogInfo("Teleport all requires RPC implementation");
-        }
-    }
-
     /// <summary>Auto-follow nearest player by continuously teleporting.</summary>
     [PluginToggleable]
     [ModCategory("Player")]

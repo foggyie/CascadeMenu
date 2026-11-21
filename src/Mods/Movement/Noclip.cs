@@ -5,7 +5,7 @@ namespace CascadeMenu.Mods
     /// through walls; disabling restores every collider the controller cached.
     /// </summary>
     [PluginToggleable]
-    [ModCategory("Super")]
+    [ModCategory("Movement")]
     public sealed class Noclip : Mod
     {
         public Noclip()

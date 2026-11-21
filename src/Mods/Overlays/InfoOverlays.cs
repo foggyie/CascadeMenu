@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CascadeMenu.UI;
 using GorillaLocomotion;
 using GorillaNetworking;
 using UnityEngine;
@@ -8,7 +9,7 @@ using UnityEngine.InputSystem;
 namespace CascadeMenu.Mods
 {
     // -------------------------------------------------------------------------
-    // World and rig readouts
+    // World and rig readouts (each with its own unique HUD design & color)
     // -------------------------------------------------------------------------
 
     /// <summary>Live world position of the local head.</summary>
@@ -19,8 +20,14 @@ namespace CascadeMenu.Mods
         public CoordinatesOverlay()
         {
             Name = "Coordinates";
-            CardHeight = 140f;
-            FontSize = 19f;
+            DefaultAnchor = HudAnchor.MidLeft;
+            DefaultSlot = 0;
+            Design = HudDesign.WindowCard;
+            AccentColor = new Color(0.28f, 0.90f, 1f, 1f);
+            BadgeIcon = CascadeIcon.Recenter;
+            CardWidth = 310f;
+            CardHeight = 132f;
+            FontSize = 18.5f;
             SortingOrder = 236;
             RefreshInterval = 0.1f;
         }
@@ -28,13 +35,13 @@ namespace CascadeMenu.Mods
         protected override string Build()
         {
             Transform head = ModKit.Head;
-            if (head == null) return "<b>POSITION</b>\nwaiting for the local rig";
+            if (head == null) return "<color=#47E5FF><b>GPS TELEMETRY</b></color>\nwaiting for local rig";
 
             Vector3 point = head.position;
-            return "<b>POSITION</b>\n" +
-                   "X   " + ModKit.F(point.x) + "\n" +
-                   "Y   " + ModKit.F(point.y) + "\n" +
-                   "Z   " + ModKit.F(point.z);
+            return "<color=#47E5FF><b>GPS TELEMETRY</b></color>\n" +
+                   "<color=#8E9BAE>X</color>   " + ModKit.F(point.x) + " m\n" +
+                   "<color=#8E9BAE>Y</color>   " + ModKit.F(point.y) + " m\n" +
+                   "<color=#8E9BAE>Z</color>   " + ModKit.F(point.z) + " m";
         }
     }
 
@@ -49,8 +56,14 @@ namespace CascadeMenu.Mods
         public AltitudeOverlay()
         {
             Name = "Altitude";
-            CardHeight = 150f;
-            FontSize = 19f;
+            DefaultAnchor = HudAnchor.MidLeft;
+            DefaultSlot = 1;
+            Design = HudDesign.GaugeWindow;
+            AccentColor = new Color(0.32f, 1f, 0.62f, 1f);
+            BadgeIcon = CascadeIcon.ArrowUp;
+            CardWidth = 315f;
+            CardHeight = 148f;
+            FontSize = 18.5f;
             SortingOrder = 236;
             RefreshInterval = 0.2f;
         }
@@ -58,7 +71,7 @@ namespace CascadeMenu.Mods
         protected override string Build()
         {
             Transform head = ModKit.Head;
-            if (head == null) return "<b>ALTITUDE</b>\nwaiting for the local rig";
+            if (head == null) return "<color=#52FF9E><b>ALTIMETER</b></color>\nwaiting for local rig";
 
             if (Time.unscaledTime >= _nextCheck)
             {
@@ -67,10 +80,11 @@ namespace CascadeMenu.Mods
             }
 
             float altitude = head.position.y;
-            return "<b>ALTITUDE</b>\n" +
-                   "Ground   " + (_groundDistance >= 0f ? ModKit.F(_groundDistance) + " m" : "-") + "\n" +
-                   "World Y  " + ModKit.F(altitude) + "\n" +
-                   "Above 0  " + ModKit.F(Mathf.Max(0f, altitude)) + " m";
+            GaugeValue = Mathf.Clamp01((_groundDistance >= 0f ? _groundDistance : Mathf.Max(0f, altitude)) / 40f);
+
+            return "<color=#52FF9E><b>ALTIMETER</b></color>\n" +
+                   "<color=#8E9BAE>Clearance</color>  " + (_groundDistance >= 0f ? ModKit.F(_groundDistance) + " m" : "-") + "\n" +
+                   "<color=#8E9BAE>Elevation</color>  " + ModKit.F(altitude) + " m";
         }
 
         private static float MeasureGround(Vector3 origin)
@@ -99,8 +113,14 @@ namespace CascadeMenu.Mods
         public AttitudeOverlay()
         {
             Name = "Attitude";
+            DefaultAnchor = HudAnchor.MidLeft;
+            DefaultSlot = 2;
+            Design = HudDesign.WindowCard;
+            AccentColor = new Color(1f, 0.72f, 0.24f, 1f);
+            BadgeIcon = CascadeIcon.Recenter;
+            CardWidth = 310f;
             CardHeight = 132f;
-            FontSize = 19f;
+            FontSize = 18.5f;
             SortingOrder = 236;
             RefreshInterval = 0.1f;
         }
@@ -108,17 +128,16 @@ namespace CascadeMenu.Mods
         protected override string Build()
         {
             Transform head = ModKit.Head;
-            if (head == null) return "<b>ATTITUDE</b>\nwaiting for the local rig";
+            if (head == null) return "<color=#FFB83D><b>GYRO HORIZON</b></color>\nwaiting for local rig";
 
             Vector3 euler = head.eulerAngles;
             float heading = Mathf.Repeat(euler.y, 360f);
             float pitch = Mathf.DeltaAngle(0f, euler.x);
             float roll = Mathf.DeltaAngle(0f, euler.z);
 
-            return "<b>ATTITUDE</b>\n" +
-                   "Heading  " + ModKit.F(heading, "0") + "°\n" +
-                   "Pitch    " + ModKit.F(pitch, "0") + "°\n" +
-                   "Roll     " + ModKit.F(roll, "0") + "°";
+            return "<color=#FFB83D><b>GYRO HORIZON</b></color>\n" +
+                   "<color=#8E9BAE>Yaw</color>    " + ModKit.F(heading, "0") + "°\n" +
+                   "<color=#8E9BAE>Pitch</color>  " + ModKit.F(pitch, "0") + "°   <color=#8E9BAE>Roll</color> " + ModKit.F(roll, "0") + "°";
         }
     }
 
@@ -130,24 +149,30 @@ namespace CascadeMenu.Mods
         public VelocityOverlay()
         {
             Name = "Velocity";
-            CardHeight = 140f;
-            FontSize = 19f;
+            DefaultAnchor = HudAnchor.MidRight;
+            DefaultSlot = 0;
+            Design = HudDesign.GaugeWindow;
+            AccentColor = new Color(0.25f, 0.85f, 1f, 1f);
+            BadgeIcon = CascadeIcon.Bolt;
+            CardWidth = 320f;
+            CardHeight = 148f;
+            FontSize = 18.5f;
             SortingOrder = 236;
         }
 
         protected override string Build()
         {
             GTPlayer player = ModKit.Player;
-            if (player == null) return "<b>VELOCITY</b>\nwaiting for the local player";
+            if (player == null) return "<color=#40D9FF><b>KINETIC VECTOR</b></color>\nwaiting for local player";
 
             Vector3 velocity = player.InstantaneousVelocity;
             float horizontal = new Vector2(velocity.x, velocity.z).magnitude;
             float speed = velocity.magnitude;
+            GaugeValue = Mathf.Clamp01(speed / 16f);
 
-            return "<b>VELOCITY</b>\n" +
-                   "Speed      " + ModKit.F(speed, "0.00") + " m/s\n" +
-                   "Horizontal " + ModKit.F(horizontal, "0.00") + "\n" +
-                   "Vertical   " + ModKit.F(velocity.y, "0.00");
+            return "<color=#40D9FF><b>KINETIC VECTOR</b></color>  <b>" + ModKit.F(speed, "0.0") + " m/s</b>\n" +
+                   "<color=#8E9BAE>Horizontal</color>  " + ModKit.F(horizontal, "0.00") + " m/s\n" +
+                   "<color=#8E9BAE>Vertical</color>    " + ModKit.F(velocity.y, "0.00") + " m/s";
         }
     }
 
@@ -165,15 +190,21 @@ namespace CascadeMenu.Mods
         public HandSpeedOverlay()
         {
             Name = "Hand Speed";
-            CardHeight = 116f;
-            FontSize = 19f;
+            DefaultAnchor = HudAnchor.MidRight;
+            DefaultSlot = 1;
+            Design = HudDesign.Capsule;
+            AccentColor = new Color(0.95f, 0.42f, 0.88f, 1f);
+            BadgeIcon = CascadeIcon.Bolt;
+            CardWidth = 320f;
+            CardHeight = 104f;
+            FontSize = 18f;
             SortingOrder = 236;
         }
 
         protected override string Build()
         {
             GTPlayer player = ModKit.Player;
-            if (player == null) return "<b>HAND SPEED</b>\nwaiting for the local player";
+            if (player == null) return "<color=#F26BE0><b>SWING METER</b></color>\nwaiting for player";
 
             Vector3 left = player.LeftHand.GetCurrentHandPosition();
             Vector3 right = player.RightHand.GetCurrentHandPosition();
@@ -191,9 +222,8 @@ namespace CascadeMenu.Mods
             _lastRight = right;
             _hasLast = true;
 
-            return "<b>HAND SPEED</b>\n" +
-                   "Left    " + ModKit.F(_leftSpeed) + " m/s\n" +
-                   "Right   " + ModKit.F(_rightSpeed) + " m/s";
+            return "<color=#F26BE0><b>SWING METER</b></color>\n" +
+                   "L <b>" + ModKit.F(_leftSpeed) + "</b> m/s  ·  R <b>" + ModKit.F(_rightSpeed) + "</b> m/s";
         }
     }
 
@@ -210,8 +240,14 @@ namespace CascadeMenu.Mods
         public DistanceWalkedOverlay()
         {
             Name = "Distance Walked";
-            CardHeight = 116f;
-            FontSize = 19f;
+            DefaultAnchor = HudAnchor.MidRight;
+            DefaultSlot = 2;
+            Design = HudDesign.Capsule;
+            AccentColor = new Color(0.38f, 0.96f, 0.65f, 1f);
+            BadgeIcon = CascadeIcon.Person;
+            CardWidth = 330f;
+            CardHeight = 104f;
+            FontSize = 18f;
             SortingOrder = 236;
             RefreshInterval = 0.1f;
         }
@@ -226,13 +262,12 @@ namespace CascadeMenu.Mods
         protected override string Build()
         {
             VRRig rig = ModKit.Rig;
-            if (rig == null) return "<b>DISTANCE</b>\nwaiting for the local rig";
+            if (rig == null) return "<color=#61F5A6><b>ODOMETER</b></color>\nwaiting for local rig";
 
             Vector3 point = rig.transform.position;
             if (_hasLast)
             {
                 float step = Vector3.Distance(point, _last);
-                // Ignore respawns and room teleports.
                 if (step < 5f) _distance += step;
             }
 
@@ -240,9 +275,8 @@ namespace CascadeMenu.Mods
             _hasLast = true;
 
             float elapsed = Mathf.Max(1f, Time.realtimeSinceStartup - _started);
-            return "<b>DISTANCE</b>\n" +
-                   "Walked   " + ModKit.F(_distance) + " m\n" +
-                   "Average  " + ModKit.F(_distance / elapsed, "0.00") + " m/s";
+            return "<color=#61F5A6><b>ODOMETER</b></color>   <b>" + ModKit.F(_distance) + " m</b>\n" +
+                   "<color=#8E9BAE>Avg pace</color>  " + ModKit.F(_distance / elapsed, "0.00") + " m/s";
         }
     }
 
@@ -261,15 +295,21 @@ namespace CascadeMenu.Mods
         public JumpCounterOverlay()
         {
             Name = "Jump Counter";
-            CardHeight = 132f;
-            FontSize = 19f;
+            DefaultAnchor = HudAnchor.BottomRight;
+            DefaultSlot = 0;
+            Design = HudDesign.Capsule;
+            AccentColor = new Color(1f, 0.64f, 0.25f, 1f);
+            BadgeIcon = CascadeIcon.ArrowUp;
+            CardWidth = 330f;
+            CardHeight = 112f;
+            FontSize = 18f;
             SortingOrder = 236;
         }
 
         protected override string Build()
         {
             GTPlayer player = ModKit.Player;
-            if (player == null) return "<b>JUMPS</b>\nwaiting for the local player";
+            if (player == null) return "<color=#FFA340><b>APEX TRACKER</b></color>\nwaiting for local player";
 
             bool grounded = player.BodyOnGround;
             float height = ModKit.HeadPosition.y;
@@ -298,10 +338,9 @@ namespace CascadeMenu.Mods
 
             _wasGrounded = grounded;
 
-            return "<b>JUMPS</b>\n" +
-                   "Count    " + _jumps + "\n" +
-                   "Last     " + ModKit.F(_lastHeight, "0.00") + " m\n" +
-                   "State    " + (grounded ? "grounded" : "airborne");
+            return "<color=#FFA340><b>APEX TRACKER</b></color>  #" + _jumps + "\n" +
+                   "Peak <b>" + ModKit.F(_lastHeight, "0.00") + " m</b> · " +
+                   (grounded ? "<color=#58E08A>GROUND</color>" : "<color=#47E5FF>AIRBORNE</color>");
         }
     }
 
@@ -317,8 +356,14 @@ namespace CascadeMenu.Mods
         public RoomInfoOverlay()
         {
             Name = "Room Info";
-            CardHeight = 186f;
-            FontSize = 18f;
+            DefaultAnchor = HudAnchor.TopCenter;
+            DefaultSlot = 1;
+            Design = HudDesign.TerminalWindow;
+            BadgeTitle = "LOBBY TELEMETRY";
+            AccentColor = new Color(0.35f, 0.85f, 1f, 1f);
+            CardWidth = 330f;
+            CardHeight = 196f;
+            FontSize = 17.5f;
             SortingOrder = 236;
             AutoSize = true;
             RefreshInterval = 0.5f;
@@ -327,8 +372,8 @@ namespace CascadeMenu.Mods
         protected override string Build()
         {
             NetworkSystem system = NetworkSystem.Instance;
-            if (system == null) return "<b>ROOM</b>\nnetwork not ready";
-            if (!system.InRoom) return "<b>ROOM</b>\nnot in a room";
+            if (system == null) return "network not ready";
+            if (!system.InRoom) return "<color=#8E9BAE>status:</color> offline / solo";
 
             string room = string.IsNullOrEmpty(system.RoomName) ? "-" : system.RoomName;
             string mode = string.IsNullOrEmpty(system.GameModeString) ? "-" : system.GameModeString;
@@ -337,12 +382,10 @@ namespace CascadeMenu.Mods
                 ? PlayerActions.SafeName(system.MasterClient)
                 : (system.IsMasterClient ? "You" : "-");
 
-            return "<b>ROOM</b>\n" +
-                   "Name     " + room + "\n" +
-                   "Mode     " + mode + "\n" +
-                   "Region   " + region + "\n" +
-                   "Players  " + PlayerActions.GetPlayers().Count + "\n" +
-                   "Master   " + master;
+            return "<color=#8E9BAE>Code</color>     <b>" + room + "</b>  (" + region + ")\n" +
+                   "<color=#8E9BAE>Mode</color>     " + mode + "\n" +
+                   "<color=#8E9BAE>Players</color>  " + (PlayerActions.GetPlayers().Count + 1) + "\n" +
+                   "<color=#8E9BAE>Host</color>     " + master;
         }
     }
 
@@ -356,8 +399,13 @@ namespace CascadeMenu.Mods
         public SessionClockOverlay()
         {
             Name = "Session Clock";
-            CardHeight = 128f;
-            FontSize = 19f;
+            DefaultAnchor = HudAnchor.BottomLeft;
+            DefaultSlot = 1;
+            Design = HudDesign.KeyCap;
+            AccentColor = new Color(0.55f, 0.78f, 1f, 1f);
+            CardWidth = 315f;
+            CardHeight = 112f;
+            FontSize = 18.5f;
             SortingOrder = 236;
             RefreshInterval = 0.25f;
         }
@@ -372,10 +420,8 @@ namespace CascadeMenu.Mods
             TimeSpan elapsed = TimeSpan.FromSeconds(Time.realtimeSinceStartup - _started);
             DateTime now = DateTime.Now;
 
-            return "<b>SESSION</b>\n" +
-                   "Elapsed  " + ModKit.Clock(elapsed.TotalSeconds) + "\n" +
-                   "Local    " + now.ToString("HH:mm:ss") + "\n" +
-                   "Date     " + now.ToString("ddd dd MMM");
+            return "<color=#8CC7FF><b>CHRONO</b></color>  " + now.ToString("HH:mm:ss") + "\n" +
+                   "<color=#8E9BAE>Uptime</color> " + ModKit.Clock(elapsed.TotalSeconds) + " · " + now.ToString("ddd dd MMM");
         }
     }
 
@@ -391,7 +437,12 @@ namespace CascadeMenu.Mods
         public FrameTimeOverlay()
         {
             Name = "Frame Time";
-            CardHeight = 116f;
+            DefaultAnchor = HudAnchor.BottomRight;
+            DefaultSlot = 1;
+            Design = HudDesign.GaugeWindow;
+            AccentColor = new Color(0.35f, 1f, 0.58f, 1f);
+            CardWidth = 300f;
+            CardHeight = 128f;
             FontSize = 19f;
             SortingOrder = 236;
         }
@@ -408,9 +459,10 @@ namespace CascadeMenu.Mods
             }
 
             float milliseconds = _fps > 0.01f ? 1000f / _fps : 0f;
-            return "<b>FRAME</b>\n" +
-                   "FPS     " + Mathf.RoundToInt(_fps) + "\n" +
-                   "Time    " + ModKit.F(milliseconds, "0.0") + " ms";
+            GaugeValue = Mathf.Clamp01(_fps / 120f);
+
+            return "<color=#59FF94><b>FRAME PACING</b></color>\n" +
+                   "<b>" + Mathf.RoundToInt(_fps) + " FPS</b>   ·   " + ModKit.F(milliseconds, "0.0") + " ms";
         }
     }
 
@@ -422,9 +474,13 @@ namespace CascadeMenu.Mods
         public MemoryOverlay()
         {
             Name = "Memory";
-
-            CardHeight = 140f;
-            FontSize = 19f;
+            DefaultAnchor = HudAnchor.BottomRight;
+            DefaultSlot = 2;
+            Design = HudDesign.GaugeWindow;
+            AccentColor = new Color(0.75f, 0.52f, 1f, 1f);
+            CardWidth = 310f;
+            CardHeight = 148f;
+            FontSize = 18.5f;
             SortingOrder = 236;
             RefreshInterval = 0.5f;
         }
@@ -432,10 +488,11 @@ namespace CascadeMenu.Mods
         protected override string Build()
         {
             float megabytes = GC.GetTotalMemory(false) / 1048576f;
-            return "<b>MEMORY</b>\n" +
-                   "Managed  " + ModKit.F(megabytes, "0.0") + " MB\n" +
-                   "GC 0     " + GC.CollectionCount(0) + "\n" +
-                   "GC 1/2   " + GC.CollectionCount(1) + " / " + GC.CollectionCount(2);
+            GaugeValue = Mathf.Clamp01(megabytes / 1024f);
+
+            return "<color=#BF85FF><b>HEAP MONITOR</b></color>  <b>" + ModKit.F(megabytes, "0.0") + " MB</b>\n" +
+                   "<color=#8E9BAE>Gen 0</color>  " + GC.CollectionCount(0) +
+                   "   <color=#8E9BAE>Gen 1/2</color>  " + GC.CollectionCount(1) + "/" + GC.CollectionCount(2);
         }
     }
 
@@ -449,7 +506,13 @@ namespace CascadeMenu.Mods
         public ActiveModsOverlay()
         {
             Name = "Active Mods";
-            CardHeight = 190f;
+            DefaultAnchor = HudAnchor.TopRight;
+            DefaultSlot = 2;
+            Design = HudDesign.TerminalWindow;
+            BadgeTitle = "ACTIVE ARRAYLIST";
+            AccentColor = new Color(0.36f, 0.92f, 0.68f, 1f);
+            CardWidth = 315f;
+            CardHeight = 200f;
             FontSize = 17f;
             SortingOrder = 236;
             AutoSize = true;
@@ -470,15 +533,12 @@ namespace CascadeMenu.Mods
                 if (mod.Enabled) enabled++;
                 if (!mod.IsActive) continue;
                 active++;
-                if (_names.Count < 7) _names.Add(mod.Name);
+                if (_names.Count < 7) _names.Add("• " + mod.Name);
             }
 
-            string text = "<b>ACTIVE MODS</b>\n" +
-                          "Enabled  " + enabled + " / " + all.Count + "\n" +
-                          "Running  " + active;
-
-            if (_names.Count == 0) return text + "\nnothing running";
-            return text + "\n" + string.Join("\n", _names.ToArray());
+            string text = "<color=#8E9BAE>Running</color> <b>" + active + "</b>  <color=#8E9BAE>Armed</color> " + enabled + "/" + all.Count;
+            if (_names.Count == 0) return text + "\n<color=#647082>no active modules</color>";
+            return text + "\n" + string.Join("\n", _names);
         }
     }
 
@@ -492,8 +552,13 @@ namespace CascadeMenu.Mods
         public KeybindOverlay()
         {
             Name = "Keybinds";
-            CardWidth = 320f;
-            CardHeight = 210f;
+            DefaultAnchor = HudAnchor.TopRight;
+            DefaultSlot = 3;
+            Design = HudDesign.TerminalWindow;
+            BadgeTitle = "HOTKEY MATRIX";
+            AccentColor = new Color(1f, 0.78f, 0.32f, 1f);
+            CardWidth = 325f;
+            CardHeight = 215f;
             FontSize = 17f;
             SortingOrder = 236;
             AutoSize = true;
@@ -510,11 +575,11 @@ namespace CascadeMenu.Mods
                 Mod mod = all[i];
                 if (mod == null || !mod.Enabled || mod.Key == Key.None) continue;
                 if (_lines.Count >= 9) break;
-                _lines.Add(Keybinds.Name(mod.Key) + "   " + mod.Name);
+                _lines.Add("<color=#FFC752>[" + Keybinds.Name(mod.Key) + "]</color>  " + mod.Name);
             }
 
-            if (_lines.Count == 0) return "<b>KEYBINDS</b>\nno armed mod has a key";
-            return "<b>KEYBINDS</b>\n" + string.Join("\n", _lines.ToArray());
+            if (_lines.Count == 0) return "<color=#647082>no armed mod has a hotkey</color>";
+            return string.Join("\n", _lines);
         }
     }
 
@@ -526,8 +591,13 @@ namespace CascadeMenu.Mods
         public TargetOverlay()
         {
             Name = "Target Info";
-            CardHeight = 166f;
-            FontSize = 18f;
+            DefaultAnchor = HudAnchor.TopCenter;
+            DefaultSlot = 2;
+            Design = HudDesign.WindowCard;
+            AccentColor = new Color(1f, 0.36f, 0.36f, 1f);
+            CardWidth = 325f;
+            CardHeight = 168f;
+            FontSize = 17.5f;
             SortingOrder = 236;
             AutoSize = true;
             RefreshInterval = 0.2f;
@@ -536,24 +606,26 @@ namespace CascadeMenu.Mods
         protected override string Build()
         {
             string id = PlayerActions.SelectedUserId;
-            if (string.IsNullOrEmpty(id)) return "<b>TARGET</b>\nno player selected";
+            if (string.IsNullOrEmpty(id)) return "<color=#FF5C5C><b>TARGET LOCK</b></color>\nno target locked";
 
             NetPlayer player = PlayerActions.FindPlayer(id);
-            if (player == null) return "<b>TARGET</b>\nthat player left the room";
+            if (player == null) return "<color=#FF5C5C><b>TARGET LOCK</b></color>\ntarget left the room";
 
             VRRig rig = PlayerActions.FindRigObject(player);
             float distance = rig != null
                 ? Vector3.Distance(ModKit.HeadPosition, rig.transform.position)
                 : -1f;
 
+            bool infected = PlayerActions.IsInfected(rig, player);
             Color color = PlayerActions.GetPlayerColor(player);
             string hex = ColorUtility.ToHtmlStringRGB(color);
 
-            return "<b>TARGET</b>\n" +
-                   "Name    " + PlayerActions.SafeName(player) + "\n" +
-                   "Distance " + (distance >= 0f ? ModKit.F(distance) + " m" : "-") + "\n" +
-                   "Platform " + PlayerActions.SafePlatform(player) + "\n" +
-                   "Color   <color=#" + hex + ">########</color> " + hex;
+            return "<color=#FF5C5C><b>TARGET LOCK</b></color>  " +
+                   (infected ? "<color=#FF3B1F>[INFECTED]</color>" : "<color=#58E08A>[SURVIVOR]</color>") + "\n" +
+                   "<b>" + PlayerActions.SafeName(player) + "</b>\n" +
+                   "<color=#8E9BAE>Range</color> " + (distance >= 0f ? ModKit.F(distance) + " m" : "-") +
+                   " · " + PlayerActions.SafePlatform(player) + "\n" +
+                   "<color=#" + hex + ">■■■</color> #" + hex;
         }
     }
 
@@ -565,9 +637,14 @@ namespace CascadeMenu.Mods
         public CustomPropsOverlay()
         {
             Name = "Room Props";
+            DefaultAnchor = HudAnchor.TopLeft;
+            DefaultSlot = 3;
+            Design = HudDesign.TerminalWindow;
+            BadgeTitle = "PHOTON ROOM PROPS";
+            AccentColor = new Color(0.45f, 0.85f, 1f, 1f);
             CardWidth = 340f;
-            CardHeight = 200f;
-            FontSize = 17f;
+            CardHeight = 205f;
+            FontSize = 16.5f;
             SortingOrder = 236;
             AutoSize = true;
             RefreshInterval = 1f;
@@ -576,12 +653,12 @@ namespace CascadeMenu.Mods
         protected override string Build()
         {
             List<string> props = PlayerActions.RoomCustomProps();
-            if (props == null || props.Count == 0) return "<b>ROOM PROPS</b>\nnone set";
+            if (props == null || props.Count == 0) return "<color=#647082>no custom properties</color>";
 
-            string text = "<b>ROOM PROPS</b> (" + props.Count + ")";
+            string text = "<color=#8E9BAE>Count:</color> " + props.Count;
             for (int i = 0; i < props.Count && i < 10; i++)
             {
-                text += "\n" + CascadeMenu.UI.CascadeUI.Truncate(props[i], 34);
+                text += "\n" + CascadeUI.Truncate(props[i], 34);
             }
             return text;
         }
@@ -599,20 +676,25 @@ namespace CascadeMenu.Mods
         public WaterStateOverlay()
         {
             Name = "Water State";
-            CardHeight = 140f;
-            FontSize = 19f;
+            DefaultAnchor = HudAnchor.BottomLeft;
+            DefaultSlot = 2;
+            Design = HudDesign.Capsule;
+            AccentColor = new Color(0.25f, 0.78f, 1f, 1f);
+            BadgeIcon = CascadeIcon.Sparkle;
+            CardWidth = 320f;
+            CardHeight = 112f;
+            FontSize = 18f;
             SortingOrder = 236;
         }
 
         protected override string Build()
         {
             GTPlayer player = ModKit.Player;
-            if (player == null) return "<b>WATER</b>\nwaiting for the local player";
+            if (player == null) return "<color=#40C7FF><b>HYDRO SENSOR</b></color>\nwaiting for local player";
 
-            return "<b>WATER</b>\n" +
-                   "Body      " + (player.InWater ? "in water" : "dry") + "\n" +
-                   "Head      " + (player.HeadInWater ? "underwater" : "above") + "\n" +
-                   "Vertical  " + ModKit.F(player.InstantaneousVelocity.y, "0.00");
+            return "<color=#40C7FF><b>HYDRO SENSOR</b></color>\n" +
+                   "Body: <b>" + (player.InWater ? "Submerged" : "Dry") + "</b> · Head: <b>" +
+                   (player.HeadInWater ? "Underwater" : "Clear") + "</b>";
         }
     }
 
@@ -624,8 +706,13 @@ namespace CascadeMenu.Mods
         public GroundedOverlay()
         {
             Name = "Ground State";
-            CardHeight = 176f;
-            FontSize = 18f;
+            DefaultAnchor = HudAnchor.TopCenter;
+            DefaultSlot = 3;
+            Design = HudDesign.WindowCard;
+            AccentColor = new Color(0.38f, 0.95f, 0.58f, 1f);
+            CardWidth = 315f;
+            CardHeight = 166f;
+            FontSize = 17.5f;
             SortingOrder = 236;
             AutoSize = true;
         }
@@ -633,19 +720,16 @@ namespace CascadeMenu.Mods
         protected override string Build()
         {
             GTPlayer player = ModKit.Player;
-            if (player == null) return "<b>GROUND</b>\nwaiting for the local player";
+            if (player == null) return "<color=#61F294><b>SURFACE CONTACT</b></color>\nwaiting for local player";
 
-            return "<b>GROUND</b>\n" +
-                   "Body        " + OnOff(player.BodyOnGround) + "\n" +
-                   "Hands       " + OnOff(player.HandContactingSurface) + "\n" +
-                   "Hand touch  " + OnOff(player.IsGroundedHand) + "\n" +
-                   "Butt touch  " + OnOff(player.IsGroundedButt) + "\n" +
-                   "Sliding     " + OnOff(player.IsBodySliding);
+            return "<color=#61F294><b>SURFACE CONTACT</b></color>\n" +
+                   "Body     " + OnOff(player.BodyOnGround) + "   Hands  " + OnOff(player.HandContactingSurface) + "\n" +
+                   "HandPad  " + OnOff(player.IsGroundedHand) + "   Sliding " + OnOff(player.IsBodySliding);
         }
 
         private static string OnOff(bool value)
         {
-            return value ? "<color=#58E08A>yes</color>" : "<color=#8A94A6>no</color>";
+            return value ? "<color=#58E08A><b>ON</b></color>" : "<color=#647082>OFF</color>";
         }
     }
 
@@ -661,41 +745,45 @@ namespace CascadeMenu.Mods
         public InputMonitorOverlay()
         {
             Name = "Input Monitor";
-            CardWidth = 320f;
-            CardHeight = 132f;
-            FontSize = 18f;
+            DefaultAnchor = HudAnchor.BottomCenter;
+            DefaultSlot = 1;
+            Design = HudDesign.KeyCap;
+            AccentColor = new Color(0.35f, 0.85f, 1f, 1f);
+            CardWidth = 330f;
+            CardHeight = 126f;
+            FontSize = 17.5f;
             SortingOrder = 236;
-            ShowPanel = false;
         }
 
         protected override string Build()
         {
             Keyboard keyboard = Keyboard.current;
-            if (keyboard == null) return "<b>INPUT</b>\nno keyboard detected";
+            if (keyboard == null) return "<color=#59D9FF><b>KEY STREAM</b></color>\nno keyboard detected";
 
             string keys = Chip(keyboard.wKey.isPressed, "W") + " " +
                           Chip(keyboard.aKey.isPressed, "A") + " " +
                           Chip(keyboard.sKey.isPressed, "S") + " " +
                           Chip(keyboard.dKey.isPressed, "D");
 
-            string actions = Chip(keyboard.spaceKey.isPressed, "Space") + " " +
-                             Chip(keyboard.leftCtrlKey.isPressed, "Ctrl") + " " +
-                             Chip(keyboard.leftShiftKey.isPressed, "Shift");
+            string actions = Chip(keyboard.spaceKey.isPressed, "SPC") + " " +
+                             Chip(keyboard.leftCtrlKey.isPressed, "CTL") + " " +
+                             Chip(keyboard.leftShiftKey.isPressed, "SHF");
 
             Mouse mouse = Mouse.current;
             string clicks = mouse == null
-                ? "no mouse"
-                : Chip(mouse.leftButton.isPressed, "L") + " " +
-                  Chip(mouse.rightButton.isPressed, "R") + " " +
-                  Chip(mouse.middleButton.isPressed, "M");
+                ? "-"
+                : Chip(mouse.leftButton.isPressed, "LMB") + " " +
+                  Chip(mouse.rightButton.isPressed, "RMB") + " " +
+                  Chip(mouse.middleButton.isPressed, "MMB");
 
-            return "<b>INPUT</b>\nMove   " + keys + "\nAction " + actions + "\nMouse  " + clicks;
+            return "<color=#59D9FF><b>KEY STREAM</b></color>   " + keys + "\n" +
+                   actions + "  ·  " + clicks;
         }
 
         private static string Chip(bool pressed, string label)
         {
             return pressed
-                ? "<color=#4DB2FF><b>" + label + "</b></color>"
+                ? "<color=#4DB2FF><b>[" + label + "]</b></color>"
                 : "<color=#5A6372>" + label + "</color>";
         }
     }
@@ -708,17 +796,20 @@ namespace CascadeMenu.Mods
         public TimeScaleOverlay()
         {
             Name = "Time Scale";
-            CardHeight = 140f;
-            FontSize = 19f;
+            DefaultAnchor = HudAnchor.BottomCenter;
+            DefaultSlot = 2;
+            Design = HudDesign.KeyCap;
+            AccentColor = new Color(1f, 0.65f, 0.32f, 1f);
+            CardWidth = 315f;
+            CardHeight = 112f;
+            FontSize = 18.5f;
             SortingOrder = 236;
         }
 
         protected override string Build()
         {
-            return "<b>TIME</b>\n" +
-                   "Scale    " + ModKit.F(Time.timeScale, "0.00") + "\n" +
-                   "Fixed dt " + ModKit.F(Time.fixedDeltaTime, "0.000") + "\n" +
-                   "Frames   " + Time.frameCount;
+            return "<color=#FFA652><b>ENGINE CLOCK</b></color>  <b>" + ModKit.F(Time.timeScale, "0.00") + "x</b>\n" +
+                   "<color=#8E9BAE>Fixed dt</color> " + ModKit.F(Time.fixedDeltaTime, "0.000") + "s · <color=#8E9BAE>Frame</color> " + Time.frameCount;
         }
     }
 
@@ -730,8 +821,12 @@ namespace CascadeMenu.Mods
         public BuildStampOverlay()
         {
             Name = "Build Stamp";
-            CardWidth = 340f;
-            CardHeight = 168f;
+            DefaultAnchor = HudAnchor.BottomCenter;
+            DefaultSlot = 3;
+            Design = HudDesign.KeyCap;
+            AccentColor = new Color(0.45f, 0.95f, 0.78f, 1f);
+            CardWidth = 345f;
+            CardHeight = 128f;
             FontSize = 17f;
             SortingOrder = 236;
             AutoSize = true;
@@ -740,12 +835,8 @@ namespace CascadeMenu.Mods
 
         protected override string Build()
         {
-            return "<b>CASCADE</b>\n" +
-                   "Mod      v" + PluginInfo.VERSION + "\n" +
-                   "Game     " + Application.version + "\n" +
-                   "Unity    " + Application.unityVersion + "\n" +
-                   "Platform " + Application.platform + "\n" +
-                   "Mods     " + ModRegistry.DiscoveredMods.Count;
+            return "<color=#73F2C7><b>CASCADE v" + PluginInfo.VERSION + "</b></color>  ·  " + ModRegistry.DiscoveredMods.Count + " mods\n" +
+                   "GT " + Application.version + " · Unity " + Application.unityVersion;
         }
     }
 }

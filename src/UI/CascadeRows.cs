@@ -6,7 +6,7 @@ namespace CascadeMenu.UI
 {
     internal sealed class CascadePage
     {
-        public readonly string Title;
+        public string Title { get; set; }
         public readonly string Subtitle;
         public readonly CascadeIcon Icon;
         public readonly List<CascadeSection> Sections = new List<CascadeSection>();
@@ -170,6 +170,20 @@ namespace CascadeMenu.UI
         public CascadeSection Dropdown(string title, string subtitle, string[] options, Func<int> get, Action<int> set)
         {
             Rows.Add(new CascadeDropdownRow(title, subtitle, options, get, set));
+            return this;
+        }
+
+        /// <summary>Adds a live scrolling console panel (for the debug log view).</summary>
+        public CascadeSection Console(Func<string> getText)
+        {
+            Rows.Add(new CascadeConsoleRow(getText));
+            return this;
+        }
+
+        /// <summary>A labelled row of pill chips, one of which is selected.</summary>
+        public CascadeSection Chips(string title, string[] options, Func<int> get, Action<int> set)
+        {
+            Rows.Add(new CascadeChipRow(title, options, get, set));
             return this;
         }
 
@@ -670,7 +684,7 @@ namespace CascadeMenu.UI
 
         public override float Height
         {
-            get { return 70f; }
+            get { return 52f; }
         }
 
         public override string SearchText
@@ -753,6 +767,38 @@ namespace CascadeMenu.UI
         {
             get { return string.IsNullOrEmpty(Subtitle) ? 44f : 52f; }
         }
+    }
+
+    /// <summary>Live scrolling text console (debug log output).</summary>
+    internal sealed class CascadeConsoleRow : CascadeRow
+    {
+        /// <summary>Called to get the current rich-text log content.</summary>
+        public readonly Func<string> GetText;
+
+        public CascadeConsoleRow(Func<string> getText) : base("Console", string.Empty)
+        {
+            GetText = getText ?? (() => string.Empty);
+        }
+
+        public override float Height { get { return 240f; } }
+    }
+
+    /// <summary>A title with a row of pill chips; exactly one chip is selected.</summary>
+    internal sealed class CascadeChipRow : CascadeRow
+    {
+        public readonly string[] Options;
+        public readonly Func<int> Get;
+        public readonly Action<int> Set;
+
+        public CascadeChipRow(string title, string[] options, Func<int> get, Action<int> set)
+            : base(title, string.Empty)
+        {
+            Options = options ?? new string[0];
+            Get = get;
+            Set = set;
+        }
+
+        public override float Height { get { return 38f; } }
     }
 
     /// <summary>Live preview of every important color role in the current theme.</summary>
