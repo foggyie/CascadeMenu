@@ -7,7 +7,7 @@ namespace CascadeMenu.Mods
     /// also exposes the controller's smoothing value.
     /// </summary>
     [PluginToggleable]
-    [ModCategory("Super")]
+    [ModCategory("Movement")]
     public sealed class Acrobatics : Mod
     {
         private float _smoothing = 5f;

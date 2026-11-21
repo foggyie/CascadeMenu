@@ -45,7 +45,7 @@ namespace CascadeMenu.Mods
         private static readonly string[] PreferredCategories =
         {
             "Overlays", "Movement", "Visual", "Fun", "Snake", "Tools", "Flight", "Desktop",
-            "Performance", "Super"
+            "Performance", "Game", "Player"
         };
 
         // Persistence for the generated per-mod rows.
@@ -375,7 +375,8 @@ namespace CascadeMenu.Mods
                 case "Flight": return CascadeIcon.Recenter;
                 case "Desktop": return CascadeIcon.Sidebar;
                 case "Performance": return CascadeIcon.Sliders;
-                case "Super": return CascadeIcon.Layers;
+                case "Game": return CascadeIcon.Gamepad;
+                case "Player": return CascadeIcon.Person;
                 default: return CascadeIcon.Layers;
             }
         }
@@ -385,6 +386,35 @@ namespace CascadeMenu.Mods
         /// that category gets the usual one-switch row; the shared footer can
         /// disarm the whole registry.
         /// </summary>
+        internal static void AppendCategoryMods(CascadePage page, CascadeMenuBehaviour menu, string category)
+        {
+            if (page == null) return;
+            EnsureLoaded();
+
+            CascadeSection section = page.Section(
+                category + " Mods",
+                "Flip one switch to start or stop a mod");
+
+            for (int i = 0; i < All.Count; i++)
+            {
+                Mod mod = All[i];
+                if (CategoryOf(mod) != category) continue;
+                AppendModRow(section, menu, mod);
+            }
+
+            if (section.Rows.Count == 0)
+            {
+                page.Sections.Remove(section);
+                return;
+            }
+
+            page.Section("Module Status", "Applies to every mod in the registry")
+                .Button("Disable all mods", "Disarm every mod and stop its effect", "Disable",
+                    DisableAll, false)
+                .Label("Enabled", "Effect is on", EnabledCount + " / " + All.Count)
+                .Label("Active", "Effects currently running", ActiveCount + " / " + All.Count);
+        }
+
         internal static CascadePage BuildCategoryPage(CascadeMenuBehaviour menu, string category)
         {
             EnsureLoaded();
@@ -710,7 +740,7 @@ namespace CascadeMenu.Mods
         {
             Mod mod = Find(name);
             if (mod == null) return;
-            SetEnabled(mod, value);
+            SetEffect(mod, value);
         }
 
         /// <summary>Stores a new key for a mod and writes it to the config file.</summary>

@@ -144,7 +144,10 @@ namespace CascadeMenu.Mods
 
         private void BuildVisuals()
         {
-            var shader = Shader.Find("Sprites/Default");
+            Shader shader = Shader.Find("GUI/Text Shader");
+            if (shader == null) shader = Shader.Find("Hidden/Internal-Colored");
+            if (shader == null) shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null) shader = Shader.Find("Sprites/Default");
             if (shader == null) shader = Shader.Find("UI/Default");
             if (shader == null) shader = Shader.Find("Unlit/Color");
             if (shader == null)
@@ -155,6 +158,16 @@ namespace CascadeMenu.Mods
 
             _material = new Material(shader) { color = Color.white };
             _material.renderQueue = 4100;
+            if (_material.HasProperty("_ZTest"))
+                _material.SetFloat("_ZTest", (float)CompareFunction.Always);
+            if (_material.HasProperty("_ZWrite"))
+                _material.SetFloat("_ZWrite", 0f);
+            if (_material.HasProperty("_Cull"))
+                _material.SetFloat("_Cull", (float)CullMode.Off);
+            if (_material.HasProperty("_SrcBlend"))
+                _material.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            if (_material.HasProperty("_DstBlend"))
+                _material.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
 
             var beamObject = new GameObject("CascadeGunBeam");
             beamObject.transform.SetParent(transform, false);
@@ -430,7 +443,9 @@ namespace CascadeMenu.Mods
                 }
                 else
                 {
-                    _ring.enabled = false;
+                    // Always draw the aiming ring at the beam tip so PC and VR
+                    // users have clear visual feedback where the gun is aiming.
+                    UpdateRing(hitPoint, _config.GunRingSize.Value * 0.55f);
                 }
             }
             else
@@ -590,7 +605,16 @@ namespace CascadeMenu.Mods
                        poller.rightControllerTriggerButton;
             }
 
-            return Mouse.current != null && Mouse.current.leftButton.isPressed;
+            if (Mouse.current == null) return false;
+
+            // If PC grip is configured as Left Mouse (1), fire with Right Mouse
+            // so holding grip does not immediately fire on the same button.
+            if (_config != null && _config.GunPcGrip.Value == 1)
+            {
+                return Mouse.current.rightButton.isPressed;
+            }
+
+            return Mouse.current.leftButton.isPressed;
         }
 
         private bool GetAimRay(HandSide hand, out Vector3 origin, out Vector3 direction)
@@ -612,9 +636,19 @@ namespace CascadeMenu.Mods
 
             // Desktop: the mouse/crosshair camera ray is the authoritative aim
             // ray. Casting from the hand would parallax away from the pointer.
-            if (camera != null && Mouse.current != null)
+            if (camera != null)
             {
-                Ray ray = camera.ScreenPointToRay(Mouse.current.position.ReadValue());
+                Vector2 screenPos = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+                if (Mouse.current != null && Cursor.lockState != CursorLockMode.Locked)
+                {
+                    Vector2 mousePos = Mouse.current.position.ReadValue();
+                    if (mousePos.x >= 0f && mousePos.x <= Screen.width &&
+                        mousePos.y >= 0f && mousePos.y <= Screen.height)
+                    {
+                        screenPos = mousePos;
+                    }
+                }
+                Ray ray = camera.ScreenPointToRay(screenPos);
                 origin = ray.origin + ray.direction * 0.15f;
                 direction = ray.direction;
                 return true;
@@ -643,7 +677,22 @@ namespace CascadeMenu.Mods
             if (XRSettings.isDeviceActive) return aimOrigin;
 
             Transform handTransform = ResolveHandTransform(hand);
-            return handTransform != null ? handTransform.position : aimOrigin;
+            if (handTransform != null && handTransform.gameObject.activeInHierarchy)
+            {
+                return handTransform.position;
+            }
+
+            Camera camera = CascadeMenuBehaviour.ResolveViewCamera();
+            if (camera != null)
+            {
+                float side = hand == HandSide.Left ? -0.18f : 0.18f;
+                return camera.transform.position +
+                       camera.transform.right * side -
+                       camera.transform.up * 0.14f +
+                       camera.transform.forward * 0.25f;
+            }
+
+            return aimOrigin;
         }
 
         private static Transform ResolveHandTransform(HandSide hand)
@@ -728,15 +777,12 @@ namespace CascadeMenu.Mods
             float bestDistance = float.MaxValue;
             Vector3 bestPoint = origin;
 
-            var containers = VRRigCache.ActiveRigContainers;
-            if (containers == null) return null;
+            var rigs = PlayerActions.GetRemoteRigs();
+            if (rigs == null || rigs.Count == 0) return null;
 
-            for (int i = 0; i < containers.Count; i++)
+            for (int i = 0; i < rigs.Count; i++)
             {
-                var container = containers[i];
-                if (container == null) continue;
-
-                VRRig rig = container.Rig;
+                VRRig rig = rigs[i];
                 if (!IsRigAlive(rig) || rig == VRRig.LocalRig) continue;
                 if (!IsRigVisible(rig)) continue;
 

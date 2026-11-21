@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace CascadeMenu.Mods.Flight
+namespace CascadeMenu.Mods
 {
     /// <summary>
     /// Desktop free-flight, toggled from the menu.

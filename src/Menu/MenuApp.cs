@@ -26,15 +26,22 @@ namespace CascadeMenu
             pages.Add(CosmeticShop.BuildPage(menu));
 
             // One sidebar tab per discovered module category (Overlays, Tools,
-            // Flight, Desktop, Performance, Super, ...).
+            // Flight, Desktop, Performance, Super, ...). Skip categories that
+            // are already merged into Fun, Movement, and Visual above.
             List<string> categories = ModRegistry.Categories();
             for (int i = 0; i < categories.Count; i++)
             {
-                pages.Add(ModRegistry.BuildCategoryPage(menu, categories[i]));
+                string cat = categories[i];
+                if (cat == "Fun" || cat == "Movement" || cat == "Visual") continue;
+                pages.Add(ModRegistry.BuildCategoryPage(menu, cat));
             }
 
-            pages.Add(Buildutilities(menu, config));
+            pages.Add(BuildUtilities(menu, config));
             pages.Add(ProfilerPage.Build(menu, config));
+            if (config.DebugConsoleEnabled.Value)
+            {
+                pages.Add(CascadeMenu.Mods.Tools.DebugConsole.BuildPage(menu, config));
+            }
             pages.Add(BuildSettings(menu, config));
             pages.Add(BuildAbout());
             pages.Add(BuildGallery(menu, state));
@@ -49,10 +56,18 @@ namespace CascadeMenu
             var home = new CascadePage("Home", "Cascade for Gorilla Tag", CascadeIcon.Home);
             home.Section("Welcome", "A macOS Sequoia inspired interface, rebuilt for VR.")
                 .Hero("Cascade", "Dark glass, traffic lights and native-feeling controls", "v1.0")
+                .LiveLabel("Active mods", "Mods currently running in the background",
+                    () => ModRegistry.ActiveCount + " active · " + ModRegistry.EnabledCount + " armed",
+                    () => ModRegistry.ActiveCount > 0)
+                .Button("Disable all active mods", "Emergency panic switch to disarm every running mod", "Panic Stop",
+                    () =>
+                    {
+                        ModRegistry.DisableAll();
+                        menu.ShowToast("Panic Stop", "All active mods have been disarmed.");
+                    }, false)
                 .Button("Re-center window", "Place the menu level, in front of you", "Recenter", menu.RecenterMenu, true)
                 .Button("Send a notification", "Preview the Cascade toast style", "Notify",
-                    () => menu.ShowToast("Cascade", "This is a notification."), false)
-                .Label("Inspired by Cascade", "Open-source Luau UI library by cascadeui", "macOS 15");
+                    () => menu.ShowToast("Cascade", "This is a notification."), false);
 
             // Live lobby details live here now; the Players tab is just the
             // roster and the per-player actions.
@@ -141,8 +156,8 @@ namespace CascadeMenu
                         menu.ShowToast("Selection", "Cleared.");
                     }, false)
                 .Toggle("Teleport gun", "Aim anywhere and pull the trigger to teleport there",
-                    () => ModRegistry.IsEnabledByName("Teleport (Gun)"),
-                    value => ModRegistry.SetEnabledByName("Teleport (Gun)", value))
+                    () => ModRegistry.IsEnabledByName("Teleport Gun Enhanced"),
+                    value => ModRegistry.SetEnabledByName("Teleport Gun Enhanced", value))
                 .Button("Teleport to random player", "Move next to someone (client-side)", "Go",
                     () =>
                     {
@@ -206,6 +221,7 @@ namespace CascadeMenu
                 }
             }
 
+            ModRegistry.AppendCategoryMods(fun, menu, "Fun");
             return fun;
         }
 
@@ -224,6 +240,7 @@ namespace CascadeMenu
                 .Button("Acrobatics settings", "Smoothing and rotation controls", "Open",
                     () => menu.OpenModuleSettings("acrobatics"), false);
 
+            ModRegistry.AppendCategoryMods(movement, menu, "Movement");
             return movement;
         }
 
@@ -250,16 +267,27 @@ namespace CascadeMenu
             AddRigOverlayToggle(voice, menu, "Talking Players",
                 "Speaker list with each player's color while they talk");
 
-            visual.Section("Module settings", "Range, colors and the HUD layout")
-                .Button("ESP settings", "Range, color and overlay options", "Open",
+            visual.Section("Visual & ESP Settings Panels", "Each visual mod has its own dedicated configuration panel")
+                .Button("Box ESP panel", "3D Box, Corner Brackets, 2D Billboard & thickness", "Open",
+                    () => menu.OpenModuleSettings("esp.box"), true)
+                .Button("Skeleton ESP panel", "Bone chains, 3-joint finger skeletons & thickness", "Open",
+                    () => menu.OpenModuleSettings("esp.skeleton"), false)
+                .Button("Tracer ESP panel", "Hand or screen snaplines & thickness", "Open",
+                    () => menu.OpenModuleSettings("esp.tracers"), false)
+                .Button("Chams ESP panel", "Through-wall full-body shader & colors", "Open",
+                    () => menu.OpenModuleSettings("esp.chams"), false)
+                .Button("Name ESP panel", "Names, distance readout & [INFECTED] badge", "Open",
+                    () => menu.OpenModuleSettings("esp.names"), false)
+                .Button("Marker ESP panel", "Through-wall overhead diamond beacon", "Open",
+                    () => menu.OpenModuleSettings("esp.marker"), false)
+                .Button("All ESP master settings", "Global infected filter, color matching & range", "Open",
                     () => menu.OpenModuleSettings("esp"), false)
-                .Button("HUD settings", "Choose what the overlay shows", "Open",
+                .Button("HUD & Overlay settings", "Configure every in-world HUD and telemetry widget", "Open",
                     () => menu.OpenModuleSettings("hud"), false)
-                .Button("Gun settings", "Gun behaviour and target ring", "Open",
-                    () => menu.OpenModuleSettings("gun"), false)
-                .Button("Cosmetic settings", "Cosmetic ESP, alerts and catalog", "Open",
+                .Button("Cosmetic ESP settings", "Special cosmetic roles, alerts & spoof checker", "Open",
                     () => menu.OpenModuleSettings("cosmetics"), false);
 
+            ModRegistry.AppendCategoryMods(visual, menu, "Visual");
             return visual;
         }
 
@@ -295,7 +323,7 @@ namespace CascadeMenu
                 openSettings);
         }
         
-        private static CascadePage Buildutilities(CascadeMenuBehaviour menu, MenuConfig config)
+        private static CascadePage BuildUtilities(CascadeMenuBehaviour menu, MenuConfig config)
         {
             var utilities = FeatureCatalog.BuildPage(config, "Utilities", "Things", CascadeIcon.Gear, menu);
 
@@ -418,14 +446,35 @@ namespace CascadeMenu
                     () => menu.OpenModuleSettings("fly"), false)
                 .Button("Acrobatics settings", "Smoothing and rotation controls", "Open",
                     () => menu.OpenModuleSettings("acrobatics"), false)
-                .Button("ESP settings", "Boxes, names, tracers and range", "Open",
+                .Button("ESP master settings", "Infected/Non-infected filter, player color matching and range", "Open",
                     () => menu.OpenModuleSettings("esp"), false)
-                .Button("HUD settings", "Choose what the overlay shows", "Open",
-                    () => menu.OpenModuleSettings("hud"), false)
+                .Button("HUD & Overlay settings", "Dedicated hub for every mod that has a HUD", "Open",
+                    () => menu.OpenModuleSettings("hud"), true)
                 .Button("Gun settings", "Gun behaviour and target ring", "Open",
                     () => menu.OpenModuleSettings("gun"), false)
                 .Button("Cosmetic settings", "Cosmetic ESP, alerts and catalog", "Open",
                     () => menu.OpenModuleSettings("cosmetics"), false);
+
+            CascadeSection hudMods = settings.Section("HUD Mods", "Toggle or open the dedicated settings panel for any mod with a HUD");
+            hudMods.Toggle("Main Cascade HUD", "Top-left status pill (mod name, player name, FPS, ArrayList)",
+                () => config.HudEnabled.Value,
+                value => config.HudEnabled.Value = value,
+                true,
+                () => menu.OpenModuleSettings("hud"));
+            ModuleSettings.AddHudModRow(hudMods, menu, "Player HUD", "3D telemetry card floating above each player");
+            ModuleSettings.AddHudModRow(hudMods, menu, "Frosted Glass HUD", "Head or wrist frosted glass HUD with hand-to-target tracer beam");
+            ModuleSettings.AddHudModRow(hudMods, menu, "Name Tags", "Clean overhead nameplate above each player");
+            ModuleSettings.AddHudModRow(hudMods, menu, "Talking Players", "Live speaker list with player-colored badges");
+            ModuleSettings.AddHudModRow(hudMods, menu, "Proximity Radar", "360° circular radar scanner with player blips");
+            ModuleSettings.AddHudModRow(hudMods, menu, "Input Visualizer", "Live controller stick pads, triggers and buttons");
+            ModuleSettings.AddHudModRow(hudMods, menu, "Compass", "Sliding cardinal heading strip at top of view");
+            ModuleSettings.AddHudModRow(hudMods, menu, "Speedometer", "Digital velocity gauge with pace bar");
+            ModuleSettings.AddHudModRow(hudMods, menu, "FPS Graph", "60-bar scrolling frame-rate histogram");
+            ModuleSettings.AddHudModRow(hudMods, menu, "Clock", "Corner digital wall clock with date");
+            ModuleSettings.AddHudModRow(hudMods, menu, "Crosshair", "Center-of-view dot, cross or ring reticle");
+            ModuleSettings.AddHudModRow(hudMods, menu, "Session Stats", "Room population, region, FPS and uptime card");
+            hudMods.Button("All HUD & Telemetry Settings", "Open the full HUD configuration hub (including all 20 telemetry readouts)", "Open Hub",
+                () => menu.OpenModuleSettings("hud"), true);
 
             settings.Section("Input", "Bindings work on PC and in VR; values are saved to the config file.")
                 .Dropdown("Menu hand", "Which controller hand opens the menu",
@@ -447,6 +496,46 @@ namespace CascadeMenu
                     () => VrInput.IndexOf(config.MenuButton.Value),
                     index => config.MenuButton.Value = VrInput.Format(VrInput.FromIndex(index)))
                 .Label("Always available", "Insert also opens the menu", "F1 / Insert");
+
+            settings.Section("Debug & Console", "Developer logs and in-game console viewer")
+                .Toggle("Debug console tab", "Show the live BepInEx and plugin log console in the sidebar",
+                    () => config.DebugConsoleEnabled.Value,
+                    value =>
+                    {
+                        config.DebugConsoleEnabled.Value = value;
+                        if (value) CascadeMenu.Mods.Tools.DebugLogListener.Attach();
+                        menu.QueueRebuild();
+                    })
+                .Dropdown("Console tab placement", "Sidebar section for the Debug Console tab",
+                    new[] { "Debug", "System", "Tools", "Main", "Fun", "Movement", "Visual", "Cosmetics" },
+                    () =>
+                    {
+                        string val = config.DebugConsolePlacement.Value;
+                        string[] opts = new[] { "Debug", "System", "Tools", "Main", "Fun", "Movement", "Visual", "Cosmetics" };
+                        int idx = System.Array.IndexOf(opts, val);
+                        return idx >= 0 ? idx : 0;
+                    },
+                    index =>
+                    {
+                        string[] opts = new[] { "Debug", "System", "Tools", "Main", "Fun", "Movement", "Visual", "Cosmetics" };
+                        config.DebugConsolePlacement.Value = opts[Mathf.Clamp(index, 0, opts.Length - 1)];
+                        menu.QueueRebuild();
+                    })
+                .Toggle("Debug log (Plugin.Log)", "Master toggle: when ON, all Plugin.Log output prints; when OFF, none of it prints",
+                    () => config.VerboseLogging.Value,
+                    value =>
+                    {
+                        config.VerboseLogging.Value = value;
+                        CascadeLogger.Enabled = value;
+                        if (value) Plugin.Log?.LogInfo("Plugin.Log debug logging enabled.");
+                    })
+                .Button("Open Debug Console", "Directly view captured logs", "Open",
+                    () =>
+                    {
+                        config.DebugConsoleEnabled.Value = true;
+                        menu.QueueRebuild();
+                        menu.OpenPage(CascadeMenu.Mods.Tools.DebugConsole.PageTag, CascadeMenu.Mods.Tools.DebugConsole.PageTitle);
+                    }, false);
 
             return settings;
         }

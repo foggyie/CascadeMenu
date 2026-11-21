@@ -179,12 +179,23 @@ namespace CascadeMenu.Mods
             if (JoystickFlyController.IsFlying) _activeMods.Add("Fly");
             if (_config.GunEnabled.Value) _activeMods.Add("Gun");
             if (_config.EspEnabled.Value) _activeMods.Add("ESP Box");
+            if (_config.EspSkeleton.Value) _activeMods.Add("Skeleton");
             if (_config.EspNames.Value) _activeMods.Add("ESP Names");
             if (_config.EspTracers.Value) _activeMods.Add("ESP Tracers");
             if (_config.EspChams.Value) _activeMods.Add("ESP Chams");
             if (_config.EspMarker.Value) _activeMods.Add("ESP Marker");
             if (_config.EspCosmeticTags.Value) _activeMods.Add("Cosmetic ESP");
             if (_config.CosmeticNotifications.Value) _activeMods.Add("Cosmetic Notify");
+
+            IReadOnlyList<Mod> mods = ModRegistry.DiscoveredMods;
+            for (int i = 0; i < mods.Count && _activeMods.Count < 8; i++)
+            {
+                Mod m = mods[i];
+                if (m != null && m.Enabled && m.IsActive && m.Name != "GunLib")
+                {
+                    if (!_activeMods.Contains(m.Name)) _activeMods.Add(m.Name);
+                }
+            }
         }
     }
 }

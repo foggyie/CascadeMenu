@@ -209,6 +209,27 @@ namespace CascadeMenu.Mods
             RigContainer container = FindRig(player != null ? player.UserId : null);
             if (container != null && container.Rig != null) return container.Rig;
 
+            if (player != null)
+            {
+                IReadOnlyList<RigContainer> active = VRRigCache.ActiveRigContainers;
+                if (active != null)
+                {
+                    for (int i = 0; i < active.Count; i++)
+                    {
+                        RigContainer c = active[i];
+                        if (c == null || c.Rig == null) continue;
+                        NetPlayer creator = c.Creator ?? c.Rig.Creator;
+                        if (creator == null) continue;
+                        if (creator == player ||
+                            (player.ActorNumber != 0 && creator.ActorNumber == player.ActorNumber) ||
+                            (!string.IsNullOrEmpty(player.UserId) && creator.UserId == player.UserId))
+                        {
+                            return c.Rig;
+                        }
+                    }
+                }
+            }
+
             // Fallback for the short window where the cache has not caught up
             // with the game manager's roster entry. Called through reflection
             // because GorillaGameManager inherits a Photon type that this project
@@ -232,6 +253,50 @@ namespace CascadeMenu.Mods
             }
 
             return null;
+        }
+
+        private static readonly HashSet<VRRig> _remoteRigsSet = new HashSet<VRRig>();
+        private static readonly List<VRRig> _remoteRigsBuffer = new List<VRRig>(16);
+        private static int _remoteRigsFrame = -1;
+
+        /// <summary>
+        /// Collects every active remote VRRig in the scene. Cached per frame so
+        /// multiple visual and HUD mods calling it in the same frame share one pass.
+        /// </summary>
+        internal static List<VRRig> GetRemoteRigs()
+        {
+            if (_remoteRigsFrame == Time.frameCount)
+            {
+                return _remoteRigsBuffer;
+            }
+            _remoteRigsFrame = Time.frameCount;
+            _remoteRigsBuffer.Clear();
+            _remoteRigsSet.Clear();
+
+            IReadOnlyList<RigContainer> active = VRRigCache.ActiveRigContainers;
+            if (active != null)
+            {
+                for (int i = 0; i < active.Count; i++)
+                {
+                    RigContainer c = active[i];
+                    if (c == null || c.Rig == null) continue;
+                    VRRig rig = c.Rig;
+                    if (rig == VRRig.LocalRig || rig.isOfflineVRRig) continue;
+                    if (rig.gameObject == null || !rig.gameObject.activeInHierarchy) continue;
+                    if (_remoteRigsSet.Add(rig)) _remoteRigsBuffer.Add(rig);
+                }
+            }
+
+            List<NetPlayer> players = GetPlayers();
+            for (int i = 0; i < players.Count; i++)
+            {
+                VRRig rig = FindRigObject(players[i]);
+                if (rig == null || rig == VRRig.LocalRig || rig.isOfflineVRRig) continue;
+                if (rig.gameObject == null || !rig.gameObject.activeInHierarchy) continue;
+                if (_remoteRigsSet.Add(rig)) _remoteRigsBuffer.Add(rig);
+            }
+
+            return _remoteRigsBuffer;
         }
 
         // -----------------------------------------------------------------
@@ -274,6 +339,109 @@ namespace CascadeMenu.Mods
         internal static Color GetPlayerColor(NetPlayer player)
         {
             return GetRigColor(FindRigObject(player));
+        }
+
+        // -----------------------------------------------------------------
+        // Infected / Tagged Detection
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Checks whether a remote gorilla rig / player is currently infected or tagged.
+        /// Combines fast material / setMatIndex checks on the VRRig with GorillaTagManager
+        /// and GorillaInfectionManager reflection fallbacks.
+        /// </summary>
+        internal static bool IsInfected(VRRig rig, NetPlayer player = null)
+        {
+            if (rig != null)
+            {
+                try
+                {
+                    if (rig.setMatIndex > 0) return true;
+
+                    if (rig.mainSkin != null && rig.mainSkin.sharedMaterial != null)
+                    {
+                        string matName = rig.mainSkin.sharedMaterial.name;
+                        if (!string.IsNullOrEmpty(matName))
+                        {
+                            string lower = matName.ToLowerInvariant();
+                            if (lower.Contains("infected") || lower.Contains("it") ||
+                                lower.Contains("lava") || lower.Contains("rock") ||
+                                lower.Contains("ice") || lower.Contains("tag") ||
+                                lower.Contains("hunter"))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    // Fall through to manager checks.
+                }
+            }
+
+            if (player == null && rig != null)
+            {
+                player = GunLibController.GetPlayerFromRig(rig);
+            }
+            if (player == null) return false;
+
+            GameApi.Resolve();
+            try
+            {
+                PropertyInfo tagManagerInstance = GameApi.TagManagerInstance;
+                if (tagManagerInstance != null)
+                {
+                    object manager = tagManagerInstance.GetValue(null, null);
+                    if (manager != null)
+                    {
+                        MethodInfo isTaggedMethod = GameApi.IsTaggedMethod;
+                        if (isTaggedMethod != null)
+                        {
+                            object result = isTaggedMethod.Invoke(manager, new object[] { player });
+                            if (result is bool b) return b;
+                        }
+
+                        object current = GameApi.CurrentTaggedField != null
+                            ? GameApi.CurrentTaggedField.GetValue(manager)
+                            : (GameApi.CurrentTaggedProperty != null ? GameApi.CurrentTaggedProperty.GetValue(manager, null) : null);
+                        if (current is NetPlayer taggedPlayer)
+                        {
+                            if (taggedPlayer.UserId == player.UserId || taggedPlayer.ActorNumber == player.ActorNumber)
+                                return true;
+                        }
+                    }
+                }
+
+                PropertyInfo infectionManagerInstance = GameApi.InfectionManagerInstance;
+                if (infectionManagerInstance != null)
+                {
+                    object manager = infectionManagerInstance.GetValue(null, null);
+                    if (manager != null)
+                    {
+                        object collection = GameApi.InfectedPlayersField != null
+                            ? GameApi.InfectedPlayersField.GetValue(manager)
+                            : (GameApi.InfectedPlayersProperty != null ? GameApi.InfectedPlayersProperty.GetValue(manager, null) : null);
+                        if (collection is IEnumerable list)
+                        {
+                            foreach (object item in list)
+                            {
+                                if (item is NetPlayer infected &&
+                                    (infected.UserId == player.UserId || infected.ActorNumber == player.ActorNumber))
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Ignore room teardown races.
+            }
+
+            return false;
         }
 
         internal static string ColorHex(Color color)

@@ -215,6 +215,8 @@ namespace CascadeMenu.Mods
         public SnakeStatusOverlay()
         {
             Name = "Snake Status";
+            DefaultAnchor = HudAnchor.TopLeft;
+            DefaultSlot = 4;
             CardHeight = 150f;
             FontSize = 18f;
             AutoSize = true;
@@ -486,6 +488,8 @@ namespace CascadeMenu.Mods
         public SnakeStatsTrackerMod()
         {
             Name = "Snake Statistics";
+            DefaultAnchor = HudAnchor.TopRight;
+            DefaultSlot = 4;
             CardHeight = 180f;
             FontSize = 16f;
             AutoSize = true;

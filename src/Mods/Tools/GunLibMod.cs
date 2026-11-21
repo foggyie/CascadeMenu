@@ -89,7 +89,11 @@ namespace CascadeMenu.Mods
         /// <summary>Used by menu rows that want to arm the gun without a rebuild.</summary>
         internal static void SetArmed(MenuConfig config, bool value)
         {
-            if (config != null) config.GunEnabled.Value = value;
+            if (config != null)
+            {
+                config.GunEnabled.Value = value;
+                if (value) config.GunActive.Value = true;
+            }
 
             ModRegistry.EnsureLoaded();
             GunLibMod mod = Instance;
@@ -97,11 +101,10 @@ namespace CascadeMenu.Mods
             {
                 mod._config = config;
 
-                // Arming restores the saved Active state, exactly like startup.
-                // Disarming goes through SetEnabled, which clears Active and
-                // runs the cleanup hooks.
+                // Arming starts the gun immediately so the user does not have
+                // to flip a second "Active" button just to see the beam.
                 mod.SetEnabled(value);
-                if (value && config != null && config.GunActive.Value && !mod.IsActive)
+                if (value && !mod.IsActive)
                 {
                     mod.SetActive(true);
                 }

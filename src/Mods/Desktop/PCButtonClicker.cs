@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace CascadeMenu.Mods.PC
+namespace CascadeMenu.Mods
 {
     /// <summary>
     /// PC button clicker: a left-mouse click in first or third person presses

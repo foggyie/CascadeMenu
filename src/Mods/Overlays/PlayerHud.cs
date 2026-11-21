@@ -266,7 +266,7 @@ namespace CascadeMenu.Mods
 
                 bool inRange = card.Distance <= _maxDistance;
                 bool onScreen = !_hideOffscreen || IsOnScreen(camera, head);
-                bool taggedAllowed = !_taggedOnly || !TagProbe.Available || card.Tagged;
+                bool taggedAllowed = !_taggedOnly || card.Tagged;
 
                 float targetAlpha = 0f;
                 if (inRange && onScreen && taggedAllowed) targetAlpha = _opacity;
@@ -513,8 +513,8 @@ namespace CascadeMenu.Mods
 
             Color rigColor = card.Rig != null ? PlayerActions.GetRigColor(card.Rig) : Color.white;
 
-            bool tagged = false;
-            bool taggedKnown = TagProbe.TryIsTagged(player, out tagged);
+            bool tagged = PlayerActions.IsInfected(card.Rig, player);
+            bool taggedKnown = true;
             card.Tagged = tagged;
             card.TaggedKnown = taggedKnown;
 

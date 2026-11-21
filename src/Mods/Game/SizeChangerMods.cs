@@ -318,8 +318,14 @@ namespace CascadeMenu.Mods
         public SizeChangerInfoOverlay()
         {
             Name = "Size Changer Info";
-            CardHeight = 200f;
-            FontSize = 16f;
+            DefaultAnchor = HudAnchor.MidRight;
+            DefaultSlot = 3;
+            Design = HudDesign.TerminalWindow;
+            BadgeTitle = "SIZE CHANGER SCANNER";
+            AccentColor = new Color(0.85f, 0.55f, 1f, 1f);
+            CardWidth = 335f;
+            CardHeight = 195f;
+            FontSize = 16.5f;
             AutoSize = true;
             RefreshInterval = 0.5f;
         }

@@ -22,8 +22,14 @@ namespace CascadeMenu.Mods
         public RulerMod()
         {
             Name = "Ruler";
-            CardHeight = 108f;
-            FontSize = 19f;
+            DefaultAnchor = HudAnchor.BottomRight;
+            DefaultSlot = 3;
+            Design = HudDesign.Capsule;
+            AccentColor = new Color(0.35f, 0.9f, 1f, 1f);
+            BadgeIcon = CascadeMenu.UI.CascadeIcon.Sliders;
+            CardWidth = 310f;
+            CardHeight = 104f;
+            FontSize = 18.5f;
             ShowPanel = true;
             ViewDistance = 0.6f;
         }
@@ -86,9 +92,13 @@ namespace CascadeMenu.Mods
         public LookDistanceMod()
         {
             Name = "Look Distance";
+            DefaultAnchor = HudAnchor.MidLeft;
+            DefaultSlot = 3;
+            Design = HudDesign.WindowCard;
+            AccentColor = new Color(0.45f, 0.95f, 0.65f, 1f);
             CardWidth = 330f;
-            CardHeight = 150f;
-            FontSize = 18f;
+            CardHeight = 144f;
+            FontSize = 17.5f;
             AutoSize = true;
         }
 
@@ -184,6 +194,252 @@ namespace CascadeMenu.Mods
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Object Enabler & Disabler (Tools)
+    // Gun mode: aim and shoot any scene object to disable it, or press Undo /
+    // Restore All. Also supports enabling/disabling any GameObject by name.
+    // -------------------------------------------------------------------------
+    [PluginToggleable]
+    [ModCategory("Tools")]
+    public sealed class ObjectTogglerMod : Mod
+    {
+        private static readonly string[] ModeNames =
+        {
+            "Gun: Shoot to Disable Object",
+            "Gun: Undo Last Disabled on Shoot",
+            "By Name: Disable Matching Objects",
+            "By Name: Enable Matching Objects",
+            "Restore All Disabled Objects"
+        };
+
+        private int _mode = 0;
+        private string _objectQuery = "";
+        private float _cooldown = 0.3f;
+        private static readonly List<GameObject> DisabledHistory = new List<GameObject>();
+
+        public ObjectTogglerMod()
+        {
+            Name = "Object Enabler & Disabler";
+            isToggle = true;
+
+            AddSetting(ModSetting.Dropdown(
+                "mode", "Action mode",
+                "Use the Gun to shoot objects off, search by name to enable/disable, or restore all",
+                ModeNames,
+                () => _mode,
+                value =>
+                {
+                    _mode = Mathf.Clamp(value, 0, ModeNames.Length - 1);
+                    if (_mode == 2 && !string.IsNullOrEmpty(_objectQuery))
+                    {
+                        ToggleByName(_objectQuery, false);
+                    }
+                    else if (_mode == 3 && !string.IsNullOrEmpty(_objectQuery))
+                    {
+                        ToggleByName(_objectQuery, true);
+                    }
+                    else if (_mode == 4)
+                    {
+                        RestoreAll();
+                    }
+                }));
+
+            AddSetting(ModSetting.Text(
+                "query", "Object name / path",
+                "Name or path of GameObject to enable or disable (used in By Name modes)",
+                () => _objectQuery,
+                value => _objectQuery = value ?? string.Empty));
+
+            AddSetting(ModSetting.Slider(
+                "cooldown", "Gun fire cooldown",
+                "Seconds between shots when using Gun mode",
+                0.1f, 1.5f,
+                () => _cooldown,
+                value => _cooldown = value,
+                value => value.ToString("0.00") + " s"));
+        }
+
+        public override void OnEnable()
+        {
+            if (_mode == 2 && !string.IsNullOrEmpty(_objectQuery))
+            {
+                ToggleByName(_objectQuery, false);
+            }
+            else if (_mode == 3 && !string.IsNullOrEmpty(_objectQuery))
+            {
+                ToggleByName(_objectQuery, true);
+            }
+            else if (_mode == 4)
+            {
+                RestoreAll();
+            }
+            Plugin.Log?.LogInfo("Cascade Object Enabler & Disabler active.");
+        }
+
+        public override void Update()
+        {
+            if (_mode != 0 && _mode != 1) return;
+
+            GunLib.Update((hit, rig, player) =>
+            {
+                if (_mode == 1)
+                {
+                    UndoLast();
+                    return;
+                }
+
+                if (hit.collider == null || hit.collider.gameObject == null) return;
+                GameObject target = hit.collider.gameObject;
+
+                // Protect local player, remote players, and the Cascade menu itself
+                if (IsProtected(target))
+                {
+                    ModKit.Notify("Object Toggler", "Protected object: " + target.name);
+                    return;
+                }
+
+                target.SetActive(false);
+                if (!DisabledHistory.Contains(target))
+                {
+                    DisabledHistory.Add(target);
+                }
+                ModKit.Notify("Object Disabled", "Disabled: " + target.name + " (" + DisabledHistory.Count + " stored)");
+                Plugin.Log?.LogInfo("Cascade Object Disabler: hid " + target.name);
+            }, cooldown: _cooldown);
+        }
+
+        public override void OnDisable()
+        {
+            GunLib.Cleanup();
+        }
+
+        private static bool IsProtected(GameObject go)
+        {
+            if (go == null) return true;
+            Transform t = go.transform;
+            if (Plugin.Root != null && t.IsChildOf(Plugin.Root.transform)) return true;
+            if (GorillaTagger.Instance != null && t.IsChildOf(GorillaTagger.Instance.transform)) return true;
+            if (VRRig.LocalRig != null && t.IsChildOf(VRRig.LocalRig.transform)) return true;
+            if (go.GetComponentInParent<VRRig>() != null) return true;
+            if (go.GetComponentInParent<Camera>() != null) return true;
+            return false;
+        }
+
+        private static void ToggleByName(string query, bool enable)
+        {
+            string q = (query ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(q))
+            {
+                ModKit.Notify("Object Toggler", "Enter an object name in settings first.");
+                return;
+            }
+
+            if (enable)
+            {
+                int enabledCount = 0;
+                // First check our disabled history
+                for (int i = DisabledHistory.Count - 1; i >= 0; i--)
+                {
+                    GameObject obj = DisabledHistory[i];
+                    if (obj == null)
+                    {
+                        DisabledHistory.RemoveAt(i);
+                        continue;
+                    }
+                    if (obj.name.IndexOf(q, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        obj.SetActive(true);
+                        DisabledHistory.RemoveAt(i);
+                        enabledCount++;
+                    }
+                }
+
+                // Also search all loaded transforms (including inactive children)
+                Transform[] all = Resources.FindObjectsOfTypeAll<Transform>();
+                for (int i = 0; i < all.Length; i++)
+                {
+                    Transform tr = all[i];
+                    if (tr == null || tr.gameObject == null) continue;
+                    if (!tr.gameObject.scene.IsValid()) continue;
+                    if (tr.gameObject.activeSelf) continue;
+                    if (tr.name.IndexOf(q, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        tr.gameObject.SetActive(true);
+                        enabledCount++;
+                    }
+                }
+
+                ModKit.Notify("Object Enabler", "Enabled " + enabledCount + " object(s) matching '" + q + "'.");
+            }
+            else
+            {
+                int disabledCount = 0;
+                GameObject[] all = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+                for (int i = 0; i < all.Length; i++)
+                {
+                    GameObject obj = all[i];
+                    if (obj == null || !obj.activeSelf || IsProtected(obj)) continue;
+                    if (obj.name.IndexOf(q, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        obj.SetActive(false);
+                        if (!DisabledHistory.Contains(obj)) DisabledHistory.Add(obj);
+                        disabledCount++;
+                    }
+                }
+                ModKit.Notify("Object Disabler", "Disabled " + disabledCount + " object(s) matching '" + q + "'.");
+            }
+        }
+
+        internal static void UndoLast()
+        {
+            while (DisabledHistory.Count > 0)
+            {
+                int last = DisabledHistory.Count - 1;
+                GameObject obj = DisabledHistory[last];
+                DisabledHistory.RemoveAt(last);
+                if (obj != null)
+                {
+                    obj.SetActive(true);
+                    ModKit.Notify("Object Enabler", "Re-enabled: " + obj.name);
+                    return;
+                }
+            }
+            ModKit.Notify("Object Enabler", "No disabled objects to undo.");
+        }
+
+        internal static void RestoreAll()
+        {
+            int count = 0;
+            for (int i = 0; i < DisabledHistory.Count; i++)
+            {
+                if (DisabledHistory[i] != null)
+                {
+                    DisabledHistory[i].SetActive(true);
+                    count++;
+                }
+            }
+            DisabledHistory.Clear();
+            ModKit.Notify("Object Enabler", "Restored " + count + " disabled object(s).");
+        }
+    }
+
+    /// <summary>One-click action to re-enable every object disabled by Object Enabler & Disabler.</summary>
+    [PluginToggleable]
+    [ModCategory("Tools")]
+    public sealed class RestoreDisabledObjectsMod : Mod
+    {
+        public RestoreDisabledObjectsMod()
+        {
+            Name = "Restore Disabled Objects";
+            isToggle = false;
+        }
+
+        public override void Execute()
+        {
+            ObjectTogglerMod.RestoreAll();
+        }
+    }
+
     /// <summary>Drops a world marker you can walk back to.</summary>
     [PluginToggleable]
     [ModCategory("Tools")]
@@ -199,8 +455,14 @@ namespace CascadeMenu.Mods
         public BeaconMod()
         {
             Name = "Beacon";
-            CardHeight = 128f;
-            FontSize = 18f;
+            DefaultAnchor = HudAnchor.BottomLeft;
+            DefaultSlot = 3;
+            Design = HudDesign.Capsule;
+            AccentColor = new Color(1f, 0.78f, 0.3f, 1f);
+            BadgeIcon = CascadeMenu.UI.CascadeIcon.Recenter;
+            CardWidth = 320f;
+            CardHeight = 120f;
+            FontSize = 17.5f;
         }
 
         protected override void OnOverlayStarted()
