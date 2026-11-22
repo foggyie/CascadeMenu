@@ -1,6 +1,7 @@
 using BepInEx;
 using BepInEx.Logging;
 using UnityEngine;
+using CascadeMenu.Menu;
 
 namespace CascadeMenu
 {

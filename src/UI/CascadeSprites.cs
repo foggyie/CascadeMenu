@@ -1,5 +1,11 @@
 using System.Collections.Generic;
 using UnityEngine;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
 
 namespace CascadeMenu.UI
 {
@@ -280,6 +286,126 @@ namespace CascadeMenu.UI
                 texture.SetPixels(pixels);
                 texture.Apply(false, true);
                 return Sprite.Create(texture, new Rect(0, 0, width, height), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            });
+        }
+
+        /// <summary>
+        /// Anti-aliased circular HSV color wheel (angle = Hue, radius = Saturation, Value = 1).
+        /// </summary>
+        public static Sprite ColorWheel(int size = 192)
+        {
+            return Cached("color_wheel_" + size, () =>
+            {
+                var texture = NewTexture(size, size);
+                var pixels = new Color[size * size];
+                float half = size * 0.5f;
+                float radius = half - 1.5f;
+
+                for (int y = 0; y < size; y++)
+                {
+                    float dy = (y + 0.5f) - half;
+                    for (int x = 0; x < size; x++)
+                    {
+                        float dx = (x + 0.5f) - half;
+                        float dist = Mathf.Sqrt(dx * dx + dy * dy);
+                        float alpha = Coverage(dist - radius);
+                        if (alpha <= 0.001f)
+                        {
+                            pixels[y * size + x] = Color.clear;
+                            continue;
+                        }
+
+                        float sat = Mathf.Clamp01(dist / radius);
+                        float angle = Mathf.Atan2(dy, dx);
+                        if (angle < 0f) angle += Mathf.PI * 2f;
+                        float hue = angle / (Mathf.PI * 2f);
+
+                        Color rgb = Color.HSVToRGB(hue, sat, 1f);
+                        rgb.a = alpha;
+                        pixels[y * size + x] = rgb;
+                    }
+                }
+
+                texture.SetPixels(pixels);
+                texture.Apply(false, true);
+                return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            });
+        }
+
+        /// <summary>
+        /// Vertical brightness gradient bar (top = white/full brightness, bottom = black)
+        /// with soft rounded pill ends. Tint Image.color with pure HSV(h,s,1) to show live value ramp.
+        /// </summary>
+        public static Sprite BrightnessBar()
+        {
+            return Cached("brightness_bar", () =>
+            {
+                const int width = 24;
+                const int height = 128;
+                var texture = NewTexture(width, height);
+                var pixels = new Color[width * height];
+
+                for (int y = 0; y < height; y++)
+                {
+                    float v = y / (float)(height - 1);
+                    for (int x = 0; x < width; x++)
+                    {
+                        float dist = RoundedRectSdf(x + 0.5f, y + 0.5f, width, height, 6f, 0.5f);
+                        float alpha = Coverage(dist);
+                        pixels[y * width + x] = new Color(v, v, v, alpha);
+                    }
+                }
+
+                texture.SetPixels(pixels);
+                texture.Apply(false, true);
+                return Sprite.Create(texture, new Rect(0, 0, width, height), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            });
+        }
+
+        /// <summary>
+        /// Smooth Gaussian radial orb glow sprite with guaranteed zero alpha before
+        /// the texture boundary so scaled/stretched halos never show boxy edges.
+        /// </summary>
+        public static Sprite OrbAura(int size = 256)
+        {
+            return Cached("orb_aura_" + size, () =>
+            {
+                var texture = NewTexture(size, size);
+                var pixels = new Color[size * size];
+                float half = size * 0.5f;
+                float invRadius = 1f / (half - 2f);
+
+                for (int y = 0; y < size; y++)
+                {
+                    float dy = (y + 0.5f) - half;
+                    for (int x = 0; x < size; x++)
+                    {
+                        float dx = (x + 0.5f) - half;
+                        float r = Mathf.Sqrt(dx * dx + dy * dy) * invRadius;
+                        if (r >= 1f)
+                        {
+                            pixels[y * size + x] = Color.clear;
+                            continue;
+                        }
+
+                        // Soft shader-like radial falloff: bright luminous core + smooth misty skirt
+                        float inv = 1f - r;
+                        float skirt = Mathf.Pow(inv, 2.35f);
+                        float core = Mathf.Exp(-r * r * 5.8f) * 0.45f;
+                        // Smoothstep to exact 0 before the outer edge to eliminate any rectangle clip
+                        float edge = Mathf.Clamp01(inv / 0.16f);
+                        edge = edge * edge * (3f - 2f * edge);
+
+                        float alpha = Mathf.Clamp01((skirt * 0.88f + core) * edge);
+                        // Slight bright-core tint shift toward white near center for shader luminosity
+                        float lum = Mathf.Clamp01(0.86f + core * 0.32f);
+                        pixels[y * size + x] = new Color(lum, lum, lum, alpha);
+                    }
+                }
+
+                texture.SetPixels(pixels);
+                texture.Apply(false, true);
+                return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
             });
         }
 

@@ -7,12 +7,21 @@ The module tabs now contain real gameplay features: a toggleable hand-link block
 ## Features
 
 - True world-space Canvas for both desktop and VR; no EventSystem required.
-- Custom pointer hit-testing for desktop mouse and VR hand rays.
-- High-contrast pointer: a laser line plus ring/dot cursor in VR, and a custom screen cursor on desktop.
-- Dark glass theme by default, plus a light theme and a live seasonal theme system.
-- Theme presets for Default, Halloween, Thanksgiving, Christmas, New Year, Valentine's, St. Patrick's, Easter, 4th of July, Summer, Fall, Winter, Dark and Light.
-- Optional date-based Auto theme that picks a holiday or season at startup and whenever the menu opens.
-- Custom color editor with RGB sliders, a hex field, quick-pick swatches and a live preview. Changes repaint every open window without rebuilding it.
+- Custom pointer hit-testing for desktop mouse and VR hand rays, with an authentic system arrow cursor in VR and fast-drag VR ray tracking plus scroll/stick forward-and-backward depth control while holding the titlebar.
+- **Two switchable menu styles**: the resizable **Cascade Window (macOS)** UI (with automatic 2-column responsive layout when resized wide or with the sidebar collapsed) and the **Glass Handheld (Wrist & Dot)** vertical wrist/fingertip menu.
+- **Shader-like Multi-Orb Window Aura**: animated dual-tone Gaussian radial orb halo behind the menu with customizable **Orb size**, **Orb intensity**, theme-accent matching, quick swatches, and a **Circular RGB Color Wheel**.
+- **Custom Background Images & Clear / Frosted / Solid Glass**:
+  - Upload any `.png`, `.jpg`, or `.jpeg` wallpaper directly from **Settings → Background**.
+  - Clicking **Browse...** launches an asynchronous **Windows PowerShell (`powershell.exe -STA`)** `OpenFileDialog` (Windows File Explorer picker) on a background thread so Gorilla Tag / VR never freezes.
+  - Clicking **Open Folder** opens `BepInEx\config\CascadeMenu\Backgrounds\` directly in **Windows File Explorer (`explorer.exe`)** so you can drop images in manually and hit **Refresh**.
+  - Images are read straight into memory (`File.ReadAllBytes` → `Texture2D`, never locking files on disk), stretched smoothly to fit the full window with zero cutoff and baked 12px rounded corners, and automatically generate a frosted-glass blurred variant in memory.
+  - Choose **Frosted Glass**, **Clear Transparent**, **Solid Opaque**, or slide continuously along **Clear ↔ Solid** (`0% – 100%`) — both the window panels and your uploaded background picture follow the same Clear / Frosted / Solid rule.
+- **Sleek Sub-Tab Bar**: responsive **Icon + Name + Glowing Colored Underline Bar** (or **Classic Pills**), customizable under **Settings → Sub-Tabs** with swatches, hex input, and a circular color wheel.
+- **Circular HSV/RGB Color Wheel & Live RGB Rainbow Mode**: interactive drag-to-pick circular color wheel + brightness ramp, right-side live target inspector explaining exactly what each of the 17 color roles changes, plus animated **RGB Rainbow Mode** with speed and target selectors.
+- **Big Easy-Grab Sliders**: full-width chunky sliders enabled by default for effortless dragging in VR and PC (toggleable under **Settings → Appearance**).
+- **Auto-Save & Fast Deferred Startup**: automatically saves menu, theme, and mod states on changes, close, and quit, with batched startup config binding and staggered post-world mod restoration so saved mods activate cleanly without startup lag.
+- **Body Estimation**, **Chams (through-wall + opacity slider)**, **NameBadges (All-in-One Nametags)**, **PropForge (All-in-One Construction & Sandbox with solid locomotion colliders)**, **LyricWave**, **Personal Space**, **Safe Quit Box**, and organized Harmony patches under `src/Patches/`.
+- Dark glass theme by default, plus a light theme and a live seasonal theme system (Default, Halloween, Thanksgiving, Christmas, New Year, Valentine's, St. Patrick's, Easter, 4th of July, Summer, Fall, Winter, Dark and Light).
 - Mods are one switch: turning one on starts its effect immediately; turning it off stops it and runs cleanup.
 - **Module tabs**: every mod category has its own sidebar page - **Overlays**, **Movement**, **Visual**, **Fun**, **Snake**, **Tools**, **Flight**, **Desktop**, **Performance**, **Super**, **Game** and **Player** - so mods are grouped by purpose instead of sharing one long list.
 - **Over a hundred extra one-switch mods** fill the new pages. Overlays: coordinates, altitude, attitude, velocity, hand speed, distance walked, jump counter, room info, session clock, frame time, memory, active mods, keybinds, target info, room props, water state, ground state, input monitor, time scale and build stamp. Movement: gravity scale, weightless, heavy gravity, moon/super jump, jump speed, no slide, ice skates, long arms, tiny/giant body, slow motion, bullet time, bouncy feet, air dash, rocket jump, auto walk and speed cap. Visual: FOV boost/narrow, extended view, vignette, letterbox, scanlines, film grain, alignment grid, safe zone, night vision, fullbright, fog off/density, long shadows, plus chams, tracers, boxes, markers and cosmetic tags. Fun: motion/hand/rainbow trails, laser sight, orbiting orbs, party lights, fireflies, snowfall, rainfall, confetti, fireworks, ground ring, beacon light and breadcrumbs. Snake: auto play with a risky fallback, auto restart, instant win, open/exit, a live status card, speed control, invincibility, path visualizer, set best score, pellet control, a stats tracker and a best-score notifier. Tools: ruler, look distance, object info, beacon, clipboard helpers for room code/player list/local id/position/room props, mod search, free cursor and fullscreen. Flight: jump jet, feather fall, rocket boots and glide. Desktop: lock/show cursor, big/compact menu and menu near. Performance: shadow off, short shadows, 60/72/90 FPS caps, player culling, LOD bias, texture quality, AA off and pixel lights. Game: size changer max/min, force player giant, size changer info, teleport to size changer and list size changers. Player: change name, join room code, set custom property, quick chat, teleport gun, teleport to nearest/random player, cycle players and follow nearest. Every one of them is a single row with an immediate start/stop and a gear only when it has options.
@@ -106,9 +115,11 @@ The menu starts hidden and its config is reloaded on the next launch.
 
 | Action | Desktop | VR |
 |---|---|---|
-| Open / close | F1, Insert, Tab | B or Y |
-| Point | Mouse | Right-hand ray + pointer line |
+| Open / close | F1, Insert, Tab | B / Y, Joystick Press (Stick Click), or A / X (configurable in Controls) |
+| Point | Mouse | Right-hand ray + VR system arrow cursor |
 | Select | Left click | Right trigger or A |
+| Move menu & depth | Drag titlebar + mouse wheel (scale / forward-back) | Hold titlebar + move hand freely; right stick up/down pushes forward/back |
+| Resize window | Drag bottom-right corner grip (auto 2-column layout when wide) | Drag bottom-right corner grip |
 | Scroll | Mouse wheel | Right stick up/down |
 | Toggle joystick fly | Movement toggle or Mods page | One switch; F5 also toggles it |
 | Fly | - | Left stick, head-relative |
@@ -159,8 +170,20 @@ The BepInEx log prints `Cascade gameplay patches installed` when the Harmony pat
 - **GunLib** - state, grip gating, beam/ring appearance and the gun's settings links.
 - **Profiler** - live Name Tags, Player HUD, Talking Players, GunLib and Construction frame cost.
 - **Controls** - input, pointer and notification demonstrations.
-- **Settings** - live UI scale, distance, theme, accent and behavior settings.
+- **Settings** - organized into clean sub-tabs (**General**, **Appearance**, **Background**, **Orb Glow**, **Sub-Tabs**, **Modules**, and **HUD Mods**) covering Auto-Save, placement, UI scale, Big Sliders, RGB Rainbow Mode, PowerShell/Explorer PNG/JPG background uploads with Clear/Frosted/Solid blending, multi-orb glow size/intensity/color, and sub-tab bar customization.
 - **About** - credits, links and a restore-defaults action.
+
+### Custom Menu Backgrounds (PowerShell & File Explorer)
+
+Cascade Menu supports custom `.png`, `.jpg`, and `.jpeg` menu backgrounds stored under:
+
+```text
+<Gorilla Tag>\BepInEx\config\CascadeMenu\Backgrounds\
+```
+
+- **Browse... (PowerShell Picker)**: Opens a native Windows `OpenFileDialog` via `powershell.exe -NoProfile -NonInteractive -STA -WindowStyle Hidden` on a background thread so Gorilla Tag and VR never stall while choosing an image. Picked files are copied into `BepInEx\config\CascadeMenu\Backgrounds\` and loaded straight into memory (`File.ReadAllBytes` → `Texture2D`) without locking the file on disk.
+- **Open Folder (Windows Explorer)**: Launches `explorer.exe` directly to `BepInEx\config\CascadeMenu\Backgrounds\` so you can drag-and-drop images manually and click **Refresh**.
+- **Stretch-to-Fit & Surface Matching**: Images smoothly stretch to fit the full window with zero cutoff and baked 12px rounded corners, and automatically follow your **Surface preset** (`Frosted Glass`, `Clear Transparent`, `Solid Opaque`) and **Clear ↔ Solid** slider (including an in-memory frosted-glass blurred texture).
 
 Use the sidebar search field to filter rows by their title, subtitle or search text. Search filtering is applied live and content scrolls back to the top when the results change.
 
@@ -174,15 +197,24 @@ CascadeMenu/
     Plugin.cs                 BepInEx entry point
     PluginInfo.cs
     Menu/
-      CascadeMenuBehaviour.cs Canvas, pointer, input, lifecycle, theme ownership, config rebuilds
-      MenuApp.cs              Declarative pages and callbacks
+      CascadeMenuBehaviour.cs Canvas, pointer, fast VR drag, input, lifecycle, RGB & auto-save
+      CascadeBackgroundManager.cs PowerShell OpenFileDialog picker, Explorer folder & in-memory PNG/JPG loader
+      MenuApp.cs              Declarative pages and organized Settings sub-tabs
       MenuState.cs            Session-only menu value store
-      MenuConfig.cs           BepInEx config entries
-      ThemesPage.cs           Preset list, Auto toggle and the custom color editor
+      MenuConfig.cs           BepInEx config entries (batched startup bind)
+      ThemesPage.cs           Preset list, Auto toggle, Circular Color Wheel, RGB & target preview
       GunLibPage.cs           State, grip, beam/ring and settings links for the gun
       ProfilerPage.cs         Live per-frame cost view for the heavy features
       ProfilerStats.cs        Shared allocation-free frame-cost registry
       ModuleSettings.cs       Settings pages for the built-in modules
+    Patches/
+      PatchManager.cs         Central Harmony patch installer/uninstaller
+      GameplayPatches.cs      Hand-link and fly-gravity patches
+      LocalRigGuardPatches.cs Local rig safety guards
+      PlatformDeployerPatch.cs Platform deployer hook
+      QuitBoxSafetyPatch.cs   Safe Quit Box protection
+      GTPlayerStatsSpoofPatch.cs Optional client-side stat overrides
+      SetupVoicePatch.cs      Voice setup hook
     Mods/
       Core/
         Mod.cs                One-switch lifecycle and settings declarations

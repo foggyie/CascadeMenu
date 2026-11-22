@@ -1,8 +1,22 @@
 using System;
 using System.Collections.Generic;
 using CascadeMenu.UI;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Desktop;
+using CascadeMenu.Mods.Flight;
+using CascadeMenu.Mods.Fun;
+using CascadeMenu.Mods.Game;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Performance;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Snake;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Visual;
 
-namespace CascadeMenu
+namespace CascadeMenu.Menu
 {
     /// <summary>
     /// One toggleable mod. Adding a new toggle to the menu is a single line in
@@ -54,8 +68,8 @@ namespace CascadeMenu
                 // Fun
                 // ---------------------------------------------------------
                 new Feature("Fun", "Toys", "Target gun", "Thin client-side player gun",
-                    () => CascadeMenu.Mods.GunLibMod.IsArmed(config),
-                    value => CascadeMenu.Mods.GunLibMod.SetArmed(config, value),
+                    () => CascadeMenu.Mods.Tools.GunLibMod.IsArmed(config),
+                    value => CascadeMenu.Mods.Tools.GunLibMod.SetArmed(config, value),
                     settingsKey: "gun"),
                 FeatureOf("Fun", "Toys", "Gun target ring", "Draw a ring on the locked player", config.GunShowMarker, settings: "gun"),
 
@@ -66,11 +80,11 @@ namespace CascadeMenu
                 FeatureOf("Movement", "Gravity", "Block hand link", "Stop other players pulling you around", config.HandLinkBlock),
                 new Feature("Movement", "Acrobatics", "Body rotation", "Toggle body rotation on or off",
                     () => config.Acrobatics.Value,
-                    value => CascadeMenu.Mods.AcrobaticsController.SetActive(value),
+                    value => CascadeMenu.Mods.Movement.AcrobaticsController.SetActive(value),
                     settingsKey: "acrobatics"),
                 new Feature("Movement", "Noclip", "Noclip", "Walk through walls and props",
                     () => config.Noclip.Value,
-                    value => CascadeMenu.Mods.NoclipController.SetActive(value)),
+                    value => CascadeMenu.Mods.Movement.NoclipController.SetActive(value)),
 
                 // ---------------------------------------------------------
                 // Visual (switches only; each visual mod has its own gear panel)

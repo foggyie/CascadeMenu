@@ -1,9 +1,22 @@
-using CascadeMenu.Mods;
 using CascadeMenu.UI;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Desktop;
+using CascadeMenu.Mods.Flight;
+using CascadeMenu.Mods.Fun;
+using CascadeMenu.Mods.Game;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Performance;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Snake;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Visual;
 
-namespace CascadeMenu
+namespace CascadeMenu.Menu
 {
     /// <summary>
     /// Dedicated settings pages for each module and individual visual/ESP mod.

@@ -6,8 +6,16 @@ using GorillaLocomotion;
 using GorillaNetworking;
 using UnityEngine;
 using CascadeMenu.UI;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Player
 {
     /// <summary>
     /// Live room player list and the client-side actions attached to each player.
@@ -19,6 +27,7 @@ namespace CascadeMenu.Mods
         internal const string PlayersTag = "cascade.players";
         internal const string PlayerTagPrefix = "cascade.player.";
         internal const string ReportTagPrefix = "cascade.report.";
+        internal const string CustomPropsTagPrefix = "cascade.props.";
 
         internal static string PlayerTag(string userId)
         {
@@ -28,6 +37,11 @@ namespace CascadeMenu.Mods
         internal static string ReportTag(string userId)
         {
             return ReportTagPrefix + (userId ?? "unknown");
+        }
+
+        internal static string CustomPropsTag(string userId)
+        {
+            return CustomPropsTagPrefix + (userId ?? "unknown");
         }
 
         internal static bool IsPlayerListPage(CascadePage page)
@@ -149,7 +163,11 @@ namespace CascadeMenu.Mods
                 result.Add(player);
             }
 
-            result.Sort((a, b) => string.Compare(SafeName(a), SafeName(b), StringComparison.OrdinalIgnoreCase));
+            result.Sort((a, b) =>
+            {
+                int cmp = a.ActorNumber.CompareTo(b.ActorNumber);
+                return cmp != 0 ? cmp : string.Compare(SafeName(a), SafeName(b), StringComparison.OrdinalIgnoreCase);
+            });
             return result;
         }
 
@@ -932,19 +950,516 @@ namespace CascadeMenu.Mods
         // Pages
         // -----------------------------------------------------------------
 
+        // -----------------------------------------------------------------
+        // Player Telemetry Helpers (FPS, Speaking, Color Code, Custom Props)
+        // -----------------------------------------------------------------
+        private static FieldInfo _rigFpsField;
+        private static PropertyInfo _rigFpsProp;
+        private static bool _rigFpsResolved;
+        private static MethodInfo _netPlayerGetRef;
+        private static PropertyInfo _photonCustomProps;
+        private static bool _customPropsResolved;
+
+        internal static int LocalFps()
+        {
+            float dt = Time.smoothDeltaTime;
+            if (dt <= 0.0001f) dt = Time.unscaledDeltaTime;
+            return dt > 0.0001f ? Mathf.Clamp(Mathf.RoundToInt(1f / dt), 0, 999) : 0;
+        }
+
+        internal static int GetRigFps(VRRig rig)
+        {
+            if (rig == null) return -1;
+            if (rig.isLocal) return LocalFps();
+
+            if (!_rigFpsResolved)
+            {
+                _rigFpsResolved = true;
+                const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                _rigFpsField = typeof(VRRig).GetField("fps", flags);
+                if (_rigFpsField == null) _rigFpsProp = typeof(VRRig).GetProperty("fps", flags);
+            }
+
+            try
+            {
+                object val = _rigFpsField != null
+                    ? _rigFpsField.GetValue(rig)
+                    : (_rigFpsProp != null ? _rigFpsProp.GetValue(rig, null) : null);
+                if (val is int iv) return iv;
+                if (val is float fv) return Mathf.RoundToInt(fv);
+                if (val is byte bv) return bv;
+                if (val is short sv) return sv;
+            }
+            catch { }
+            return -1;
+        }
+
+        internal static int GetPlayerFps(NetPlayer player)
+        {
+            if (player == null) return -1;
+            if (player.IsLocal) return LocalFps();
+            return GetRigFps(FindRigObject(player));
+        }
+
+        internal static bool IsRigSpeaking(VRRig rig)
+        {
+            if (rig == null) return false;
+            try
+            {
+                GorillaSpeakerLoudness speaker = rig.GetComponent<GorillaSpeakerLoudness>();
+                if (speaker != null) return speaker.IsSpeaking || speaker.Loudness > 0.04f;
+            }
+            catch { }
+            return false;
+        }
+
+        internal static bool IsPlayerSpeaking(NetPlayer player)
+        {
+            if (player == null) return false;
+            return IsRigSpeaking(FindRigObject(player));
+        }
+
+        internal static string ColorCode9(Color c)
+        {
+            int r = Mathf.Clamp(Mathf.RoundToInt(c.r * 9f), 0, 9);
+            int g = Mathf.Clamp(Mathf.RoundToInt(c.g * 9f), 0, 9);
+            int b = Mathf.Clamp(Mathf.RoundToInt(c.b * 9f), 0, 9);
+            return r + " " + g + " " + b;
+        }
+
+        // Illegal / cheat menu custom property keys vs known legal mod keys
+        private static readonly HashSet<string> IllegalModKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "void", "void_menu_open", "ORBIT", "ØƦƁƖƬ", "Vivid", "Atlas",
+            "ObsidianMC", "genesis", "violetpaiduser", "violetfree",
+            "Violet On Top", "dark", "oblivionuser", "hidden menu", "elux",
+            "Mango", "bvunt menu", "y u lookin in here weirdo", "cokecosmetics"
+        };
+
+        private static readonly Dictionary<string, string> KnownModPropKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // Illegal / cheat menus
+            { "void", "Void" },
+            { "void_menu_open", "Void" },
+            { "ORBIT", "Orbit" },
+            { "ØƦƁƖƬ", "Orbit" },
+            { "Vivid", "Vivid" },
+            { "Atlas", "Atlas" },
+            { "ObsidianMC", "Obsidian" },
+            { "genesis", "Genesis" },
+            { "violetpaiduser", "Violet Paid" },
+            { "violetfree", "Violet Free" },
+            { "Violet On Top", "Violet" },
+            { "dark", "Shiba GT Dark" },
+            { "oblivionuser", "Oblivion" },
+            { "hidden menu", "Hidden" },
+            { "elux", "Elux" },
+            { "Mango", "Mango Mod Menu" },
+            { "bvunt menu", "Bvunt Menu" },
+            { "y u lookin in here weirdo", "Malachi Menu Reborn" },
+            { "cokecosmetics", "Coke Cosmetx" },
+
+            // Known legal mods
+            { "GrateVersion", "Grate" },
+            { "BANANAOS", "Banana OS" },
+            { "GC", "Gorilla Craft" },
+            { "CarName", "Gorilla Vehicles" },
+            { "GorillaWatch", "Gorilla Watch" },
+            { "InfoWatch", "Info Watch" },
+            { "BananaPhone", "Banana Phone" },
+            { "MonkePhone", "Monke Phone" },
+            { "MP25", "Monke Phone" },
+            { "GorillaShirts", "Gorilla Shirts" },
+            { "ShirtProperties", "Gorilla Shirts" },
+            { "shirtversion", "Gorilla Shirts" },
+            { "GPronouns", "Gorilla Pronouns" },
+            { "GFaces", "Gorilla Faces" },
+            { "GorillaStats", "Gorilla Stats" },
+            { "GorillaCinema", "Gorilla Cinema" },
+            { "MediaPad", "Media Pad" },
+            { "EmoteWheel", "Emote Wheel" },
+            { "ChainedTogether", "Chained Together" },
+            { "ChainedTogetherActive", "Chained Together" },
+            { "GTrials", "Gorilla Trials" },
+            { "using gorilladrift", "Gorilla Drift" },
+            { "HP_Left", "Holdable Pad" },
+            { "CSVersion", "Custom Skin" },
+            { "pmversion", "Player Models" },
+            { "spectapeversion", "Spec Tape" },
+            { "goofywalkversion", "Goofy Walk" },
+            { "FPS-Nametags for Zlothy", "FPS Tags" },
+            { "github.com/maroon-shadow/SimpleBoards", "Simple Boards" },
+            { "github.com/ZlothY29IQ/GorillaMediaDisplay", "Gorilla Media Display" },
+            { "github.com/ZlothY29IQ/TooMuchInfo", "Too Much Info" }
+        };
+
+        private static bool _modJsonLoaded;
+
+        private static string KnownModsJsonPath()
+        {
+            return System.IO.Path.Combine(BepInEx.Paths.ConfigPath, "CascadeMenu_KnownMods.json");
+        }
+
+        private static void EnsureKnownModsJsonLoaded()
+        {
+            if (_modJsonLoaded) return;
+            _modJsonLoaded = true;
+            try
+            {
+                string path = KnownModsJsonPath();
+                if (!System.IO.File.Exists(path))
+                {
+                    SaveKnownModsJson();
+                    return;
+                }
+
+                string json = System.IO.File.ReadAllText(path);
+                if (string.IsNullOrEmpty(json)) return;
+
+                // Lightweight parser for {"key":"Name","key2":"[ILLEGAL] Name"} without external JSON deps
+                var matches = System.Text.RegularExpressions.Regex.Matches(json, "\"([^\"]+)\"\\s*:\\s*\"([^\"]+)\"");
+                for (int i = 0; i < matches.Count; i++)
+                {
+                    string k = matches[i].Groups[1].Value;
+                    string v = matches[i].Groups[2].Value;
+                    if (string.IsNullOrEmpty(k) || string.IsNullOrEmpty(v)) continue;
+                    if (v.StartsWith("[ILLEGAL] ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        IllegalModKeys.Add(k);
+                        KnownModPropKeys[k] = v.Substring(10).Trim();
+                    }
+                    else
+                    {
+                        KnownModPropKeys[k] = v;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        internal static void SaveKnownModsJson()
+        {
+            try
+            {
+                string path = KnownModsJsonPath();
+                string dir = System.IO.Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir) && !System.IO.Directory.Exists(dir))
+                    System.IO.Directory.CreateDirectory(dir);
+
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("{");
+                var keys = new List<string>(KnownModPropKeys.Keys);
+                keys.Sort(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < keys.Count; i++)
+                {
+                    string k = keys[i];
+                    string v = KnownModPropKeys[k];
+                    if (IllegalModKeys.Contains(k)) v = "[ILLEGAL] " + v;
+                    string ek = k.Replace("\\", "\\\\").Replace("\"", "\\\"");
+                    string ev = v.Replace("\\", "\\\\").Replace("\"", "\\\"");
+                    sb.Append("  \"").Append(ek).Append("\": \"").Append(ev).Append("\"");
+                    sb.AppendLine(i < keys.Count - 1 ? "," : "");
+                }
+                sb.AppendLine("}");
+                System.IO.File.WriteAllText(path, sb.ToString());
+            }
+            catch { }
+        }
+
+        internal static void SaveCustomPropToJson(string key, string displayName, bool markIllegal)
+        {
+            if (string.IsNullOrEmpty(key)) return;
+            EnsureKnownModsJsonLoaded();
+            KnownModPropKeys[key] = string.IsNullOrEmpty(displayName) ? key : displayName;
+            if (markIllegal) IllegalModKeys.Add(key);
+            else IllegalModKeys.Remove(key);
+            SaveKnownModsJson();
+            _propsCache.Clear();
+        }
+
+        internal readonly struct CustomPropEntry
+        {
+            public readonly string Key;
+            public readonly string Value;
+            public readonly string DetectedMod;
+            public readonly bool IsIllegal;
+
+            public CustomPropEntry(string key, string value, string detectedMod, bool isIllegal)
+            {
+                Key = key;
+                Value = value;
+                DetectedMod = detectedMod;
+                IsIllegal = isIllegal;
+            }
+        }
+
+        private sealed class CachedPropsSnapshot
+        {
+            public float ExpiresAt;
+            public readonly List<CustomPropEntry> Entries = new List<CustomPropEntry>();
+            public readonly List<string> IllegalMods = new List<string>();
+            public readonly List<string> LegalMods = new List<string>();
+        }
+
+        private static readonly Dictionary<string, CachedPropsSnapshot> _propsCache =
+            new Dictionary<string, CachedPropsSnapshot>(StringComparer.Ordinal);
+
+        internal static List<CustomPropEntry> GetPlayerCustomPropEntries(NetPlayer player, bool forceRefresh = false)
+        {
+            EnsureKnownModsJsonLoaded();
+            if (player == null) return new List<CustomPropEntry>();
+            string cacheKey = !string.IsNullOrEmpty(player.UserId) ? player.UserId : ("actor_" + player.ActorNumber);
+            float now = Time.unscaledTime;
+
+            if (!forceRefresh && _propsCache.TryGetValue(cacheKey, out CachedPropsSnapshot cached) && now < cached.ExpiresAt)
+            {
+                return cached.Entries;
+            }
+
+            if (!_propsCache.TryGetValue(cacheKey, out cached))
+            {
+                cached = new CachedPropsSnapshot();
+                _propsCache[cacheKey] = cached;
+            }
+            cached.Entries.Clear();
+            cached.IllegalMods.Clear();
+            cached.LegalMods.Clear();
+            cached.ExpiresAt = now + 0.5f;
+
+            try
+            {
+                if (!_customPropsResolved)
+                {
+                    _customPropsResolved = true;
+                    _netPlayerGetRef = player.GetType().GetMethod("GetPlayerRef",
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                }
+
+                object photonPlayer = _netPlayerGetRef != null ? _netPlayerGetRef.Invoke(player, null) : null;
+                if (photonPlayer == null) return cached.Entries;
+
+                if (_photonCustomProps == null)
+                {
+                    _photonCustomProps = photonPlayer.GetType().GetProperty("CustomProperties",
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                }
+
+                IDictionary dict = _photonCustomProps != null ? _photonCustomProps.GetValue(photonPlayer, null) as IDictionary : null;
+                if (dict == null) return cached.Entries;
+
+                var seenIllegal = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var seenLegal = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (DictionaryEntry entry in dict)
+                {
+                    if (entry.Key == null) continue;
+                    string k = entry.Key.ToString();
+                    if (string.IsNullOrEmpty(k)) continue;
+                    string v = entry.Value != null ? entry.Value.ToString() : string.Empty;
+
+                    string modName = null;
+                    bool illegal = IllegalModKeys.Contains(k);
+                    if (KnownModPropKeys.TryGetValue(k, out string mapped))
+                    {
+                        modName = mapped;
+                        if (illegal)
+                        {
+                            if (seenIllegal.Add(mapped)) cached.IllegalMods.Add(mapped);
+                        }
+                        else
+                        {
+                            if (seenLegal.Add(mapped)) cached.LegalMods.Add(mapped);
+                        }
+                    }
+
+                    cached.Entries.Add(new CustomPropEntry(k, v, modName, illegal));
+                }
+            }
+            catch { }
+
+            cached.Entries.Sort((a, b) => string.Compare(a.Key, b.Key, StringComparison.OrdinalIgnoreCase));
+            cached.IllegalMods.Sort(StringComparer.OrdinalIgnoreCase);
+            cached.LegalMods.Sort(StringComparer.OrdinalIgnoreCase);
+            return cached.Entries;
+        }
+
+        internal static List<string> GetDetectedModsForPlayer(NetPlayer player, bool forceRefresh = false)
+        {
+            var combined = new List<string>();
+            if (player == null) return combined;
+            GetPlayerCustomPropEntries(player, forceRefresh);
+            string cacheKey = !string.IsNullOrEmpty(player.UserId) ? player.UserId : ("actor_" + player.ActorNumber);
+            if (_propsCache.TryGetValue(cacheKey, out CachedPropsSnapshot cached))
+            {
+                for (int i = 0; i < cached.IllegalMods.Count; i++) combined.Add("[ILLEGAL] " + cached.IllegalMods[i]);
+                for (int i = 0; i < cached.LegalMods.Count; i++) combined.Add(cached.LegalMods[i]);
+            }
+            return combined;
+        }
+
+        internal static List<string> GetIllegalModsForPlayer(NetPlayer player, bool forceRefresh = false)
+        {
+            if (player == null) return new List<string>();
+            GetPlayerCustomPropEntries(player, forceRefresh);
+            string cacheKey = !string.IsNullOrEmpty(player.UserId) ? player.UserId : ("actor_" + player.ActorNumber);
+            return _propsCache.TryGetValue(cacheKey, out CachedPropsSnapshot cached) ? cached.IllegalMods : new List<string>();
+        }
+
+        internal static List<string> GetLegalModsForPlayer(NetPlayer player, bool forceRefresh = false)
+        {
+            if (player == null) return new List<string>();
+            GetPlayerCustomPropEntries(player, forceRefresh);
+            string cacheKey = !string.IsNullOrEmpty(player.UserId) ? player.UserId : ("actor_" + player.ActorNumber);
+            return _propsCache.TryGetValue(cacheKey, out CachedPropsSnapshot cached) ? cached.LegalMods : new List<string>();
+        }
+
+        internal static string PlayerCustomPropsSummary(NetPlayer player, int maxItems = 3)
+        {
+            List<CustomPropEntry> entries = GetPlayerCustomPropEntries(player);
+            if (entries.Count == 0) return "None";
+
+            var items = new List<string>(maxItems);
+            int totalNonTutorial = 0;
+            // Prioritize illegal mods first in summary!
+            for (int i = 0; i < entries.Count; i++)
+            {
+                CustomPropEntry e = entries[i];
+                if (e.Key == "didTutorial") continue;
+                totalNonTutorial++;
+                if (e.IsIllegal && items.Count < maxItems)
+                    items.Add("[ILLEGAL] " + (e.DetectedMod ?? e.Key));
+            }
+            for (int i = 0; i < entries.Count; i++)
+            {
+                CustomPropEntry e = entries[i];
+                if (e.Key == "didTutorial" || e.IsIllegal) continue;
+                if (items.Count < maxItems)
+                {
+                    if (!string.IsNullOrEmpty(e.DetectedMod))
+                        items.Add(e.DetectedMod);
+                    else if (!string.IsNullOrEmpty(e.Value) && e.Value.Length <= 16)
+                        items.Add(e.Key + " : " + e.Value);
+                    else
+                        items.Add(e.Key);
+                }
+            }
+
+            if (totalNonTutorial == 0) return "None";
+            string joined = string.Join(", ", items);
+            if (totalNonTutorial > items.Count) joined += " +" + (totalNonTutorial - items.Count);
+            return joined;
+        }
+
         /// <summary>
-        /// Platform plus a compact cosmetic check marker. The full report lives on
-        /// the player's page; this is only a hint that opens with the row.
+        private static System.Reflection.FieldInfo _zoneEntityField;
+        private static System.Reflection.PropertyInfo _zoneEntityProp;
+        private static System.Reflection.FieldInfo _currentZoneField;
+        private static System.Reflection.PropertyInfo _currentZoneProp;
+        private static bool _zoneReflectionInit;
+
+        /// <summary>
+        /// Reads the Gorilla Tag map/zone a player's VRRig is currently inside
+        /// (shown only in Cascade's Player List, never modifying the game leaderboard).
+        /// </summary>
+        internal static string GetPlayerZone(NetPlayer player)
+        {
+            if (player == null) return "Unknown";
+            VRRig rig = player.IsLocal ? VRRig.LocalRig : FindRigObject(player);
+            return GetRigZone(rig);
+        }
+
+        internal static string GetRigZone(VRRig rig)
+        {
+            if (rig == null) return "Unknown";
+            try
+            {
+                if (!_zoneReflectionInit)
+                {
+                    _zoneReflectionInit = true;
+                    const System.Reflection.BindingFlags flags =
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+                    _zoneEntityField = typeof(VRRig).GetField("zoneEntity", flags);
+                    _zoneEntityProp = typeof(VRRig).GetProperty("zoneEntity", flags);
+                }
+
+                object entity = _zoneEntityField != null ? _zoneEntityField.GetValue(rig) : _zoneEntityProp?.GetValue(rig, null);
+                if (entity == null) return "Unknown";
+
+                if (_currentZoneField == null && _currentZoneProp == null)
+                {
+                    const System.Reflection.BindingFlags flags =
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+                    System.Type et = entity.GetType();
+                    _currentZoneField = et.GetField("currentZone", flags);
+                    _currentZoneProp = et.GetProperty("currentZone", flags);
+                }
+
+                object zoneVal = _currentZoneField != null ? _currentZoneField.GetValue(entity) : _currentZoneProp?.GetValue(entity, null);
+                if (zoneVal == null) return "Unknown";
+                return FormatZoneName(zoneVal.ToString());
+            }
+            catch
+            {
+                return "Unknown";
+            }
+        }
+
+        private static string FormatZoneName(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return "Unknown";
+            string lower = raw.Trim();
+            if (string.Equals(lower, "none", StringComparison.OrdinalIgnoreCase)) return "Stump";
+
+            var sb = new System.Text.StringBuilder(lower.Length + 4);
+            for (int i = 0; i < lower.Length; i++)
+            {
+                char c = lower[i];
+                if (c == '_' || c == '-')
+                {
+                    sb.Append(' ');
+                    continue;
+                }
+                if (i > 0 && char.IsUpper(c) && char.IsLower(lower[i - 1]))
+                {
+                    sb.Append(' ');
+                }
+                sb.Append(i == 0 || sb[sb.Length - 1] == ' ' ? char.ToUpperInvariant(c) : c);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Compact live summary shown under each player's name in Player List:
+        /// Actor #, Zone, FPS, Color Code (0-9), Speaking, Custom Props, Master & Platform.
         /// </summary>
         private static string RowSubtitle(CascadeMenuBehaviour menu, NetPlayer player)
         {
-            string subtitle = SafePlatform(player);
-            if (player != null && player.IsMasterClient) subtitle += " - MASTER";
-            if (menu == null || menu.Config == null || !menu.Config.CosmeticCheck.Value) return subtitle;
+            var parts = new List<string>(7);
+            if (player != null) parts.Add("#" + player.ActorNumber);
 
-            CosmeticChecker.Report report = CosmeticChecker.Inspect(FindRigObject(player));
-            string status = report.ShortStatus;
-            return string.IsNullOrEmpty(status) ? subtitle : subtitle + " - " + status;
+            string zone = GetPlayerZone(player);
+            if (!string.IsNullOrEmpty(zone) && zone != "Unknown") parts.Add(zone);
+
+            int fps = GetPlayerFps(player);
+            if (fps >= 0) parts.Add(fps + " FPS");
+
+            parts.Add("Col " + ColorCode9(GetPlayerColor(player)));
+
+            if (IsPlayerSpeaking(player)) parts.Add("SPEAKING");
+            if (player != null && player.IsMasterClient) parts.Add("MASTER");
+
+            string props = PlayerCustomPropsSummary(player, 2);
+            if (props != "None") parts.Add("Props: " + props);
+            else parts.Add(SafePlatform(player));
+
+            if (menu != null && menu.Config != null && menu.Config.CosmeticCheck.Value)
+            {
+                CosmeticChecker.Report report = CosmeticChecker.Inspect(FindRigObject(player));
+                string status = report.ShortStatus;
+                if (!string.IsNullOrEmpty(status)) parts.Add(status);
+            }
+
+            return string.Join(" · ", parts);
         }
 
         /// <summary>Live lobby data shared by the Home room card and the Players tools.</summary>
@@ -1022,7 +1537,7 @@ namespace CascadeMenu.Mods
 
         internal static CascadePage BuildPlayersPage(CascadeMenuBehaviour menu)
         {
-            var page = new CascadePage("Players", "Live room list and player actions", CascadeIcon.Person);
+            var page = new CascadePage("Player List", "Sorted by Actor # (lowest first) · FPS, Color, Speaking & Props", CascadeIcon.Person);
             page.Tag = PlayersTag;
 
             NetPlayer local = LocalPlayer();
@@ -1030,23 +1545,34 @@ namespace CascadeMenu.Mods
             if (local == null && VRRig.LocalRig != null && !string.IsNullOrEmpty(VRRig.LocalRig.playerNameVisible))
                 localName = VRRig.LocalRig.playerNameVisible;
             string localId = local != null && !string.IsNullOrEmpty(local.UserId) ? local.UserId : "unknown";
+            int localActor = local != null ? local.ActorNumber : 0;
+            Color localColor = VRRig.LocalRig != null ? VRRig.LocalRig.playerColor : Color.white;
 
             List<NetPlayer> players = GetPlayers();
             RoomSnapshot room = ReadRoomSnapshot();
 
-            page.Section("Your identity", "Copied with the room summary")
-                .Label("Player name", "From the local VRRig", localName)
-                .Label("Player ID", "Your unique UserId", localId);
+            page.Section("Your identity", "Live local telemetry")
+                .Label("Player name", "From your local VRRig", localName + (localActor > 0 ? "  (#" + localActor + ")" : ""))
+                .LiveLabel("FPS & Color", "Your live FPS and 0-9 Gorilla color code",
+                    () => LocalFps() + " FPS · Col " + ColorCode9(VRRig.LocalRig != null ? VRRig.LocalRig.playerColor : localColor),
+                    () => true)
+                .Label("Current zone", "Map zone your local rig is currently in", GetRigZone(VRRig.LocalRig))
+                .Label("Room", "Current room and player count", room.Name + " (" + room.PlayerCount + ")")
+                .Button("Your Custom Properties", "Open the full key : value viewer for your own player", "Open",
+                    () =>
+                    {
+                        if (local != null) menu.OpenPlayerCustomPropsPage(local);
+                        else menu.ShowToast("Custom Properties", "Join a room first to inspect your properties.");
+                    }, false)
+                .Label("Player ID", "Your unique UserId", ShortId(localId));
 
-            Plugin.Log?.LogInfo("Cascade player list: " + players.Count + " other player(s) in room \"" +
-                                room.Name + "\", master " + room.MasterName + ", " + room.FlaggedCount + " flagged.");
             string description = players.Count == 0
                 ? "No other players detected. Join a public room first."
                 : players.Count + (players.Count == 1
-                    ? " player in this room. Tap a name to open actions."
-                    : " players in this room. Tap a name to open actions.");
+                    ? " player in room (lowest Actor # at top). Tap to open actions."
+                    : " players in room (lowest Actor # at top). Tap to open actions.");
 
-            CascadeSection list = page.Section("Players in room", description);
+            CascadeSection list = page.Section("Player List", description);
             if (players.Count == 0)
             {
                 list.Label("No players", "Nothing to list yet", "0");
@@ -1058,20 +1584,19 @@ namespace CascadeMenu.Mods
                     NetPlayer player = players[i];
                     string name = SafeName(player);
                     string id = player != null && !string.IsNullOrEmpty(player.UserId) ? player.UserId : "unknown";
+                    int actor = player != null ? player.ActorNumber : 0;
 
                     list.Player(new CascadePlayerRow(
-                        name,
+                        "#" + actor + "  " + name,
                         RowSubtitle(menu, player),
                         id,
-                        "ID " + ShortId(id),
+                        "Actor #" + actor + " · " + ShortId(id),
                         () => IsSelected(player),
-                        () => menu.Config != null && menu.Config.HandTapIndicator.Value && IsHandTapping(player),
+                        () => IsPlayerSpeaking(player) || (menu.Config != null && menu.Config.HandTapIndicator.Value && IsHandTapping(player)),
                         () => IsMuted(id),
                         () => menu.OpenPlayerPage(player),
                         () =>
                         {
-                            // The row polls IsMuted, so no page rebuild is needed here:
-                            // the list keeps its scroll position and the button relabels.
                             bool muted = ToggleMute(player);
                             menu.ShowToast(muted ? "Player muted" : "Player unmuted", name);
                         },
@@ -1136,18 +1661,37 @@ namespace CascadeMenu.Mods
             page.Section("Live preview", "Their actual gorilla, rendered from the live rig")
                 .Portrait(name, SafePlatform(player), () => FindRigObject(player), () => GetPlayerColor(player));
 
-            page.Section("Player", "Session information")
+            int playerFps = GetPlayerFps(player);
+            int actorNum = player != null ? player.ActorNumber : 0;
+            bool speaking = IsPlayerSpeaking(player);
+            List<CustomPropEntry> allProps = GetPlayerCustomPropEntries(player);
+            List<string> detectedMods = GetDetectedModsForPlayer(player);
+            string customPropsText = PlayerCustomPropsSummary(player, 4);
+
+            page.Section("Session & Telemetry", "Live player stats and identity")
                 .Label("Name", "Nickname", name)
-                .Label("Player ID", "Tap Copy for the full UserId", id)
-                .Label("Platform", "Report platform", SafePlatform(player))
-                .Label("Distance", "From your position", distance >= 0f ? distance.ToString("0.0") + " m" : "unknown")
+                .Label("Actor number", "Lower actor # joined earlier", "#" + actorNum)
+                .Label("Zone", "Current Gorilla Tag map zone", GetPlayerZone(player))
+                .Label("FPS", "Reported frame rate from VRRig", playerFps >= 0 ? playerFps + " FPS" : "unknown")
+                .Label("Speaking", "Live voice activity", speaking ? "Speaking" : "Quiet")
+                .Label("Color code", "0-9 Gorilla color code & hex", ColorCode9(rigColor) + "  (" + ColorHex(rigColor) + ")")
+                .Label("Platform", "Reported platform", SafePlatform(player))
+                .Label("Distance", "Distance from your position", distance >= 0f ? distance.ToString("0.0") + " m" : "unknown")
                 .Label("Master client", "Current room host", master ? "Yes" : "No")
-                .Label("Gorilla color", "Live tint used by their rig and portrait", ColorHex(rigColor))
+                .Label("Player ID", "Tap Copy below for full UserId", ShortId(id));
+
+            page.Section("Custom Properties & Mods", "Inspect all Photon custom properties on this player")
+                .Label("Detected mods", "Matched from known Gorilla Tag mod keys",
+                    detectedMods.Count > 0 ? string.Join(", ", detectedMods) : "None detected")
+                .Label("Summary (" + allProps.Count + ")", "Preview of custom properties", customPropsText)
+                .Button("Open Custom Properties", "Open the full key : value property viewer for " + name, "Open",
+                    () => menu.OpenPlayerCustomPropsPage(player), true);
+
+            page.Section("Status & Checks", "Local client state")
                 .Label("Modder check", "Cosmetic spoof flags (local hint)", flagged ? modderSummary : "Clean / unknown")
-                .Label("HWID", "Only your own device ID is exposed", "hidden")
                 .Label("Muted", "Local manual mute", muted ? "Yes" : "No")
                 .Label("Hands", "Live hand-tap state", IsHandTapping(player) ? "Tapping" : "Idle")
-                .Label("Selected", "Highlighted in the player list", IsSelected(player) ? "Yes" : "No");
+                .Label("Selected", "Highlighted in Player List", IsSelected(player) ? "Yes" : "No");
 
             CascadeSection actions = page.Section("Player actions", "Client-side tools aimed at this player");
             actions.Button("Spectate player", "Live first- or third-person view of their gorilla", "Spectate",
@@ -1242,6 +1786,118 @@ namespace CascadeMenu.Mods
                         bool moved = TeleportTo(player);
                         menu.ShowToast("Teleport", moved ? "Moved next to " + name : "Player rig is not ready");
                     }, false);
+
+            return page;
+        }
+
+        /// <summary>
+        /// Dedicated Custom Properties viewer UI for any player.
+        /// Shows detected mods and every custom property in clean "key : value" format.
+        /// </summary>
+        internal static CascadePage BuildCustomPropsPage(CascadeMenuBehaviour menu, NetPlayer player)
+        {
+            string name = SafeName(player);
+            string id = player != null && !string.IsNullOrEmpty(player.UserId) ? player.UserId : "unknown";
+            int actor = player != null ? player.ActorNumber : 0;
+
+            List<CustomPropEntry> entries = GetPlayerCustomPropEntries(player, true);
+            List<string> illegalMods = GetIllegalModsForPlayer(player, false);
+            List<string> legalMods = GetLegalModsForPlayer(player, false);
+
+            var page = new CascadePage("Custom Properties", name + " (#" + actor + ") · " + entries.Count + " properties", CascadeIcon.Sliders);
+            page.Tag = CustomPropsTag(id);
+            page.HiddenFromSidebar = true;
+
+            page.Section("Navigation", "Saved mod database: BepInEx/config/CascadeMenu_KnownMods.json")
+                .Button("Back", "Return to previous page", "Back", () => menu.GoBack(), false)
+                .Button("Refresh properties", "Re-read live Photon custom properties", "Refresh",
+                    () => menu.OpenPlayerCustomPropsPage(player), true)
+                .Button("Save database to JSON", "Write known & illegal mod keys to CascadeMenu_KnownMods.json", "Save JSON", () =>
+                {
+                    SaveKnownModsJson();
+                    menu.ShowToast("Saved", "BepInEx/config/CascadeMenu_KnownMods.json updated.");
+                }, false)
+                .Button("Copy all raw properties", "Copy every key : value line to clipboard", "Copy All", () =>
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine(name + " (#" + actor + ") Custom Properties:");
+                    for (int i = 0; i < entries.Count; i++)
+                    {
+                        CustomPropEntry e = entries[i];
+                        string modTag = !string.IsNullOrEmpty(e.DetectedMod)
+                            ? (e.IsIllegal ? " [ILLEGAL: " + e.DetectedMod + "]" : " [" + e.DetectedMod + "]")
+                            : "";
+                        sb.AppendLine(e.Key + " : " + (string.IsNullOrEmpty(e.Value) ? "(empty)" : e.Value) + modTag);
+                    }
+                    Copy(sb.ToString());
+                    menu.ShowToast("Custom Properties", "Copied " + entries.Count + " entries.");
+                }, false);
+
+            CascadeSection illegalSec = page.Section("Illegal / Cheat Menus (" + illegalMods.Count + ")",
+                "Flagged menus: Void, Orbit, Vivid, Atlas, Obsidian, Genesis, etc.");
+            if (illegalMods.Count == 0)
+            {
+                illegalSec.Label("None detected", "No illegal menu keys found on this player", "Clean");
+            }
+            else
+            {
+                for (int i = 0; i < illegalMods.Count; i++)
+                {
+                    illegalSec.Label(illegalMods[i], "Flagged illegal mod menu key", "ILLEGAL");
+                }
+            }
+
+            CascadeSection legalSec = page.Section("Known Mods (" + legalMods.Count + ")",
+                "Recognized Gorilla Tag community mods");
+            if (legalMods.Count == 0)
+            {
+                legalSec.Label("None detected", "No recognized legal mod keys found", "0");
+            }
+            else
+            {
+                for (int i = 0; i < legalMods.Count; i++)
+                {
+                    legalSec.Label(legalMods[i], "Recognized mod key", "Mod");
+                }
+            }
+
+            CascadeSection allSec = page.Section("All Raw Custom Properties (" + entries.Count + ")",
+                "Every raw key : value pair (unknown keys can be saved to JSON)");
+            if (entries.Count == 0)
+            {
+                allSec.Label("None", "This player has no custom properties set", "0");
+            }
+            else
+            {
+                for (int i = 0; i < entries.Count; i++)
+                {
+                    CustomPropEntry e = entries[i];
+                    string val = string.IsNullOrEmpty(e.Value) ? "(empty)" : e.Value;
+                    string tag = e.IsIllegal
+                        ? "[ILLEGAL: " + (e.DetectedMod ?? e.Key) + "]  "
+                        : (!string.IsNullOrEmpty(e.DetectedMod) ? "[Mod: " + e.DetectedMod + "]  " : "[Raw / Unknown]  ");
+                    string desc = tag + e.Key + " : " + val;
+                    string shortVal = val.Length > 24 ? val.Substring(0, 21) + "..." : val;
+
+                    if (string.IsNullOrEmpty(e.DetectedMod) && e.Key != "didTutorial")
+                    {
+                        allSec.Button(e.Key + " : " + shortVal, desc + " — tap Save to add to JSON", "Save", () =>
+                        {
+                            SaveCustomPropToJson(e.Key, e.Key, false);
+                            menu.ShowToast("Saved to JSON", e.Key + " added to CascadeMenu_KnownMods.json");
+                            menu.OpenPlayerCustomPropsPage(player);
+                        }, false);
+                    }
+                    else
+                    {
+                        allSec.Button(e.Key + " : " + shortVal, desc, "Copy", () =>
+                        {
+                            Copy(e.Key + " : " + val);
+                            menu.ShowToast("Copied", e.Key + " : " + val);
+                        }, false);
+                    }
+                }
+            }
 
             return page;
         }

@@ -1,12 +1,17 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using CascadeMenu.Mods;
 using GorillaNetworking;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.XR;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
 
 namespace CascadeMenu.UI
 {
@@ -19,9 +24,29 @@ namespace CascadeMenu.UI
             return !string.IsNullOrEmpty(row.SearchText) && row.SearchText.ToLowerInvariant().Contains(query);
         }
 
+        private static RectTransform CreateSectionColumn(string name, Transform parent)
+        {
+            RectTransform col = CascadeUI.Rect(name, parent);
+            var le = col.gameObject.AddComponent<LayoutElement>();
+            le.flexibleWidth = 1f;
+            var vl = col.gameObject.AddComponent<VerticalLayoutGroup>();
+            vl.spacing = 10f;
+            vl.childAlignment = TextAnchor.UpperLeft;
+            vl.childControlWidth = true;
+            vl.childControlHeight = true;
+            vl.childForceExpandWidth = true;
+            vl.childForceExpandHeight = false;
+            return col;
+        }
+
         private void AddSectionHeader(CascadeSection section)
         {
-            RectTransform header = CascadeUI.Rect("Section_" + section.Title, _content);
+            AddSectionHeaderTo(_content, section);
+        }
+
+        private void AddSectionHeaderTo(Transform parent, CascadeSection section)
+        {
+            RectTransform header = CascadeUI.Rect("Section_" + section.Title, parent);
             bool hasDescription = !string.IsNullOrEmpty(section.Description);
             var layout = header.gameObject.AddComponent<LayoutElement>();
             layout.preferredHeight = hasDescription ? 42f : 24f;
@@ -40,8 +65,14 @@ namespace CascadeMenu.UI
 
         private RectTransform AddCard()
         {
-            RectTransform card = CascadeUI.Rect("Card", _content);
-            CascadeUI.Panel(card, Theme.ViewBg, 8);
+            return AddCardTo(_content);
+        }
+
+        private RectTransform AddCardTo(Transform parent)
+        {
+            RectTransform card = CascadeUI.Rect("Card", parent);
+            Image cardBg = CascadeUI.Panel(card, Theme.ViewBg, 8);
+            if (cardBg != null) _cardBgImages.Add(cardBg);
 
             RectTransform border = CascadeUI.Rect("Border", card);
             CascadeUI.Stretch(border);
@@ -104,6 +135,12 @@ namespace CascadeMenu.UI
                 return;
             }
 
+            if (row is CascadeColorWheelRow wheelRow)
+            {
+                BuildColorWheelRow(card, wheelRow);
+                return;
+            }
+
             if (row is CascadePreviewRow previewRow)
             {
                 BuildPreviewRow(card, previewRow);
@@ -124,8 +161,10 @@ namespace CascadeMenu.UI
 
             RectTransform root = CascadeUI.Rect("Row", card);
             var layoutElement = root.gameObject.AddComponent<LayoutElement>();
-            layoutElement.preferredHeight = row.Height;
-            layoutElement.minHeight = row.Height;
+            bool useBigSlider = row is CascadeSliderRow && (_config == null || _config.BigSliders.Value);
+            float effectiveHeight = useBigSlider ? row.Height + 10f : row.Height;
+            layoutElement.preferredHeight = effectiveHeight;
+            layoutElement.minHeight = effectiveHeight;
 
             RectTransform hoverRect = CascadeUI.Rect("Hover", root);
             CascadeUI.Stretch(hoverRect, 3f, 3f, 2f, 2f);
@@ -189,16 +228,27 @@ namespace CascadeMenu.UI
             else if (row is CascadeSliderRow slider)
             {
                 sliderRow = true;
+                bool bigSlider = _config == null || _config.BigSliders.Value;
                 TMP_Text valueLabel;
                 CascadeSliderView view = CascadeWidgets.Slider(
-                    this, Theme, root, slider.Min, slider.Max, slider.Get, slider.Set, slider.Format, out valueLabel);
+                    this, Theme, root, slider.Min, slider.Max, slider.Get, slider.Set, slider.Format, out valueLabel, bigSlider);
                 RectTransform hit = view.Hit;
                 hit.anchorMin = new Vector2(0f, 0f);
                 hit.anchorMax = new Vector2(1f, 0f);
                 hit.pivot = new Vector2(0.5f, 0f);
-                hit.offsetMin = new Vector2(12f, 6f);
-                hit.offsetMax = new Vector2(-92f, 26f);
-                rightOffset = 92f;
+                if (bigSlider)
+                {
+                    // Full-width chunky easy-grab slider bar beneath title/subtitle
+                    hit.offsetMin = new Vector2(14f, 6f);
+                    hit.offsetMax = new Vector2(-14f, 34f);
+                    rightOffset = 132f;
+                }
+                else
+                {
+                    hit.offsetMin = new Vector2(12f, 6f);
+                    hit.offsetMax = new Vector2(-92f, 26f);
+                    rightOffset = 92f;
+                }
             }
             else if (row is CascadeButtonRow buttonRow)
             {
@@ -308,10 +358,11 @@ namespace CascadeMenu.UI
             }
             else if (row is CascadeLabelRow labelRow)
             {
-                RectTransform valueRect = CascadeUI.TopRight("Value", root, 12f, (row.Height - 18f) * 0.5f, 150f, 18f);
+                RectTransform valueRect = CascadeUI.TopRight("Value", root, 12f, (row.Height - 18f) * 0.5f, 224f, 18f);
                 string value = labelRow.GetValue != null ? (labelRow.GetValue() ?? string.Empty) : labelRow.Value;
                 TMP_Text valueLabel = CascadeUI.Text(valueRect, value, 11f, Theme.TextSecondary,
                     TextAlignmentOptions.Right);
+                valueLabel.overflowMode = TextOverflowModes.Ellipsis;
 
                 if (labelRow.GetValue != null)
                 {
@@ -324,7 +375,7 @@ namespace CascadeMenu.UI
                     view.Theme = Theme;
                 }
 
-                rightOffset = 174f;
+                rightOffset = 246f;
             }
 
             bool hasSubtitle = !string.IsNullOrEmpty(row.Subtitle);
@@ -581,25 +632,146 @@ namespace CascadeMenu.UI
         }
 
         /// <summary>
-        /// The theme preview. Every piece is created with a role color, so the
-        /// binding cache repaints it automatically on a live theme change.
+        /// Interactive circular HSV/RGB color wheel + vertical brightness ramp + live RGB readout.
+        /// Supports click & drag on both PC mouse and VR laser pointer.
+        /// </summary>
+        private void BuildColorWheelRow(RectTransform card, CascadeColorWheelRow row)
+        {
+            RectTransform root = CascadeUI.Rect("ColorWheelRow", card);
+            var layoutElement = root.gameObject.AddComponent<LayoutElement>();
+            layoutElement.preferredHeight = row.Height;
+            layoutElement.minHeight = row.Height;
+
+            RectTransform titleRect = LineRect("Title", root, 12f, 12f, 6f, 20f);
+            CascadeUI.Text(titleRect, row.Title, 12f, Theme.TextPrimary, TextAlignmentOptions.Left, true);
+
+            if (!string.IsNullOrEmpty(row.Subtitle))
+            {
+                RectTransform subRect = LineRect("Subtitle", root, 12f, 12f, 24f, 15f);
+                CascadeUI.Text(subRect, row.Subtitle, 9.5f, Theme.TextSecondary, TextAlignmentOptions.Left);
+            }
+
+            const float wheelSize = 124f;
+            const float topOffset = 43f;
+
+            // --- 1. Circular HSV Color Wheel ---
+            RectTransform wheelHit = CascadeUI.TopLeft("WheelHit", root, 14f, topOffset, wheelSize, wheelSize);
+            Image wheelImg = CascadeUI.Image(wheelHit, CascadeSprites.ColorWheel(192), Color.white, Image.Type.Simple);
+            wheelImg.raycastTarget = false;
+
+            RectTransform wheelRing = CascadeUI.Rect("WheelBorder", wheelHit);
+            CascadeUI.Stretch(wheelRing, -1f, -1f, -1f, -1f);
+            Image ringImg = CascadeUI.Image(wheelRing, CascadeSprites.CircleRing(2f), Theme.Border.WithAlpha(0.55f), Image.Type.Simple);
+            if (ringImg != null) ringImg.raycastTarget = false;
+
+            // Draggable circular reticle knob
+            RectTransform wheelKnob = CascadeUI.Rect("WheelKnob", wheelHit);
+            wheelKnob.anchorMin = wheelKnob.anchorMax = new Vector2(0.5f, 0.5f);
+            wheelKnob.pivot = new Vector2(0.5f, 0.5f);
+            wheelKnob.sizeDelta = new Vector2(14f, 14f);
+            Image knobShadow = CascadeUI.Image(wheelKnob, CascadeSprites.Circle(), new Color(0f, 0f, 0f, 0.72f), Image.Type.Simple);
+            if (knobShadow != null) knobShadow.raycastTarget = false;
+
+            RectTransform knobRing = CascadeUI.Rect("Ring", wheelKnob);
+            CascadeUI.Stretch(knobRing, 1.5f, 1.5f, 1.5f, 1.5f);
+            Image knobWhite = CascadeUI.Image(knobRing, CascadeSprites.Circle(), Color.white, Image.Type.Simple);
+            if (knobWhite != null) knobWhite.raycastTarget = false;
+
+            RectTransform knobInner = CascadeUI.Rect("Fill", wheelKnob);
+            CascadeUI.Stretch(knobInner, 3f, 3f, 3f, 3f);
+            Image knobFill = CascadeUI.Image(knobInner, CascadeSprites.Circle(), Color.white, Image.Type.Simple);
+            if (knobFill != null) knobFill.raycastTarget = false;
+
+            // --- 2. Vertical Brightness (Value) Bar ---
+            RectTransform valHit = CascadeUI.TopLeft("ValueBarHit", root, 14f + wheelSize + 14f, topOffset, 22f, wheelSize);
+            Image valImg = CascadeUI.Image(valHit, CascadeSprites.BrightnessBar(), Color.white, Image.Type.Simple);
+            valImg.raycastTarget = false;
+
+            RectTransform valBorder = CascadeUI.Rect("Border", valHit);
+            CascadeUI.Stretch(valBorder);
+            CascadeUI.Outline(valBorder, Theme.Border.WithAlpha(0.45f), 6);
+
+            RectTransform valKnob = CascadeUI.Rect("ValueKnob", valHit);
+            valKnob.anchorMin = new Vector2(0.5f, 0f);
+            valKnob.anchorMax = new Vector2(0.5f, 0f);
+            valKnob.pivot = new Vector2(0.5f, 0.5f);
+            valKnob.sizeDelta = new Vector2(26f, 8f);
+            Image valKnobImg = CascadeUI.Image(valKnob, CascadeSprites.Rounded(4), Color.white, Image.Type.Sliced);
+            if (valKnobImg != null) valKnobImg.raycastTarget = false;
+            RectTransform valKnobBorder = CascadeUI.Rect("Border", valKnob);
+            CascadeUI.Stretch(valKnobBorder);
+            CascadeUI.Outline(valKnobBorder, new Color(0f, 0f, 0f, 0.65f), 4);
+
+            // --- 3. Right Live Color / RGB / HSV Readout Card ---
+            float infoLeft = 14f + wheelSize + 14f + 22f + 14f;
+            RectTransform infoBox = CascadeUI.Rect("WheelInfo", root);
+            infoBox.anchorMin = new Vector2(0f, 0f);
+            infoBox.anchorMax = new Vector2(1f, 1f);
+            infoBox.offsetMin = new Vector2(infoLeft, 8f);
+            infoBox.offsetMax = new Vector2(-12f, -topOffset);
+            CascadeUI.Panel(infoBox, Theme.FieldBg, 8);
+            RectTransform infoBorder = CascadeUI.Rect("Border", infoBox);
+            CascadeUI.Stretch(infoBorder);
+            CascadeUI.Outline(infoBorder, Theme.ViewBorder, 8);
+
+            RectTransform swatchRect = CascadeUI.TopLeft("PreviewSwatch", infoBox, 12f, 12f, 40f, 40f);
+            Image swatchImg = CascadeUI.Panel(swatchRect, Color.white, 8);
+            if (swatchImg != null) swatchImg.raycastTarget = false;
+            RectTransform swatchBorder = CascadeUI.Rect("Border", swatchRect);
+            CascadeUI.Stretch(swatchBorder);
+            CascadeUI.Outline(swatchBorder, Theme.Border, 8);
+
+            RectTransform roleRect = LineRect("Role", infoBox, 60f, 10f, 12f, 18f);
+            TMP_Text roleTxt = CascadeUI.Text(roleRect, "Selected color", 11.5f, Theme.TextPrimary, TextAlignmentOptions.Left, true);
+            roleTxt.overflowMode = TextOverflowModes.Ellipsis;
+
+            RectTransform hexRect = LineRect("Hex", infoBox, 60f, 10f, 32f, 18f);
+            TMP_Text hexTxt = CascadeUI.Text(hexRect, "#FFFFFF", 11f, Theme.Accent, TextAlignmentOptions.Left, true);
+
+            RectTransform rgbRect = LineRect("Rgb", infoBox, 12f, 10f, 64f, 18f);
+            TMP_Text rgbTxt = CascadeUI.Text(rgbRect, "R 255 · G 255 · B 255", 10.5f, Theme.TextPrimary, TextAlignmentOptions.Left);
+
+            RectTransform hsvRect = LineRect("Hsv", infoBox, 12f, 10f, 84f, 17f);
+            TMP_Text hsvTxt = CascadeUI.Text(hsvRect, "H 0° · S 0% · V 100%", 9.5f, Theme.TextSecondary, TextAlignmentOptions.Left);
+
+            RectTransform hintRect = LineRect("Hint", infoBox, 12f, 10f, 103f, 15f);
+            CascadeUI.Text(hintRect, "Click or drag wheel & brightness bar", 9f, Theme.TextTertiary, TextAlignmentOptions.Left);
+
+            var view = root.gameObject.AddComponent<CascadeColorWheelView>();
+            view.Configure(
+                wheelHit, wheelKnob, knobFill, wheelImg,
+                valHit, valImg, valKnob,
+                swatchImg, hexTxt, rgbTxt, hsvTxt, roleTxt,
+                row.Get, row.Set, row.GetRoleLabel);
+
+            Register(wheelHit, CascadeLayerGroup.Content, dragWorld: world => view.DragWheelWorld(world), slider: true);
+            Register(valHit, CascadeLayerGroup.Content, dragWorld: world => view.DragValueWorld(world), slider: true);
+        }
+
+        /// <summary>
+        /// The theme preview split into two columns:
+        /// Left: live mini-window UI diagram (repainted automatically via theme bindings).
+        /// Right: live "Currently Editing" target inspector showing a swatch, role name,
+        /// hex code, and plain-English explanation of what the selected color changes.
         /// </summary>
         private void BuildPreviewRow(RectTransform card, CascadePreviewRow row)
         {
             RectTransform root = CascadeUI.Rect("Preview", card);
             var layoutElement = root.gameObject.AddComponent<LayoutElement>();
-            layoutElement.preferredHeight = row.Height;
-            layoutElement.minHeight = row.Height;
+            float rowHeight = Mathf.Max(row.Height, 134f);
+            layoutElement.preferredHeight = rowHeight;
+            layoutElement.minHeight = rowHeight;
 
-            RectTransform titleRect = LineRect("Title", root, 12f, 12f, 4f, 18f);
+            RectTransform titleRect = LineRect("Title", root, 12f, 12f, 5f, 18f);
             CascadeUI.Text(titleRect, row.Title, 11.5f, Theme.TextSecondary, TextAlignmentOptions.Left, true);
 
+            // --- Left half: Mini Live UI Window Diagram ---
             RectTransform preview = CascadeUI.Rect("Window", root);
             preview.anchorMin = new Vector2(0f, 0f);
-            preview.anchorMax = new Vector2(1f, 1f);
-            preview.pivot = new Vector2(0.5f, 0.5f);
-            preview.offsetMin = new Vector2(12f, 8f);
-            preview.offsetMax = new Vector2(-12f, -26f);
+            preview.anchorMax = new Vector2(0.52f, 1f);
+            preview.pivot = new Vector2(0f, 0.5f);
+            preview.offsetMin = new Vector2(12f, 10f);
+            preview.offsetMax = new Vector2(-5f, -27f);
             CascadeUI.Panel(preview, Theme.Background, 8);
             RectTransform previewBorder = CascadeUI.Rect("Border", preview);
             CascadeUI.Stretch(previewBorder);
@@ -609,7 +781,7 @@ namespace CascadeMenu.UI
             sidebar.anchorMin = new Vector2(0f, 0f);
             sidebar.anchorMax = new Vector2(0f, 1f);
             sidebar.pivot = new Vector2(0f, 0.5f);
-            sidebar.sizeDelta = new Vector2(96f, 0f);
+            sidebar.sizeDelta = new Vector2(74f, 0f);
             CascadeUI.Panel(sidebar, Theme.Panel, 8);
 
             RectTransform header = CascadeUI.Rect("Header", preview);
@@ -620,38 +792,93 @@ namespace CascadeMenu.UI
             header.offsetMax = new Vector2(0f, 0f);
             CascadeUI.Panel(header, Theme.Header, 8);
 
+            RectTransform hdrLabel = CascadeUI.Rect("HeaderLabel", header);
+            CascadeUI.Stretch(hdrLabel, 8f, 8f, 0f, 0f);
+            CascadeUI.Text(hdrLabel, "Header", 8.5f, Theme.Text, TextAlignmentOptions.Left, true);
+
             RectTransform text = CascadeUI.Rect("Text", sidebar);
-            CascadeUI.Stretch(text, 10f, 10f, 8f, 8f);
-            CascadeUI.Text(text, "Aa", 15f, Theme.Text, TextAlignmentOptions.Left, true);
+            CascadeUI.Stretch(text, 8f, 6f, 24f, 8f);
+            CascadeUI.Text(text, "Panel\nAa", 10.5f, Theme.Text, TextAlignmentOptions.TopLeft, true);
 
             RectTransform secondary = CascadeUI.Rect("Secondary", preview);
             secondary.anchorMin = new Vector2(0f, 1f);
             secondary.anchorMax = new Vector2(1f, 1f);
             secondary.pivot = new Vector2(0.5f, 1f);
-            secondary.offsetMin = new Vector2(108f, -40f);
-            secondary.offsetMax = new Vector2(-12f, -24f);
-            CascadeUI.Text(secondary, "Secondary text", 9.5f, Theme.SecondaryText, TextAlignmentOptions.Left);
+            secondary.offsetMin = new Vector2(82f, -42f);
+            secondary.offsetMax = new Vector2(-8f, -24f);
+            CascadeUI.Text(secondary, "BG · Subtext", 9f, Theme.SecondaryText, TextAlignmentOptions.Left);
+
+            RectTransform fieldBox = CascadeUI.Rect("Field", preview);
+            fieldBox.anchorMin = new Vector2(0f, 1f);
+            fieldBox.anchorMax = new Vector2(1f, 1f);
+            fieldBox.pivot = new Vector2(0.5f, 1f);
+            fieldBox.offsetMin = new Vector2(82f, -62f);
+            fieldBox.offsetMax = new Vector2(-8f, -45f);
+            CascadeUI.Panel(fieldBox, Theme.FieldBg, 4);
 
             RectTransform button = CascadeUI.Rect("Button", preview);
             button.anchorMin = button.anchorMax = new Vector2(1f, 0f);
             button.pivot = new Vector2(1f, 0f);
-            button.anchoredPosition = new Vector2(-12f, 9f);
-            button.sizeDelta = new Vector2(58f, 18f);
+            button.anchoredPosition = new Vector2(-8f, 8f);
+            button.sizeDelta = new Vector2(52f, 18f);
             CascadeUI.Panel(button, Theme.ButtonSecondaryTop, 5);
+            RectTransform btnTxt = CascadeUI.Rect("BtnTxt", button);
+            CascadeUI.Stretch(btnTxt);
+            CascadeUI.Text(btnTxt, "Btn", 8.5f, Theme.Text, TextAlignmentOptions.Center, true);
 
             RectTransform accent = CascadeUI.Rect("Accent", preview);
             accent.anchorMin = accent.anchorMax = new Vector2(0f, 0f);
             accent.pivot = new Vector2(0f, 0f);
-            accent.anchoredPosition = new Vector2(108f, 9f);
-            accent.sizeDelta = new Vector2(44f, 18f);
+            accent.anchoredPosition = new Vector2(82f, 8f);
+            accent.sizeDelta = new Vector2(46f, 18f);
             CascadeUI.Panel(accent, Theme.Accent, 5);
+            RectTransform accTxt = CascadeUI.Rect("AccTxt", accent);
+            CascadeUI.Stretch(accTxt);
+            CascadeUI.Text(accTxt, "Accent", 8f, Color.white, TextAlignmentOptions.Center, true);
 
             RectTransform active = CascadeUI.Rect("Active", preview);
             active.anchorMin = active.anchorMax = new Vector2(0f, 0f);
             active.pivot = new Vector2(0f, 0f);
-            active.anchoredPosition = new Vector2(160f, 14f);
+            active.anchoredPosition = new Vector2(134f, 13f);
             active.sizeDelta = new Vector2(8f, 8f);
             CascadeUI.Panel(active, Theme.ActiveColor, 4);
+
+            // --- Right half: Live "What This Changes" Inspector Card ---
+            RectTransform infoCard = CascadeUI.Rect("TargetInfo", root);
+            infoCard.anchorMin = new Vector2(0.52f, 0f);
+            infoCard.anchorMax = new Vector2(1f, 1f);
+            infoCard.pivot = new Vector2(1f, 0.5f);
+            infoCard.offsetMin = new Vector2(5f, 10f);
+            infoCard.offsetMax = new Vector2(-12f, -27f);
+            CascadeUI.Panel(infoCard, Theme.FieldBg, 8);
+            RectTransform infoBorder = CascadeUI.Rect("Border", infoCard);
+            CascadeUI.Stretch(infoBorder);
+            CascadeUI.Outline(infoBorder, Theme.ViewBorder, 8);
+
+            RectTransform swatchRect = CascadeUI.TopLeft("RoleSwatch", infoCard, 10f, 10f, 28f, 28f);
+            Image swatchImg = CascadeUI.Panel(swatchRect, Color.white, 6);
+            RectTransform swatchOutline = CascadeUI.Rect("Outline", swatchRect);
+            CascadeUI.Stretch(swatchOutline);
+            CascadeUI.Outline(swatchOutline, Theme.Border, 6);
+
+            RectTransform roleTitleRect = LineRect("RoleName", infoCard, 46f, 10f, 9f, 18f);
+            TMP_Text roleTitle = CascadeUI.Text(roleTitleRect, "Background", 11.5f, Theme.TextPrimary, TextAlignmentOptions.Left, true);
+            roleTitle.overflowMode = TextOverflowModes.Ellipsis;
+
+            RectTransform roleHexRect = LineRect("RoleHex", infoCard, 46f, 10f, 26f, 15f);
+            TMP_Text roleHex = CascadeUI.Text(roleHexRect, "#1C1C1E", 9.5f, Theme.Accent, TextAlignmentOptions.Left, true);
+
+            RectTransform roleDescRect = CascadeUI.Rect("RoleDesc", infoCard);
+            roleDescRect.anchorMin = new Vector2(0f, 0f);
+            roleDescRect.anchorMax = new Vector2(1f, 1f);
+            roleDescRect.offsetMin = new Vector2(10f, 7f);
+            roleDescRect.offsetMax = new Vector2(-10f, -45f);
+            TMP_Text roleDesc = CascadeUI.Text(roleDescRect, "", 9.5f, Theme.TextSecondary, TextAlignmentOptions.TopLeft);
+            roleDesc.textWrappingMode = TextWrappingModes.Normal;
+            roleDesc.overflowMode = TextOverflowModes.Ellipsis;
+
+            var inspector = infoCard.gameObject.AddComponent<CascadeColorTargetInfoView>();
+            inspector.Configure(_menu, swatchImg, roleTitle, roleHex, roleDesc);
         }
 
         // -----------------------------------------------------------------

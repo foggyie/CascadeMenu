@@ -2,8 +2,17 @@ using System;
 using System.Collections.Generic;
 using GorillaLocomotion;
 using UnityEngine;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Overlays;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Fun
 {
     /// <summary>
     /// Fixed-capacity particle list drawn by one <see cref="BillboardCloud"/>.
@@ -395,14 +404,32 @@ namespace CascadeMenu.Mods
     public sealed class OrbitingOrbsMod : Mod
     {
         private const int Count = 8;
+        private static readonly string[] Patterns = { "Wave Orbit", "Flat Halo", "Double Helix" };
 
         private BillboardCloud _cloud;
         private float _angle;
+        private int _pattern = 0;
+        private float _scale = 1.0f;
 
         public OrbitingOrbsMod()
         {
             Name = "Orbiting Orbs";
             isToggle = true;
+
+            AddSetting(ModSetting.Dropdown(
+                "pattern", "Pattern",
+                "How the orbs move around you",
+                Patterns,
+                () => _pattern,
+                v => _pattern = Mathf.Clamp(v, 0, Patterns.Length - 1)));
+
+            AddSetting(ModSetting.Slider(
+                "scale", "Orb scale",
+                "Size multiplier for each orb",
+                0.4f, 2.5f,
+                () => _scale,
+                value => _scale = value,
+                value => value.ToString("0.00") + "x"));
 
             AddSetting(ModSetting.Slider(
                 "radius", "Radius",
@@ -446,11 +473,15 @@ namespace CascadeMenu.Mods
             for (int i = 0; i < Count; i++)
             {
                 float angle = (_angle + i * (360f / Count)) * Mathf.Deg2Rad;
+                float yOff = 0f;
+                if (_pattern == 0) yOff = Mathf.Sin(angle * 2f) * 0.18f;
+                else if (_pattern == 2) yOff = ((i % 2 == 0) ? 1f : -1f) * Mathf.Sin(angle) * 0.45f;
+
                 Vector3 point = center + new Vector3(
                     Mathf.Cos(angle) * _radius,
-                    Mathf.Sin(angle * 2f) * 0.18f,
+                    yOff,
                     Mathf.Sin(angle) * _radius);
-                _cloud.Add(point, 0.16f, ModKit.Hsv(i / (float)Count));
+                _cloud.Add(point, 0.16f * _scale, ModKit.Hsv(i / (float)Count));
             }
             _cloud.End(ModKit.ViewCamera);
         }
@@ -462,15 +493,42 @@ namespace CascadeMenu.Mods
     public sealed class PartyLightsMod : Mod
     {
         private const int Count = 24;
+        private static readonly string[] Patterns = { "Carousel", "Strobe Pulse", "Spiral Rise" };
 
         private BillboardCloud _cloud;
         private float _angle;
         private float _hue;
+        private int _pattern = 0;
+        private float _scale = 1.0f;
+        private float _speed = 1.0f;
 
         public PartyLightsMod()
         {
             Name = "Party Lights";
             isToggle = true;
+
+            AddSetting(ModSetting.Dropdown(
+                "pattern", "Pattern",
+                "Choose how the party lights animate",
+                Patterns,
+                () => _pattern,
+                v => _pattern = Mathf.Clamp(v, 0, Patterns.Length - 1)));
+
+            AddSetting(ModSetting.Slider(
+                "scale", "Light scale",
+                "Size multiplier for each party light",
+                0.4f, 2.5f,
+                () => _scale,
+                value => _scale = value,
+                value => value.ToString("0.00") + "x"));
+
+            AddSetting(ModSetting.Slider(
+                "speed", "Speed",
+                "Animation speed multiplier",
+                0.25f, 3.0f,
+                () => _speed,
+                value => _speed = value,
+                value => value.ToString("0.00") + "x"));
 
             AddSetting(ModSetting.Slider(
                 "radius", "Radius",
@@ -498,20 +556,24 @@ namespace CascadeMenu.Mods
         {
             if (_cloud == null) return;
 
-            _angle = Mathf.Repeat(_angle + Time.unscaledDeltaTime * 40f, 360f);
-            _hue = Mathf.Repeat(_hue + Time.unscaledDeltaTime * 0.18f, 1f);
+            _angle = Mathf.Repeat(_angle + Time.unscaledDeltaTime * 40f * _speed, 360f);
+            _hue = Mathf.Repeat(_hue + Time.unscaledDeltaTime * 0.18f * _speed, 1f);
             Vector3 center = ModKit.HeadPosition;
 
             _cloud.Begin();
             for (int i = 0; i < Count; i++)
             {
                 float angle = (_angle + i * (360f / Count)) * Mathf.Deg2Rad;
-                float height = 0.8f + Mathf.Abs(Mathf.Sin(angle * 2f)) * 3.2f;
+                float height = _pattern == 2
+                    ? Mathf.Repeat((Time.unscaledTime * _speed * 0.8f) + (i / (float)Count) * 4f, 4f)
+                    : 0.8f + Mathf.Abs(Mathf.Sin(angle * 2f)) * 3.2f;
+                float pulse = _pattern == 1 ? (0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 10f * _speed + i)) : 1f;
+
                 Vector3 point = center + new Vector3(
                     Mathf.Cos(angle) * _radius,
                     height,
                     Mathf.Sin(angle) * _radius);
-                _cloud.Add(point, 0.28f, ModKit.Hsv(_hue + i * 0.04f));
+                _cloud.Add(point, 0.28f * _scale * pulse, ModKit.Hsv(_hue + i * 0.04f));
             }
             _cloud.End(ModKit.ViewCamera);
         }
@@ -523,14 +585,32 @@ namespace CascadeMenu.Mods
     public sealed class FirefliesMod : Mod
     {
         private const int Count = 40;
+        private static readonly string[] Styles = { "Warm Gold", "Neon Cyan", "Rainbow" };
 
         private BillboardCloud _cloud;
         private readonly Vector3[] _seeds = new Vector3[Count];
+        private int _style = 0;
+        private float _scale = 1.0f;
 
         public FirefliesMod()
         {
             Name = "Fireflies";
             isToggle = true;
+
+            AddSetting(ModSetting.Dropdown(
+                "style", "Color style",
+                "Glow palette for drifting fireflies",
+                Styles,
+                () => _style,
+                v => _style = Mathf.Clamp(v, 0, Styles.Length - 1)));
+
+            AddSetting(ModSetting.Slider(
+                "scale", "Firefly scale",
+                "Size multiplier for each firefly",
+                0.4f, 2.5f,
+                () => _scale,
+                value => _scale = value,
+                value => value.ToString("0.00") + "x"));
 
             AddSetting(ModSetting.Slider(
                 "radius", "Radius",
@@ -578,8 +658,13 @@ namespace CascadeMenu.Mods
                     seed.z * _radius + Mathf.Cos(time * 0.45f + i) * 0.4f);
 
                 float pulse = 0.5f + 0.5f * Mathf.Sin(time * 2f + i);
-                Color color = new Color(1f, 0.92f, 0.45f, Mathf.Lerp(0.25f, 1f, pulse));
-                _cloud.Add(point, Mathf.Lerp(0.05f, 0.11f, pulse), color);
+                float alpha = Mathf.Lerp(0.25f, 1f, pulse);
+                Color color;
+                if (_style == 1) color = new Color(0.35f, 0.95f, 1f, alpha);
+                else if (_style == 2) color = ModKit.Hsv(Mathf.Repeat(time * 0.15f + i * 0.05f, 1f), 0.85f, 1f, alpha);
+                else color = new Color(1f, 0.92f, 0.45f, alpha);
+
+                _cloud.Add(point, Mathf.Lerp(0.05f, 0.11f, pulse) * _scale, color);
             }
             _cloud.End(ModKit.ViewCamera);
         }
@@ -589,37 +674,64 @@ namespace CascadeMenu.Mods
     // Weather
     // -------------------------------------------------------------------------
 
-    /// <summary>Snow falling in a cylinder around the player.</summary>
+    /// <summary>Snow falling in a cylinder around the player with Light/Normal/Moderate/Blizzard modes.</summary>
     [PluginToggleable]
     [ModCategory("Fun")]
     public sealed class SnowfallMod : Mod
     {
-        private const int Count = 140;
+        private const int MaxCount = 360;
+        private static readonly string[] IntensityModes = { "Light Snow", "Normal Snow", "Moderate Snow", "Blizzard" };
 
         private BillboardCloud _cloud;
-        private readonly Vector3[] _points = new Vector3[Count];
-        private readonly float[] _speeds = new float[Count];
+        private readonly Vector3[] _points = new Vector3[MaxCount];
+        private readonly float[] _speeds = new float[MaxCount];
         private bool _seeded;
+
+        private int _mode = 1; // 0=Light, 1=Normal, 2=Moderate, 3=Blizzard
+        private float _speedMult = 1.0f;
+        private float _flakeScale = 1.0f;
+        private float _radius = 9f;
 
         public SnowfallMod()
         {
             Name = "Snowfall";
             isToggle = true;
 
+            AddSetting(ModSetting.Dropdown(
+                "mode", "Snow intensity",
+                "Light Snow, Normal Snow, Moderate Snow, or howling Blizzard",
+                IntensityModes,
+                () => _mode,
+                v => _mode = Mathf.Clamp(v, 0, IntensityModes.Length - 1)));
+
+            AddSetting(ModSetting.Slider(
+                "speed", "Fall speed",
+                "How fast the snow falls and blows",
+                0.25f, 4.0f,
+                () => _speedMult,
+                value => _speedMult = value,
+                value => value.ToString("0.00") + "x"));
+
+            AddSetting(ModSetting.Slider(
+                "scale", "Flake scale",
+                "Size multiplier for each snowflake",
+                0.30f, 3.0f,
+                () => _flakeScale,
+                value => _flakeScale = value,
+                value => value.ToString("0.00") + "x"));
+
             AddSetting(ModSetting.Slider(
                 "radius", "Radius",
-                "Snow field radius",
-                2f, 18f,
+                "Snow field radius around you",
+                2f, 20f,
                 () => _radius,
                 value => _radius = value,
                 value => value.ToString("0.0") + " m"));
         }
 
-        private float _radius = 8f;
-
         public override void OnEnable()
         {
-            _cloud = new BillboardCloud("CascadeSnow", Count, true);
+            _cloud = new BillboardCloud("CascadeSnow", MaxCount, true);
             _seeded = false;
         }
 
@@ -640,15 +752,63 @@ namespace CascadeMenu.Mods
             if (!_seeded)
             {
                 _seeded = true;
-                for (int i = 0; i < Count; i++) Spawn(i, center, true);
+                for (int i = 0; i < MaxCount; i++) Spawn(i, center, true);
             }
 
+            int activeCount;
+            float modeSpeed;
+            float windX;
+            float windZ;
+            float sway;
+            float baseSize;
+
+            switch (_mode)
+            {
+                case 0: // Light Snow
+                    activeCount = 75;
+                    modeSpeed = 0.65f;
+                    windX = 0.15f;
+                    windZ = 0.05f;
+                    sway = 0.25f;
+                    baseSize = 0.062f;
+                    break;
+                case 2: // Moderate Snow
+                    activeCount = 240;
+                    modeSpeed = 1.45f;
+                    windX = 1.15f;
+                    windZ = 0.45f;
+                    sway = 0.55f;
+                    baseSize = 0.085f;
+                    break;
+                case 3: // Blizzard
+                    activeCount = MaxCount;
+                    modeSpeed = 2.65f;
+                    windX = 4.20f;
+                    windZ = 1.65f;
+                    sway = 1.10f;
+                    baseSize = 0.105f;
+                    break;
+                default: // Normal Snow
+                    activeCount = 150;
+                    modeSpeed = 1.0f;
+                    windX = 0.45f;
+                    windZ = 0.15f;
+                    sway = 0.35f;
+                    baseSize = 0.075f;
+                    break;
+            }
+
+            float speedFactor = modeSpeed * _speedMult;
+            float flakeSize = baseSize * _flakeScale;
+            float time = Time.unscaledTime;
+
             _cloud.Begin();
-            for (int i = 0; i < Count; i++)
+            for (int i = 0; i < activeCount; i++)
             {
                 Vector3 point = _points[i];
-                point.y -= _speeds[i] * deltaTime;
-                point.x += Mathf.Sin(Time.unscaledTime * 0.6f + i) * 0.02f;
+                point.y -= _speeds[i] * speedFactor * deltaTime;
+                point.x += (windX + Mathf.Sin(time * 0.9f + i) * sway) * _speedMult * deltaTime;
+                point.z += (windZ + Mathf.Cos(time * 0.7f + i * 1.3f) * sway * 0.6f) * _speedMult * deltaTime;
 
                 if (point.y < center.y - 4f || Vector2.Distance(
                         new Vector2(point.x, point.z),
@@ -659,7 +819,7 @@ namespace CascadeMenu.Mods
                 }
 
                 _points[i] = point;
-                _cloud.Add(point, 0.075f, new Color(0.92f, 0.97f, 1f, 0.9f));
+                _cloud.Add(point, flakeSize, new Color(0.93f, 0.97f, 1f, _mode == 3 ? 0.96f : 0.88f));
             }
             _cloud.End(ModKit.ViewCamera);
         }
@@ -669,7 +829,7 @@ namespace CascadeMenu.Mods
             Vector2 offset = FunKit.RandomCircle() * _radius;
             _points[index] = new Vector3(
                 center.x + offset.x,
-                center.y + (anywhere ? UnityEngine.Random.Range(-3f, 7f) : UnityEngine.Random.Range(5f, 7f)),
+                center.y + (anywhere ? UnityEngine.Random.Range(-3f, 7f) : UnityEngine.Random.Range(5f, 7.5f)),
                 center.z + offset.y);
             _speeds[index] = UnityEngine.Random.Range(0.7f, 1.8f);
         }
@@ -680,17 +840,46 @@ namespace CascadeMenu.Mods
     [ModCategory("Fun")]
     public sealed class RainfallMod : Mod
     {
-        private const int Count = 160;
+        private const int MaxCount = 260;
+        private static readonly string[] IntensityModes = { "Light Drizzle", "Normal Rain", "Heavy Downpour", "Storm" };
 
         private BillboardCloud _cloud;
-        private readonly Vector3[] _points = new Vector3[Count];
-        private readonly float[] _speeds = new float[Count];
+        private readonly Vector3[] _points = new Vector3[MaxCount];
+        private readonly float[] _speeds = new float[MaxCount];
         private bool _seeded;
+
+        private int _mode = 1;
+        private float _speedMult = 1.0f;
+        private float _scale = 1.0f;
+        private float _radius = 7f;
 
         public RainfallMod()
         {
             Name = "Rainfall";
             isToggle = true;
+
+            AddSetting(ModSetting.Dropdown(
+                "mode", "Rain intensity",
+                "Drizzle, Normal Rain, Heavy Downpour, or Storm",
+                IntensityModes,
+                () => _mode,
+                v => _mode = Mathf.Clamp(v, 0, IntensityModes.Length - 1)));
+
+            AddSetting(ModSetting.Slider(
+                "speed", "Fall speed",
+                "How fast raindrops fall",
+                0.25f, 3.0f,
+                () => _speedMult,
+                value => _speedMult = value,
+                value => value.ToString("0.00") + "x"));
+
+            AddSetting(ModSetting.Slider(
+                "scale", "Drop scale",
+                "Size multiplier for raindrops",
+                0.4f, 2.5f,
+                () => _scale,
+                value => _scale = value,
+                value => value.ToString("0.00") + "x"));
 
             AddSetting(ModSetting.Slider(
                 "radius", "Radius",
@@ -701,11 +890,9 @@ namespace CascadeMenu.Mods
                 value => value.ToString("0.0") + " m"));
         }
 
-        private float _radius = 7f;
-
         public override void OnEnable()
         {
-            _cloud = new BillboardCloud("CascadeRain", Count, false);
+            _cloud = new BillboardCloud("CascadeRain", MaxCount, false);
             _seeded = false;
         }
 
@@ -726,14 +913,18 @@ namespace CascadeMenu.Mods
             if (!_seeded)
             {
                 _seeded = true;
-                for (int i = 0; i < Count; i++) Spawn(i, center, true);
+                for (int i = 0; i < MaxCount; i++) Spawn(i, center, true);
             }
 
+            int activeCount = _mode == 0 ? 80 : (_mode == 1 ? 150 : (_mode == 2 ? 210 : MaxCount));
+            float wind = _mode == 3 ? 2.6f : (_mode == 2 ? 0.8f : 0f);
+
             _cloud.Begin();
-            for (int i = 0; i < Count; i++)
+            for (int i = 0; i < activeCount; i++)
             {
                 Vector3 point = _points[i];
-                point.y -= _speeds[i] * deltaTime;
+                point.y -= _speeds[i] * _speedMult * deltaTime;
+                point.x += wind * _speedMult * deltaTime;
 
                 if (point.y < center.y - 4f)
                 {
@@ -742,7 +933,7 @@ namespace CascadeMenu.Mods
                 }
 
                 _points[i] = point;
-                _cloud.Add(point, 0.03f, new Color(0.6f, 0.78f, 1f, 0.5f));
+                _cloud.Add(point, 0.032f * _scale, new Color(0.6f, 0.80f, 1f, 0.55f));
             }
             _cloud.End(ModKit.ViewCamera);
         }
@@ -767,13 +958,33 @@ namespace CascadeMenu.Mods
     [ModCategory("Fun")]
     public sealed class ConfettiMod : Mod
     {
+        private static readonly string[] Styles = { "Overhead Burst", "Fountain", "Spiral Shower" };
+
         private ParticlePool _particles;
         private float _nextBurst;
+        private int _style = 0;
+        private float _scale = 1.0f;
+        private float _interval = 1.6f;
 
         public ConfettiMod()
         {
             Name = "Confetti";
             isToggle = true;
+
+            AddSetting(ModSetting.Dropdown(
+                "style", "Burst style",
+                "Choose how confetti launches",
+                Styles,
+                () => _style,
+                v => _style = Mathf.Clamp(v, 0, Styles.Length - 1)));
+
+            AddSetting(ModSetting.Slider(
+                "scale", "Confetti scale",
+                "Size multiplier for confetti pieces",
+                0.4f, 2.5f,
+                () => _scale,
+                value => _scale = value,
+                value => value.ToString("0.00") + "x"));
 
             AddSetting(ModSetting.Slider(
                 "rate", "Burst rate",
@@ -784,11 +995,9 @@ namespace CascadeMenu.Mods
                 value => value.ToString("0.0") + " s"));
         }
 
-        private float _interval = 1.6f;
-
         public override void OnEnable()
         {
-            _particles = new ParticlePool("CascadeConfetti", 220, false, 7f);
+            _particles = new ParticlePool("CascadeConfetti", 260, false, 7f);
             _nextBurst = 0f;
         }
 
@@ -814,22 +1023,33 @@ namespace CascadeMenu.Mods
 
         private void Burst()
         {
-            Vector3 center = ModKit.HeadPosition + Vector3.up * 0.6f;
+            Vector3 center = ModKit.HeadPosition + Vector3.up * (_style == 1 ? 0.1f : 0.6f);
 
             for (int i = 0; i < 34; i++)
             {
-                Vector2 spread = FunKit.RandomCircle() * 3.2f;
-                Vector3 velocity = new Vector3(
-                    spread.x,
-                    UnityEngine.Random.Range(2.5f, 6.5f),
-                    spread.y);
+                Vector3 velocity;
+                if (_style == 1)
+                {
+                    Vector2 spread = FunKit.RandomCircle() * 1.4f;
+                    velocity = new Vector3(spread.x, UnityEngine.Random.Range(5.5f, 9.0f), spread.y);
+                }
+                else if (_style == 2)
+                {
+                    float a = (i / 34f) * Mathf.PI * 4f + Time.unscaledTime * 2f;
+                    velocity = new Vector3(Mathf.Cos(a) * 3.2f, UnityEngine.Random.Range(2.5f, 5.5f), Mathf.Sin(a) * 3.2f);
+                }
+                else
+                {
+                    Vector2 spread = FunKit.RandomCircle() * 3.2f;
+                    velocity = new Vector3(spread.x, UnityEngine.Random.Range(2.5f, 6.5f), spread.y);
+                }
 
                 _particles.Spawn(
-                    center + new Vector3(spread.x * 0.2f, 0f, spread.y * 0.2f),
+                    center,
                     velocity,
                     ModKit.Hsv(UnityEngine.Random.value, 0.85f, 1f, 0.95f),
                     UnityEngine.Random.Range(1.4f, 2.6f),
-                    UnityEngine.Random.Range(0.05f, 0.11f));
+                    UnityEngine.Random.Range(0.05f, 0.11f) * _scale);
             }
         }
     }
@@ -839,13 +1059,34 @@ namespace CascadeMenu.Mods
     [ModCategory("Fun")]
     public sealed class FireworksMod : Mod
     {
+        private static readonly string[] Styles = { "Sphere Burst", "Ring Burst", "Double Cluster" };
+
         private ParticlePool _particles;
         private float _nextBurst;
+        private int _style = 0;
+        private float _scale = 1.0f;
+        private float _interval = 2.4f;
+        private float _height = 12f;
 
         public FireworksMod()
         {
             Name = "Fireworks";
             isToggle = true;
+
+            AddSetting(ModSetting.Dropdown(
+                "style", "Firework style",
+                "Explosion shape in the sky",
+                Styles,
+                () => _style,
+                v => _style = Mathf.Clamp(v, 0, Styles.Length - 1)));
+
+            AddSetting(ModSetting.Slider(
+                "scale", "Spark scale",
+                "Size multiplier for firework sparks",
+                0.4f, 2.5f,
+                () => _scale,
+                value => _scale = value,
+                value => value.ToString("0.00") + "x"));
 
             AddSetting(ModSetting.Slider(
                 "rate", "Launch rate",
@@ -864,12 +1105,9 @@ namespace CascadeMenu.Mods
                 value => value.ToString("0") + " m"));
         }
 
-        private float _interval = 2.4f;
-        private float _height = 12f;
-
         public override void OnEnable()
         {
-            _particles = new ParticlePool("CascadeFireworks", 320, true, 2.5f);
+            _particles = new ParticlePool("CascadeFireworks", 360, true, 2.5f);
             _nextBurst = 0f;
         }
 
@@ -900,17 +1138,32 @@ namespace CascadeMenu.Mods
             float hue = UnityEngine.Random.value;
             float speed = UnityEngine.Random.Range(4f, 8f);
 
-            for (int i = 0; i < 46; i++)
+            int bursts = _style == 2 ? 2 : 1;
+            for (int b = 0; b < bursts; b++)
             {
-                Vector3 direction = UnityEngine.Random.onUnitSphere;
-                Vector3 velocity = direction * speed * UnityEngine.Random.Range(0.6f, 1f);
+                Vector3 burstCenter = b == 0 ? center : center + UnityEngine.Random.onUnitSphere * 2.5f;
+                float burstHue = Mathf.Repeat(hue + b * 0.35f, 1f);
+                for (int i = 0; i < 42; i++)
+                {
+                    Vector3 direction;
+                    if (_style == 1)
+                    {
+                        float a = (i / 42f) * Mathf.PI * 2f;
+                        direction = new Vector3(Mathf.Cos(a), UnityEngine.Random.Range(-0.15f, 0.15f), Mathf.Sin(a)).normalized;
+                    }
+                    else
+                    {
+                        direction = UnityEngine.Random.onUnitSphere;
+                    }
 
-                _particles.Spawn(
-                    center,
-                    velocity,
-                    ModKit.Hsv(hue + UnityEngine.Random.Range(-0.06f, 0.06f), 0.9f, 1f, 0.95f),
-                    UnityEngine.Random.Range(1.2f, 2.2f),
-                    UnityEngine.Random.Range(0.08f, 0.16f));
+                    Vector3 velocity = direction * speed * UnityEngine.Random.Range(0.6f, 1f);
+                    _particles.Spawn(
+                        burstCenter,
+                        velocity,
+                        ModKit.Hsv(burstHue + UnityEngine.Random.Range(-0.06f, 0.06f), 0.9f, 1f, 0.95f),
+                        UnityEngine.Random.Range(1.2f, 2.2f),
+                        UnityEngine.Random.Range(0.08f, 0.16f) * _scale);
+                }
             }
         }
     }
@@ -925,13 +1178,32 @@ namespace CascadeMenu.Mods
     public sealed class GroundRingMod : Mod
     {
         private const int Segments = 64;
+        private static readonly string[] Styles = { "Cyan Glow", "Rainbow Pulse", "Emerald Aura" };
 
         private LineRenderer _ring;
+        private int _style = 0;
+        private float _scale = 1.0f;
+        private float _radius = 1.4f;
 
         public GroundRingMod()
         {
             Name = "Ground Ring";
             isToggle = true;
+
+            AddSetting(ModSetting.Dropdown(
+                "style", "Ring style",
+                "Color and pulse style for the ground ring",
+                Styles,
+                () => _style,
+                v => _style = Mathf.Clamp(v, 0, Styles.Length - 1)));
+
+            AddSetting(ModSetting.Slider(
+                "scale", "Line thickness",
+                "Thickness multiplier for the ring",
+                0.5f, 3.0f,
+                () => _scale,
+                value => _scale = value,
+                value => value.ToString("0.00") + "x"));
 
             AddSetting(ModSetting.Slider(
                 "radius", "Radius",
@@ -941,8 +1213,6 @@ namespace CascadeMenu.Mods
                 value => _radius = value,
                 value => value.ToString("0.00") + " m"));
         }
-
-        private float _radius = 1.4f;
 
         public override void OnEnable()
         {
@@ -961,6 +1231,14 @@ namespace CascadeMenu.Mods
         public override void Update()
         {
             if (_ring == null) return;
+
+            _ring.startWidth = 0.03f * _scale;
+            _ring.endWidth = 0.03f * _scale;
+            Color col = _style == 1
+                ? ModKit.Hsv(Mathf.Repeat(Time.unscaledTime * 0.25f, 1f), 0.85f, 1f, 0.85f)
+                : (_style == 2 ? new Color(0.25f, 0.95f, 0.55f, 0.85f) : new Color(0.45f, 0.9f, 1f, 0.8f));
+            _ring.startColor = col;
+            _ring.endColor = col;
 
             Vector3 head = ModKit.HeadPosition;
             float ground = head.y;
@@ -988,13 +1266,31 @@ namespace CascadeMenu.Mods
     public sealed class BeaconLightMod : Mod
     {
         private const int Count = 16;
+        private static readonly string[] Styles = { "Ice Cyan", "Rainbow", "Golden Pillar" };
 
         private BillboardCloud _cloud;
+        private int _style = 0;
+        private float _scale = 1.0f;
 
         public BeaconLightMod()
         {
             Name = "Beacon Light";
             isToggle = true;
+
+            AddSetting(ModSetting.Dropdown(
+                "style", "Beacon color",
+                "Color style for the vertical light beam",
+                Styles,
+                () => _style,
+                v => _style = Mathf.Clamp(v, 0, Styles.Length - 1)));
+
+            AddSetting(ModSetting.Slider(
+                "scale", "Beam scale",
+                "Width multiplier for the light pillar",
+                0.4f, 2.5f,
+                () => _scale,
+                value => _scale = value,
+                value => value.ToString("0.00") + "x"));
         }
 
         public override void OnEnable()
@@ -1021,7 +1317,12 @@ namespace CascadeMenu.Mods
                 float t = i / (float)(Count - 1);
                 Vector3 point = basePoint + Vector3.up * (t * 18f);
                 float alpha = (1f - t) * Mathf.Lerp(0.35f, 0.85f, pulse);
-                _cloud.Add(point, Mathf.Lerp(0.9f, 0.4f, t), new Color(0.55f, 0.9f, 1f, alpha));
+                Color col;
+                if (_style == 1) col = ModKit.Hsv(Mathf.Repeat(Time.unscaledTime * 0.2f + t * 0.5f, 1f), 0.85f, 1f, alpha);
+                else if (_style == 2) col = new Color(1f, 0.82f, 0.32f, alpha);
+                else col = new Color(0.55f, 0.9f, 1f, alpha);
+
+                _cloud.Add(point, Mathf.Lerp(0.9f, 0.4f, t) * _scale, col);
             }
             _cloud.End(ModKit.ViewCamera);
         }

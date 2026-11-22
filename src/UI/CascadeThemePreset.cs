@@ -1,6 +1,12 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
 
 namespace CascadeMenu.UI
 {
@@ -35,6 +41,32 @@ namespace CascadeMenu.UI
             "Warning",
             "Success"
         };
+
+        public static readonly string[] Descriptions =
+        {
+            "Main page background area behind all cards and rows",
+            "Left navigation sidebar rail and grouped settings cards",
+            "Top macOS titlebar, telemetry pill, and search header",
+            "Secondary action buttons and neutral control pills",
+            "Highlight color when hovering over a button or row",
+            "Fill color while pressing or holding down a button",
+            "Switch track fill when a toggle is turned ON",
+            "Switch track fill when a toggle is turned OFF",
+            "Primary titles, headings, and main readable labels",
+            "Subtitles, descriptions, and secondary status text",
+            "Active tab fill, sliders, primary buttons, and outer glow",
+            "Window frame outline, card borders, and divider lines",
+            "Live ON status dot, active badges, and running highlights",
+            "Search box, text input fields, and dropdown surfaces",
+            "Destructive actions, warnings, and disconnect button",
+            "Caution labels, alerts, and warning badges",
+            "Positive confirmations, owned dots, and saved badges"
+        };
+
+        public static string Describe(int index)
+        {
+            return Descriptions[Mathf.Clamp(index, 0, Count - 1)];
+        }
 
         public Color this[int index]
         {

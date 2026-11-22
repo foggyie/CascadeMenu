@@ -1,12 +1,17 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using CascadeMenu.Mods;
 using GorillaNetworking;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.XR;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
 
 namespace CascadeMenu.UI
 {
@@ -18,10 +23,14 @@ namespace CascadeMenu.UI
 
         private void BuildToasts()
         {
-            _toastContainer = CascadeUI.TopRight("Toasts", _root, 10f, 10f, 300f, 0f);
-            _toastContainer.pivot = new Vector2(1f, 1f);
+            _toastContainer = CascadeUI.Rect("Toasts", _root);
+            _toastContainer.anchorMin = _toastContainer.anchorMax = new Vector2(1f, 0f);
+            _toastContainer.pivot = new Vector2(1f, 0f);
+            _toastContainer.anchoredPosition = new Vector2(-12f, 12f);
+            _toastContainer.sizeDelta = new Vector2(300f, 0f);
+
             var layout = _toastContainer.gameObject.AddComponent<VerticalLayoutGroup>();
-            layout.childAlignment = TextAnchor.UpperRight;
+            layout.childAlignment = TextAnchor.LowerRight;
             layout.spacing = 8f;
             layout.childControlWidth = true;
             layout.childControlHeight = true;
@@ -35,6 +44,7 @@ namespace CascadeMenu.UI
         public void ShowToast(string title, string message)
         {
             if (_toastContainer == null) return;
+            _toastContainer.SetAsLastSibling();
 
             RectTransform toast = CascadeUI.Rect("Toast", _toastContainer);
             var layoutElement = toast.gameObject.AddComponent<LayoutElement>();

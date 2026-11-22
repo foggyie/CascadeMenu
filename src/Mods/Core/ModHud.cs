@@ -2,8 +2,16 @@ using CascadeMenu.UI;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Overlays;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Core
 {
     /// <summary>
     /// HUD frame designs. Every one reuses the Cascade window / keyboard look:

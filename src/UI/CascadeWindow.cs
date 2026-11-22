@@ -1,12 +1,18 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using CascadeMenu.Mods;
 using GorillaNetworking;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.XR;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
 
 namespace CascadeMenu.UI
 {
@@ -64,6 +70,39 @@ namespace CascadeMenu.UI
         private RectTransform _contentFlatLeft;
         private RectTransform _titlebarFlatLeft;
         private RectTransform _windowBorder;
+        private Image _windowGlowCore;
+        private Image _windowGlowOrbA;
+        private Image _windowGlowOrbB;
+        private RectTransform _windowGlowCoreRect;
+        private RectTransform _windowGlowOrbARect;
+        private RectTransform _windowGlowOrbBRect;
+        private int _lastGlowThemeVersion = int.MinValue;
+        private bool _lastGlowEnabled;
+        private float _lastGlowIntensity = -1f;
+        private float _lastGlowSize = -1f;
+        private bool _lastGlowUseAccent = true;
+        private string _lastGlowColorHex;
+        private Color _glowColorPrimary = new Color(0.25f, 0.65f, 1f, 1f);
+        private Color _glowColorSecondary = new Color(0.60f, 0.35f, 1f, 1f);
+        private Image _activeSubTabLine;
+        private Image _activeSubTabGlow;
+        private int _lastSubTabLineThemeVer = int.MinValue;
+        private bool _lastSubTabLineUseAccent = true;
+        private string _lastSubTabLineHex;
+
+        // Custom uploaded background + Clear / Frosted / Solid window surface controls
+        private RawImage _customBgImage;
+        private Image _bodyBgImage;
+        private Image _glassSheenImage;
+        private Image _topHighlightImage;
+        private Image _bottomHighlightImage;
+        private Image _sidebarBgImage;
+        private Image _contentBgImage;
+        private Image _contentFlatLeftImage;
+        private Image _titlebarBgImage;
+        private Image _titlebarFlatLeftImage;
+        private readonly List<Image> _cardBgImages = new List<Image>();
+        private int _lastSurfaceHash = int.MinValue;
         private CanvasGroup _fadeGroup;
         private RectTransform _scrollThumb;
         private ScrollRect _scroll;
@@ -76,6 +115,8 @@ namespace CascadeMenu.UI
 
         private TMP_Text _titleText;
         private TMP_Text _subtitleText;
+        private TMP_Text _topTelemetryText;
+        private float _nextTopTelemetryAt;
         private Image _backIcon;
         private Image _forwardIcon;
         private CascadeInteractable _backInteractable;
@@ -137,6 +178,7 @@ namespace CascadeMenu.UI
             BuildToasts();
             BuildResizeGrip();
             if (_windowBorder != null) _windowBorder.SetAsLastSibling();
+            if (_toastContainer != null) _toastContainer.SetAsLastSibling();
 
             _history.Clear();
             _history.Add(Mathf.Clamp(pageIndex, 0, Mathf.Max(0, Pages.Count - 1)));
@@ -222,6 +264,7 @@ namespace CascadeMenu.UI
             _focusedTextField = null;
             CloseDropdown();
             RemoveInteractables(CascadeLayerGroup.Content, CascadeLayerGroup.Overlay);
+            _cardBgImages.Clear();
 
             if (_content != null)
             {
@@ -246,6 +289,8 @@ namespace CascadeMenu.UI
                     any = true;
                 }
 
+                // Collect visible sections so wide / resized windows can display them in 2 side-by-side columns
+                var visibleSections = new List<System.Tuple<CascadeSection, List<CascadeRow>>>();
                 for (int sectionIndex = 0; sectionIndex < page.Sections.Count; sectionIndex++)
                 {
                     if (subTab != SubTabAll && sectionIndex != subTab) continue;
@@ -256,13 +301,60 @@ namespace CascadeMenu.UI
                         if (Matches(row)) rows.Add(row);
                     }
                     if (rows.Count == 0) continue;
-                    any = true;
+                    visibleSections.Add(System.Tuple.Create(section, rows));
+                }
 
-                    AddSectionHeader(section);
-                    RectTransform card = AddCard();
-                    for (int i = 0; i < rows.Count; i++)
+                float contentWidth = _root.sizeDelta.x - (_sidebarExpanded ? CascadeTheme.SidebarWidth : 0f) - 44f;
+                bool useTwoColumns = visibleSections.Count >= 2 && contentWidth >= 740f;
+
+                if (useTwoColumns)
+                {
+                    any = true;
+                    RectTransform columns = CascadeUI.Rect("Columns", _content);
+                    var colGroup = columns.gameObject.AddComponent<HorizontalLayoutGroup>();
+                    colGroup.spacing = 12f;
+                    colGroup.childAlignment = TextAnchor.UpperLeft;
+                    colGroup.childControlWidth = true;
+                    colGroup.childControlHeight = true;
+                    colGroup.childForceExpandWidth = true;
+                    colGroup.childForceExpandHeight = false;
+
+                    RectTransform leftCol = CreateSectionColumn("LeftColumn", columns);
+                    RectTransform rightCol = CreateSectionColumn("RightColumn", columns);
+
+                    int leftWeight = 0;
+                    int rightWeight = 0;
+                    for (int s = 0; s < visibleSections.Count; s++)
                     {
-                        BuildRow(card, rows[i], i == rows.Count - 1);
+                        RectTransform targetCol = leftWeight <= rightWeight ? leftCol : rightCol;
+                        CascadeSection sec = visibleSections[s].Item1;
+                        List<CascadeRow> rows = visibleSections[s].Item2;
+
+                        AddSectionHeaderTo(targetCol, sec);
+                        RectTransform card = AddCardTo(targetCol);
+                        for (int i = 0; i < rows.Count; i++)
+                        {
+                            BuildRow(card, rows[i], i == rows.Count - 1);
+                        }
+
+                        int weight = rows.Count + 2;
+                        if (targetCol == leftCol) leftWeight += weight;
+                        else rightWeight += weight;
+                    }
+                }
+                else
+                {
+                    for (int s = 0; s < visibleSections.Count; s++)
+                    {
+                        any = true;
+                        CascadeSection sec = visibleSections[s].Item1;
+                        List<CascadeRow> rows = visibleSections[s].Item2;
+                        AddSectionHeader(sec);
+                        RectTransform card = AddCard();
+                        for (int i = 0; i < rows.Count; i++)
+                        {
+                            BuildRow(card, rows[i], i == rows.Count - 1);
+                        }
                     }
                 }
             }
@@ -290,6 +382,13 @@ namespace CascadeMenu.UI
                 _scroll.StopMovement();
                 _scroll.verticalNormalizedPosition = 1f;
             }
+            if (_topTelemetryText != null && Time.unscaledTime >= _nextTopTelemetryAt)
+            {
+                _nextTopTelemetryAt = Time.unscaledTime + 0.25f;
+                RefreshTopTelemetry();
+            }
+
+            UpdateWindowSurface(true);
             UpdateScrollbar();
         }
 
@@ -407,6 +506,8 @@ namespace CascadeMenu.UI
             CascadeTheme.Active = Theme;
             Theme.RecolorAll();
 
+            UpdateSidebarSelection();
+            UpdateNavButtons();
             if (SearchField != null) SearchField.RefreshTheme();
             if (_focusedTextField != null) _focusedTextField.RefreshTheme();
         }
@@ -520,11 +621,32 @@ namespace CascadeMenu.UI
 
             Vector3[] corners = new Vector3[4];
             view.Root.GetWorldCorners(corners);
-            Vector3 local = _canvasRect.InverseTransformPoint(corners[0]);
-            float canvasWidth = _canvasRect.rect.width;
-            float canvasHeight = _canvasRect.rect.height;
-            float x = Mathf.Clamp(local.x, -canvasWidth * 0.5f + 8f, canvasWidth * 0.5f - width - 8f);
-            float y = Mathf.Clamp(local.y - 4f, -canvasHeight * 0.5f + height + 8f, canvasHeight * 0.5f - 8f);
+            Vector3 localBottomLeft = _canvasRect.InverseTransformPoint(corners[0]);
+            Vector3 localTopLeft = _canvasRect.InverseTransformPoint(corners[1]);
+
+            float minX = -_canvasRect.rect.width * 0.5f + 8f;
+            float maxX = _canvasRect.rect.width * 0.5f - width - 8f;
+            float minY = -_canvasRect.rect.height * 0.5f + 8f;
+            float maxY = _canvasRect.rect.height * 0.5f - 8f;
+
+            if (_root != null)
+            {
+                Vector3[] winCorners = new Vector3[4];
+                _root.GetWorldCorners(winCorners);
+                Vector3 winBL = _canvasRect.InverseTransformPoint(winCorners[0]);
+                Vector3 winTR = _canvasRect.InverseTransformPoint(winCorners[2]);
+                minX = winBL.x + 8f;
+                maxX = winTR.x - width - 8f;
+                minY = winBL.y + 8f;
+                maxY = winTR.y - 8f;
+            }
+
+            float x = Mathf.Clamp(localBottomLeft.x, minX, Mathf.Max(minX, maxX));
+            float downTopY = localBottomLeft.y - 4f;
+            // If opening downward would hang past the bottom of the Cascade window, flip upward!
+            float y = (downTopY - height < minY)
+                ? Mathf.Clamp(localTopLeft.y + 4f + height, minY + height, maxY)
+                : Mathf.Clamp(downTopY, minY + height, maxY);
             _dropdownPanel.anchoredPosition = new Vector2(x, y);
 
             RectTransform shadow = CascadeUI.Rect("Shadow", _dropdownPanel);
@@ -765,7 +887,262 @@ namespace CascadeMenu.UI
                 _sidebarGroup.interactable = _sidebarCurrent > 1f;
             }
 
+            if (_topTelemetryText != null && Time.unscaledTime >= _nextTopTelemetryAt)
+            {
+                _nextTopTelemetryAt = Time.unscaledTime + 0.25f;
+                RefreshTopTelemetry();
+            }
+
+            UpdateWindowGlow(false);
+            UpdateWindowSurface(false);
+            UpdateSubTabLineColor(false);
             UpdateScrollbar();
+        }
+
+        private void UpdateWindowSurface(bool force)
+        {
+            if (_config == null || Theme == null) return;
+
+            CascadeBackgroundManager.SyncFromConfig(_config, false);
+
+            int style = Mathf.Clamp(_config.WindowSurfaceStyle.Value, 0, 3); // 0=Frosted, 1=Clear, 2=Solid, 3=Custom Blend
+            float solidness = Mathf.Clamp01(_config.WindowSolidness.Value);
+            float bgOpacity = Mathf.Clamp01(_config.BackgroundImageOpacity.Value);
+            float panelOpacity = Mathf.Clamp(_config.WindowPanelOpacity.Value, 0.05f, 1f);
+            bool dimTop = _config.DimTopBar.Value;
+            bool dimSide = _config.DimSidebar.Value;
+            int bgVer = CascadeBackgroundManager.Version;
+            int themeVer = Theme.Version;
+            int cardCount = _cardBgImages.Count;
+
+            int hash = style * 31
+                ^ Mathf.RoundToInt(solidness * 255f) * 193
+                ^ Mathf.RoundToInt(bgOpacity * 255f) * 397
+                ^ Mathf.RoundToInt(panelOpacity * 255f) * 7919
+                ^ (dimTop ? 131071 : 0)
+                ^ (dimSide ? 262143 : 0)
+                ^ (bgVer * 9973)
+                ^ (themeVer * 4099)
+                ^ (cardCount * 17);
+
+            if (!force && hash == _lastSurfaceHash) return;
+            _lastSurfaceHash = hash;
+
+            // Presets 0/1/2 lock to Frosted/Clear/Solid, while Custom (3) follows the Clear<->Solid slider smoothly.
+            float blend = style == 1 ? 0.10f : (style == 2 ? 1.0f : (style == 0 ? 0.55f : solidness));
+            bool useFrostedLook = style == 0 || (style == 3 && solidness >= 0.25f && solidness <= 0.80f);
+
+            // Uploaded picture follows the exact same Clear / Frosted / Solid blend:
+            Texture2D tex = useFrostedLook
+                ? CascadeBackgroundManager.FrostedTexture
+                : CascadeBackgroundManager.CurrentTexture;
+            bool hasImage = tex != null && bgOpacity > 0.005f;
+
+            if (_customBgImage != null)
+            {
+                _customBgImage.gameObject.SetActive(hasImage);
+                if (hasImage)
+                {
+                    if (_customBgImage.texture != tex) _customBgImage.texture = tex;
+                    float clearToSolidMul = Mathf.Lerp(0.28f, 1.0f, blend);
+                    float imgAlpha = style == 2
+                        ? Mathf.Clamp01(Mathf.Max(bgOpacity, 0.96f))
+                        : Mathf.Clamp01(bgOpacity * clearToSolidMul);
+                    _customBgImage.color = new Color(1f, 1f, 1f, imgAlpha);
+                }
+            }
+
+            // Smooth continuous surface interpolation from Clear (0) -> Frosted (0.55) -> Solid (1)
+            float bodyAlpha = hasImage
+                ? Mathf.Lerp(0.05f, 0.95f, blend * blend)
+                : Mathf.Lerp(0.06f, 1.0f, blend);
+
+            float contentAlpha = hasImage
+                ? panelOpacity * Mathf.Lerp(0.10f, 0.42f, blend)
+                : Mathf.Lerp(panelOpacity * 0.22f, 1.0f, blend);
+
+            float sidebarAlpha = dimSide
+                ? (hasImage ? panelOpacity * Mathf.Lerp(0.26f, 0.84f, blend) : Mathf.Lerp(panelOpacity * 0.34f, 1.0f, blend))
+                : (hasImage ? panelOpacity * Mathf.Lerp(0.08f, 0.28f, blend) : Mathf.Lerp(panelOpacity * 0.14f, 0.92f, blend));
+
+            float titleAlpha = dimTop
+                ? (hasImage ? panelOpacity * Mathf.Lerp(0.30f, 0.88f, blend) : Mathf.Lerp(panelOpacity * 0.38f, 1.0f, blend))
+                : (hasImage ? panelOpacity * Mathf.Lerp(0.08f, 0.28f, blend) : Mathf.Lerp(panelOpacity * 0.14f, 0.92f, blend));
+
+            float cardAlpha = hasImage
+                ? panelOpacity * Mathf.Lerp(0.24f, 0.88f, blend)
+                : Mathf.Lerp(panelOpacity * 0.28f, 1.0f, blend);
+
+            bool showSheen = useFrostedLook;
+            bool showGlassRim = blend < 0.90f;
+
+            if (_bodyBgImage != null)
+            {
+                Color c = Theme.SidebarBg;
+                c.a = Mathf.Clamp01(bodyAlpha);
+                _bodyBgImage.color = c;
+            }
+
+            if (_glassSheenImage != null) _glassSheenImage.gameObject.SetActive(showSheen);
+            if (_topHighlightImage != null) _topHighlightImage.gameObject.SetActive(showGlassRim);
+            if (_bottomHighlightImage != null) _bottomHighlightImage.gameObject.SetActive(showGlassRim);
+
+            if (_sidebarBgImage != null)
+            {
+                Color c = Theme.SidebarBg;
+                c.a = Mathf.Clamp01(sidebarAlpha);
+                _sidebarBgImage.color = c;
+            }
+
+            if (_contentBgImage != null)
+            {
+                Color c = Theme.ContentBg;
+                c.a = Mathf.Clamp01(contentAlpha);
+                _contentBgImage.color = c;
+            }
+            if (_contentFlatLeftImage != null)
+            {
+                Color c = Theme.ContentBg;
+                c.a = Mathf.Clamp01(contentAlpha);
+                _contentFlatLeftImage.color = c;
+            }
+
+            if (_titlebarBgImage != null)
+            {
+                Color c = Theme.TitlebarBg;
+                c.a = Mathf.Clamp01(titleAlpha);
+                _titlebarBgImage.color = c;
+            }
+            if (_titlebarFlatLeftImage != null)
+            {
+                Color c = Theme.TitlebarBg;
+                c.a = Mathf.Clamp01(titleAlpha);
+                _titlebarFlatLeftImage.color = c;
+            }
+
+            Color viewCol = Theme.ViewBg;
+            viewCol.a = Mathf.Clamp01(cardAlpha);
+            for (int i = _cardBgImages.Count - 1; i >= 0; i--)
+            {
+                Image img = _cardBgImages[i];
+                if (img == null)
+                {
+                    _cardBgImages.RemoveAt(i);
+                    continue;
+                }
+                img.color = viewCol;
+            }
+        }
+
+        private void UpdateWindowGlow(bool force)
+        {
+            if (_windowGlowCore == null && _windowGlowOrbA == null && _windowGlowOrbB == null) return;
+
+            bool enabled = _config == null || _config.WindowGlow.Value;
+            float intensity = _config != null ? Mathf.Clamp(_config.WindowGlowIntensity.Value, 0f, 2.5f) : 1f;
+            float orbSize = _config != null ? Mathf.Clamp(_config.WindowGlowSize.Value, 0.35f, 2.5f) : 1f;
+            bool useAccent = _config == null || _config.WindowGlowUseAccent.Value;
+            string customHex = _config != null ? (_config.WindowGlowColor.Value ?? string.Empty) : string.Empty;
+            int themeVer = Theme != null ? Theme.Version : -1;
+
+            bool paramsChanged = force ||
+                enabled != _lastGlowEnabled ||
+                !Mathf.Approximately(intensity, _lastGlowIntensity) ||
+                !Mathf.Approximately(orbSize, _lastGlowSize) ||
+                useAccent != _lastGlowUseAccent ||
+                !string.Equals(customHex, _lastGlowColorHex, StringComparison.Ordinal) ||
+                themeVer != _lastGlowThemeVersion;
+
+            if (paramsChanged)
+            {
+                _lastGlowEnabled = enabled;
+                _lastGlowIntensity = intensity;
+                _lastGlowSize = orbSize;
+                _lastGlowUseAccent = useAccent;
+                _lastGlowColorHex = customHex;
+                _lastGlowThemeVersion = themeVer;
+
+                if (_windowGlowCore != null) _windowGlowCore.gameObject.SetActive(enabled);
+                if (_windowGlowOrbA != null) _windowGlowOrbA.gameObject.SetActive(enabled);
+                if (_windowGlowOrbB != null) _windowGlowOrbB.gameObject.SetActive(enabled);
+
+                if (_windowGlowCoreRect != null)
+                {
+                    float baseW = _root != null && _root.sizeDelta.x > 100f ? _root.sizeDelta.x : CascadeTheme.WindowWidth;
+                    float baseH = _root != null && _root.sizeDelta.y > 100f ? _root.sizeDelta.y : CascadeTheme.WindowHeight;
+                    _windowGlowCoreRect.sizeDelta = new Vector2(
+                        baseW * (0.95f + 0.55f * orbSize),
+                        baseH * (1.02f + 0.65f * orbSize));
+                }
+                if (_windowGlowOrbARect != null)
+                {
+                    float sA = 680f * orbSize;
+                    _windowGlowOrbARect.sizeDelta = new Vector2(sA, sA);
+                }
+                if (_windowGlowOrbBRect != null)
+                {
+                    float sB = 640f * orbSize;
+                    _windowGlowOrbBRect.sizeDelta = new Vector2(sB, sB);
+                }
+
+                Color baseColor = Theme != null ? (Color)Theme.Accent : new Color(0.20f, 0.60f, 1f, 1f);
+                if (!useAccent && !string.IsNullOrEmpty(customHex))
+                {
+                    string hex = customHex.StartsWith("#") ? customHex : "#" + customHex;
+                    if (ColorUtility.TryParseHtmlString(hex, out Color parsed))
+                    {
+                        baseColor = parsed;
+                    }
+                }
+
+                float h, s, v;
+                Color.RGBToHSV(baseColor, out h, out s, out v);
+
+                // Primary orb: chosen orb color (or theme accent)
+                _glowColorPrimary = Color.HSVToRGB(h, Mathf.Clamp(s, 0.50f, 0.96f), Mathf.Max(v, 0.92f));
+                // Companion shader orb: analogous hue shift (+50 deg for silky dual-tone aurora)
+                float h2 = (h + 0.14f) % 1f;
+                _glowColorSecondary = Color.HSVToRGB(h2, Mathf.Clamp(s, 0.54f, 0.96f), Mathf.Max(v, 0.90f));
+            }
+
+            if (!enabled) return;
+
+            bool animate = _config == null || _config.Animations.Value;
+            float t = animate ? Time.unscaledTime : 0f;
+            float spread = Mathf.Lerp(0.65f, 1.35f, Mathf.InverseLerp(0.35f, 2.5f, orbSize));
+
+            // Gentle shader-like breathing & slow Lissajous orb drift
+            float pulseA = animate ? (0.88f + 0.12f * Mathf.Sin(t * 1.15f)) : 1f;
+            float pulseB = animate ? (0.88f + 0.12f * Mathf.Cos(t * 0.92f + 1.1f)) : 1f;
+            float corePulse = animate ? (0.92f + 0.08f * Mathf.Sin(t * 0.7f)) : 1f;
+
+            if (_windowGlowCore != null)
+            {
+                Color c = Color.Lerp(_glowColorPrimary, _glowColorSecondary, 0.35f + 0.2f * Mathf.Sin(t * 0.5f));
+                _windowGlowCore.color = new Color(c.r, c.g, c.b, Mathf.Clamp01(0.34f * intensity * corePulse));
+            }
+
+            if (_windowGlowOrbA != null && _windowGlowOrbARect != null)
+            {
+                float ox = (animate ? (-210f + Mathf.Sin(t * 0.52f) * 145f) : -210f) * spread;
+                float oy = (animate ? (110f + Mathf.Cos(t * 0.41f) * 75f) : 110f) * spread;
+                _windowGlowOrbARect.anchoredPosition = new Vector2(ox, oy);
+                float scaleA = animate ? (1f + 0.08f * Mathf.Sin(t * 0.78f)) : 1f;
+                _windowGlowOrbARect.localScale = new Vector3(scaleA, scaleA, 1f);
+                _windowGlowOrbA.color = new Color(_glowColorPrimary.r, _glowColorPrimary.g, _glowColorPrimary.b,
+                    Mathf.Clamp01(0.40f * intensity * pulseA));
+            }
+
+            if (_windowGlowOrbB != null && _windowGlowOrbBRect != null)
+            {
+                float ox = (animate ? (215f + Mathf.Cos(t * 0.46f) * 150f) : 215f) * spread;
+                float oy = (animate ? (-115f + Mathf.Sin(t * 0.38f) * 80f) : -115f) * spread;
+                _windowGlowOrbBRect.anchoredPosition = new Vector2(ox, oy);
+                float scaleB = animate ? (1f + 0.09f * Mathf.Cos(t * 0.66f)) : 1f;
+                _windowGlowOrbBRect.localScale = new Vector3(scaleB, scaleB, 1f);
+                _windowGlowOrbB.color = new Color(_glowColorSecondary.r, _glowColorSecondary.g, _glowColorSecondary.b,
+                    Mathf.Clamp01(0.38f * intensity * pulseB));
+            }
         }
 
         private void UpdateScrollbar()

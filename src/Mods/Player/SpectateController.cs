@@ -1,8 +1,16 @@
 using System;
 using UnityEngine;
 using UnityEngine.Rendering;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Player
 {
     /// <summary>
     /// Renders a live first- or third-person view of another player's rig into a

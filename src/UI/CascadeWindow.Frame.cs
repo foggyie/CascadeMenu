@@ -1,5 +1,11 @@
 using UnityEngine;
 using UnityEngine.UI;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
 
 namespace CascadeMenu.UI
 {
@@ -130,6 +136,7 @@ namespace CascadeMenu.UI
             ClampToCanvas();
 
             _savedSize = _root.sizeDelta;
+            UpdateWindowGlow(true);
             if (_menu != null) _menu.SetWindowOffset(_root.anchoredPosition);
         }
 
@@ -138,7 +145,8 @@ namespace CascadeMenu.UI
             _resizeStarted = false;
             if (_menu != null) _menu.SetWindowOffset(_root.anchoredPosition);
 
-            // Chip rows and other width-dependent content re-flow for the new size.
+            // Sub-tab bar, 2-column cards, and width-dependent content reflow for the new size.
+            UpdateWindowGlow(true);
             RebuildContent();
         }
     }

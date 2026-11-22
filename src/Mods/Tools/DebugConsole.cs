@@ -4,6 +4,14 @@ using System.Text;
 using BepInEx.Logging;
 using CascadeMenu.UI;
 using UnityEngine;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
 
 namespace CascadeMenu.Mods.Tools
 {

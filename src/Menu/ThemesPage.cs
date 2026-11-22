@@ -2,8 +2,22 @@ using System;
 using System.Collections.Generic;
 using CascadeMenu.UI;
 using UnityEngine;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Desktop;
+using CascadeMenu.Mods.Flight;
+using CascadeMenu.Mods.Fun;
+using CascadeMenu.Mods.Game;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Performance;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Snake;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Visual;
 
-namespace CascadeMenu
+namespace CascadeMenu.Menu
 {
     /// <summary>
     /// The appearance tab. Every preset is one row; adding a season to
@@ -57,7 +71,7 @@ namespace CascadeMenu
                 .Label("Today's pick",
                     "Used while Auto is on; holidays win over broad seasons",
                     DescribeDate(DateTime.Now))
-                .Label("Current theme", "Saved to the config file", menu.Theme.Name);
+                .LiveLabel("Current theme", "Saved to the config file", () => menu.Theme.Name, () => true);
 
             for (int i = 0; i < CascadeThemePreset.All.Length; i++)
             {
@@ -80,11 +94,30 @@ namespace CascadeMenu
             string[] names = CascadeThemePalette.Names;
 
             page.Section("Custom colors",
-                    "Edits apply live. The picker stores the result as the Custom theme.")
-                .Dropdown("Color to edit", "Choose which role the sliders and hex box change",
+                    "Drag the circular color wheel or sliders below. Edits apply live.")
+                .Dropdown("Color to edit", "Choose which UI role the wheel, sliders and hex box change",
                     names,
                     () => menu.CustomColorIndex,
                     index => menu.CustomColorIndex = index)
+                .LiveLabel("What it changes", "Live UI area affected by the selected color role",
+                    () => CascadeThemePalette.Names[menu.CustomColorIndex] + " · " + menu.CustomHex(menu.CustomColorIndex),
+                    () => true)
+                .ColorWheel("Circular RGB color palette", "Drag anywhere on the color wheel for Hue/Saturation and use the bar for Brightness",
+                    () => menu.CustomColor(menu.CustomColorIndex),
+                    color => menu.SetCustomColor(menu.CustomColorIndex, color),
+                    () => "Editing: " + CascadeThemePalette.Names[menu.CustomColorIndex])
+                .Toggle("RGB Rainbow Mode", "Smoothly cycle your menu accent, outer glow, and sub-tab bar through RGB",
+                    () => menu.RgbAccentEnabled,
+                    menu.SetRgbAccentEnabled)
+                .Dropdown("RGB target", "Choose which UI elements animate with RGB Rainbow Mode",
+                    new[] { "Accent + Glow + Sub-Tab", "Full Neon (+ Borders & Active)", "Glow & Sub-Tab Only" },
+                    () => menu.RgbTargetMode,
+                    menu.SetRgbTargetMode)
+                .Slider("RGB speed", "How fast the RGB rainbow cycles",
+                    0.05f, 2.0f,
+                    () => menu.RgbAccentSpeed,
+                    menu.SetRgbAccentSpeed,
+                    v => v.ToString("0.00") + "x")
                 .Slider("Red", "Red channel of the selected color",
                     0f, 1f,
                     () => menu.GetCustomChannel(menu.CustomColorIndex, 0),
@@ -106,7 +139,7 @@ namespace CascadeMenu
                     menu.SetCustomHex)
                 .Swatches("Quick picks", "Tap a chip to replace the selected color", QuickColors,
                     index => menu.SetCustomColor(menu.CustomColorIndex, QuickColors[index]))
-                .ThemePreview("Preview", "Background, panel, header, text, accent and Active");
+                .ThemePreview("Live UI Preview & Selected Target", "Left: live mini UI · Right: exact element & color being changed");
         }
 
         private static void BuildActions(CascadePage page, CascadeMenuBehaviour menu)

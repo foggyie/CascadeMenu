@@ -2,8 +2,16 @@ using System;
 using System.IO;
 using System.Reflection;
 using UnityEngine;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Tools
 {
     /// <summary>
     /// One-shot action that writes a PNG next to the game's persistent data.

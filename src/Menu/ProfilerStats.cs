@@ -2,8 +2,22 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Desktop;
+using CascadeMenu.Mods.Flight;
+using CascadeMenu.Mods.Fun;
+using CascadeMenu.Mods.Game;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Performance;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Snake;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Visual;
 
-namespace CascadeMenu
+namespace CascadeMenu.Menu
 {
     /// <summary>
     /// One feature's frame cost. Values are updated in-place so reading the

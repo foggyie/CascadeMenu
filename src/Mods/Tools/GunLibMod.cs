@@ -1,6 +1,14 @@
 using System;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Tools
 {
     /// <summary>
     /// Job 2 adapter for the gun library.

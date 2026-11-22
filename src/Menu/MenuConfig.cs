@@ -1,7 +1,21 @@
 using BepInEx.Configuration;
 using UnityEngine;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Desktop;
+using CascadeMenu.Mods.Flight;
+using CascadeMenu.Mods.Fun;
+using CascadeMenu.Mods.Game;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Performance;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Snake;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Visual;
 
-namespace CascadeMenu
+namespace CascadeMenu.Menu
 {
     internal sealed class MenuConfig
     {
@@ -14,6 +28,29 @@ namespace CascadeMenu
         public readonly ConfigEntry<string> CustomPalette;
         public readonly ConfigEntry<int> GunAccentIndex;
         public readonly ConfigEntry<int> UiMode;
+        public readonly ConfigEntry<int> MenuStyle;
+        public readonly ConfigEntry<int> HandheldAttach;
+        public readonly ConfigEntry<bool> HandheldAura;
+        public readonly ConfigEntry<bool> WindowGlow;
+        public readonly ConfigEntry<float> WindowGlowIntensity;
+        public readonly ConfigEntry<float> WindowGlowSize;
+        public readonly ConfigEntry<bool> WindowGlowUseAccent;
+        public readonly ConfigEntry<string> WindowGlowColor;
+        public readonly ConfigEntry<bool> BigSliders;
+        public readonly ConfigEntry<int> SubTabStyle;
+        public readonly ConfigEntry<bool> SubTabShowIcons;
+        public readonly ConfigEntry<bool> SubTabLineUseAccent;
+        public readonly ConfigEntry<string> SubTabLineColor;
+        public readonly ConfigEntry<bool> RgbAccentEnabled;
+        public readonly ConfigEntry<float> RgbAccentSpeed;
+        public readonly ConfigEntry<int> RgbTargetMode;
+        public readonly ConfigEntry<int> WindowSurfaceStyle;
+        public readonly ConfigEntry<float> WindowSolidness;
+        public readonly ConfigEntry<string> BackgroundImagePath;
+        public readonly ConfigEntry<float> BackgroundImageOpacity;
+        public readonly ConfigEntry<float> WindowPanelOpacity;
+        public readonly ConfigEntry<bool> DimTopBar;
+        public readonly ConfigEntry<bool> DimSidebar;
         public readonly ConfigEntry<float> Scale;
         public readonly ConfigEntry<float> Distance;
         public readonly ConfigEntry<bool> FollowHead;
@@ -43,6 +80,7 @@ namespace CascadeMenu
 
         // Input / keybinds
         public readonly ConfigEntry<int> MenuHand;
+        public readonly ConfigEntry<int> MenuOpenMode;
         public readonly ConfigEntry<string> MenuKey;
         public readonly ConfigEntry<string> MenuButton;
         public readonly ConfigEntry<string> AcrobaticsKey;
@@ -122,9 +160,31 @@ namespace CascadeMenu
         public readonly ConfigEntry<bool> DebugConsoleEnabled;
         public readonly ConfigEntry<string> DebugConsolePlacement;
 
+        // Auto-save
+        public readonly ConfigEntry<bool> AutoSave;
+        public readonly ConfigEntry<float> AutoSaveInterval;
+        internal bool IsDirty;
+
         public MenuConfig(ConfigFile config)
         {
             File = config;
+            File.SettingChanged += (_, __) => IsDirty = true;
+
+            bool previousSaveOnSet = config.SaveOnConfigSet;
+            config.SaveOnConfigSet = false;
+            try
+            {
+            AutoSave = config.Bind(
+                "Window",
+                "Auto Save",
+                true,
+                "Automatically save menu, theme, and mod settings to disk whenever changes are made.");
+
+            AutoSaveInterval = config.Bind(
+                "Window",
+                "Auto Save Interval",
+                10f,
+                new ConfigDescription("Seconds between automatic saves when changes are pending", new AcceptableValueRange<float>(2f, 60f)));
 
             ThemePreset = config.Bind(
                 "Appearance",
@@ -156,6 +216,152 @@ namespace CascadeMenu
                 0,
                 new ConfigDescription("0 = Auto, 1 = Force PC (screen), 2 = Force VR (world)",
                     new AcceptableValueRange<int>(0, 2)));
+
+            MenuStyle = config.Bind(
+                "Window",
+                "Menu Style",
+                0,
+                new ConfigDescription("0 = Cascade Window (macOS), 1 = Glass Handheld (Wrist & Dot)",
+                    new AcceptableValueRange<int>(0, 1)));
+
+            HandheldAttach = config.Bind(
+                "Window",
+                "Handheld Mount",
+                0,
+                new ConfigDescription("0 = Wrist / Hand, 1 = Floating In Front, 2 = Wrist-Tap Toggle",
+                    new AcceptableValueRange<int>(0, 2)));
+
+            HandheldAura = config.Bind(
+                "Window",
+                "Handheld Aura Glow",
+                true,
+                "Show the soft glowing halo behind the Glass Handheld wrist menu.");
+
+            WindowGlow = config.Bind(
+                "Window",
+                "Window Outer Glow",
+                true,
+                "Show a soft shader-like multi-orb glow aura behind the main Cascade window.");
+
+            WindowGlowIntensity = config.Bind(
+                "Window",
+                "Window Glow Intensity",
+                1f,
+                new ConfigDescription("Brightness of the orb glow aura around the Cascade window",
+                    new AcceptableValueRange<float>(0f, 2.5f)));
+
+            WindowGlowSize = config.Bind(
+                "Window",
+                "Window Glow Size",
+                1f,
+                new ConfigDescription("Size and spread of the glowing orbs behind the Cascade window",
+                    new AcceptableValueRange<float>(0.35f, 2.5f)));
+
+            WindowGlowUseAccent = config.Bind(
+                "Window",
+                "Window Glow Follow Accent",
+                true,
+                "Match the orb aura color to your active theme accent (off = use custom orb color).");
+
+            WindowGlowColor = config.Bind(
+                "Window",
+                "Window Glow Color",
+                "#6366F1",
+                "Custom #RRGGBB hex color for the glowing orb aura.");
+
+            BigSliders = config.Bind(
+                "Appearance",
+                "Big Sliders",
+                true,
+                "Use wide, chunky easy-to-grab sliders across the menu (great for VR).");
+
+            SubTabStyle = config.Bind(
+                "Appearance",
+                "Sub-Tab Style",
+                0,
+                new ConfigDescription("0 = Icon + Color Bar Line, 1 = Classic Pills",
+                    new AcceptableValueRange<int>(0, 1)));
+
+            SubTabShowIcons = config.Bind(
+                "Appearance",
+                "Sub-Tab Icons",
+                true,
+                "Show an icon beside each sub-tab name.");
+
+            SubTabLineUseAccent = config.Bind(
+                "Appearance",
+                "Sub-Tab Line Follow Accent",
+                true,
+                "Use the active theme's accent color for the sub-tab underline bar (off = use custom color).");
+
+            SubTabLineColor = config.Bind(
+                "Appearance",
+                "Sub-Tab Line Color",
+                "#FF6B6B",
+                "Custom #RRGGBB hex color for the active sub-tab underline bar.");
+
+            RgbAccentEnabled = config.Bind(
+                "Appearance",
+                "RGB Rainbow Mode",
+                false,
+                "Smoothly cycle the menu accent, glow, and sub-tab underline bar through the RGB rainbow.");
+
+            RgbAccentSpeed = config.Bind(
+                "Appearance",
+                "RGB Cycle Speed",
+                0.35f,
+                new ConfigDescription("How fast the RGB rainbow cycles", new AcceptableValueRange<float>(0.05f, 2.0f)));
+
+            RgbTargetMode = config.Bind(
+                "Appearance",
+                "RGB Target Mode",
+                0,
+                new ConfigDescription("0 = Accent + Glow + Sub-Tab Bar, 1 = Full Neon (Accent + Borders + Active), 2 = Glow & Sub-Tab Bar Only",
+                    new AcceptableValueRange<int>(0, 2)));
+
+            WindowSurfaceStyle = config.Bind(
+                "Appearance",
+                "Window Surface Style",
+                0,
+                new ConfigDescription("0 = Frosted Preset, 1 = Clear Preset, 2 = Solid Preset, 3 = Custom Clear-to-Solid Blend",
+                    new AcceptableValueRange<int>(0, 3)));
+
+            WindowSolidness = config.Bind(
+                "Appearance",
+                "Window Clear To Solid",
+                0.55f,
+                new ConfigDescription("Continuous blend from 0% (crystal clear) through 50% (frosted) to 100% (solid opaque)",
+                    new AcceptableValueRange<float>(0f, 1f)));
+
+            BackgroundImagePath = config.Bind(
+                "Appearance",
+                "Background Image",
+                string.Empty,
+                "Filename inside BepInEx/config/CascadeMenu/Backgrounds/ (or full path) to a PNG/JPG/JPEG menu background image.");
+
+            BackgroundImageOpacity = config.Bind(
+                "Appearance",
+                "Background Image Opacity",
+                0.82f,
+                new ConfigDescription("Opacity of the custom uploaded background image", new AcceptableValueRange<float>(0f, 1f)));
+
+            WindowPanelOpacity = config.Bind(
+                "Appearance",
+                "Panel & Card Opacity",
+                0.78f,
+                new ConfigDescription("Opacity of the window backdrop, sidebar, and cards over the background", new AcceptableValueRange<float>(0.05f, 1f)));
+
+            DimTopBar = config.Bind(
+                "Appearance",
+                "Dim Top Bar",
+                true,
+                "Keep a soft dark/tinted header behind the titlebar so text stays crisp over custom backgrounds.");
+
+            DimSidebar = config.Bind(
+                "Appearance",
+                "Dim Sidebar",
+                true,
+                "Keep a soft backdrop behind the left sidebar so tab names stay readable over custom backgrounds.");
 
             Scale = config.Bind(
                 "Window",
@@ -540,6 +746,14 @@ namespace CascadeMenu
                     "Controller hand that opens the menu. 0 = left hand only, 1 = right hand only.",
                     new AcceptableValueRange<int>(0, 1)));
 
+            MenuOpenMode = config.Bind(
+                "Input",
+                "Menu Open Mode",
+                0,
+                new ConfigDescription(
+                    "0 = Secondary (B/Y), 1 = Joystick Press (Stick Click), 2 = Primary (A/X), 3 = B/Y or Joystick Press, 4 = Extra VR Bind Only.",
+                    new AcceptableValueRange<int>(0, 4)));
+
             MenuKey = config.Bind(
                 "Input",
                 "Menu Key",
@@ -655,6 +869,13 @@ namespace CascadeMenu
                 "Debug",
                 "Sidebar section the Debug Console tab appears in: Main, Fun, Movement, Visual, Cosmetics, Tools, Debug, System.");
 
+            }
+            finally
+            {
+                config.SaveOnConfigSet = previousSaveOnSet;
+                try { config.Save(); } catch { }
+                IsDirty = false;
+            }
         }
 
         public void ResetDefaults()
@@ -664,6 +885,29 @@ namespace CascadeMenu
             CustomPalette.Value = string.Empty;
             GunAccentIndex.Value = 0;
             UiMode.Value = 0;
+            MenuStyle.Value = 0;
+            HandheldAttach.Value = 0;
+            HandheldAura.Value = true;
+            WindowGlow.Value = true;
+            WindowGlowIntensity.Value = 1f;
+            WindowGlowSize.Value = 1f;
+            WindowGlowUseAccent.Value = true;
+            WindowGlowColor.Value = "#6366F1";
+            BigSliders.Value = true;
+            SubTabStyle.Value = 0;
+            SubTabShowIcons.Value = true;
+            SubTabLineUseAccent.Value = true;
+            SubTabLineColor.Value = "#FF6B6B";
+            RgbAccentEnabled.Value = false;
+            RgbAccentSpeed.Value = 0.35f;
+            RgbTargetMode.Value = 0;
+            WindowSurfaceStyle.Value = 0;
+            WindowSolidness.Value = 0.55f;
+            BackgroundImagePath.Value = string.Empty;
+            BackgroundImageOpacity.Value = 0.82f;
+            WindowPanelOpacity.Value = 0.78f;
+            DimTopBar.Value = true;
+            DimSidebar.Value = true;
             Scale.Value = 1f;
             Distance.Value = 0.7f;
             FollowHead.Value = false;
@@ -730,6 +974,7 @@ namespace CascadeMenu
             HandTapIndicator.Value = true;
             CosmeticCheck.Value = true;
             MenuHand.Value = 0;
+            MenuOpenMode.Value = 0;
             MenuKey.Value = "F1";
             MenuButton.Value = "None";
             AcrobaticsKey.Value = "Delete";
@@ -748,6 +993,9 @@ namespace CascadeMenu
             CascadeLogger.Enabled = false;
             DebugConsoleEnabled.Value = true;
             DebugConsolePlacement.Value = "Debug";
+            AutoSave.Value = true;
+            AutoSaveInterval.Value = 10f;
+            IsDirty = true;
         }
     }
 }

@@ -3,10 +3,19 @@ using System.Collections.Generic;
 using System.Reflection;
 using BepInEx.Configuration;
 using CascadeMenu.UI;
+using GorillaLocomotion;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Overlays;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Core
 {
     /// <summary>
     /// Discovers every <see cref="Mod"/> subclass in this assembly and turns it
@@ -32,6 +41,7 @@ namespace CascadeMenu.Mods
     {
         private const string BindSection = "Binds";
         private const string SettingsSection = "Mod settings";
+        private const string EnabledSection = "EnabledMods";
         private const float FallbackDoublePressWindow = 0.3f;
 
         /// <summary>Tag prefix for a generated mod settings page.</summary>
@@ -53,11 +63,20 @@ namespace CascadeMenu.Mods
             new Dictionary<Mod, ConfigEntry<string>>();
         private static readonly Dictionary<Mod, ConfigEntry<string>> PressEntries =
             new Dictionary<Mod, ConfigEntry<string>>();
+        private static readonly Dictionary<Mod, ConfigEntry<bool>> EnabledEntries =
+            new Dictionary<Mod, ConfigEntry<bool>>();
 
         // Mod option changes are coalesced so dragging a slider does not write
         // the config file every frame.
         private static readonly HashSet<Mod> DirtySettings = new HashSet<Mod>();
         private static float _nextSettingsFlush;
+
+        // Saved enabled toggle mods are restored gradually AFTER Gorilla Tag's
+        // GTPlayer, GorillaTagger, and main camera are ready so startup never
+        // lags and mods don't silently fail OnEnable() while showing ON.
+        private static readonly Queue<Mod> PendingRestore = new Queue<Mod>();
+        private static readonly HashSet<Mod> PendingRestoreSet = new HashSet<Mod>();
+        private static float _worldReadyAt = -1f;
 
         // Reused every frame so the input path does not allocate.
         private static readonly HashSet<Key> DoubleKeys = new HashSet<Key>();
@@ -126,39 +145,110 @@ namespace CascadeMenu.Mods
                                 CategoryList.Count + " categor" + (CategoryList.Count == 1 ? "y" : "ies") + ".");
         }
 
-        /// <summary>Binds saved keys and press types, then logs one line per mod.</summary>
+        /// <summary>Binds saved keys, press types, settings and deferred enabled states.</summary>
         private static void ApplyBinds()
         {
             if (_bindsApplied || _config == null) return;
             _bindsApplied = true;
 
-            for (int i = 0; i < All.Count; i++)
+            // Suspend BepInEx's per-Bind disk write so startup binds all 100+
+            // mods in memory and flushes once instead of hundreds of file writes.
+            bool previousSaveOnSet = _config.File.SaveOnConfigSet;
+            _config.File.SaveOnConfigSet = false;
+            int queuedRestore = 0;
+
+            try
             {
-                Mod mod = All[i];
-                string id = mod.GetType().Name;
+                for (int i = 0; i < All.Count; i++)
+                {
+                    Mod mod = All[i];
+                    string id = mod.GetType().Name;
 
-                ConfigEntry<string> keyEntry = _config.File.Bind(
-                    BindSection,
-                    id,
-                    "None",
-                    "Keyboard key for \"" + mod.Name + "\" (Input System name, e.g. F6). None = unbound.");
+                    ConfigEntry<string> keyEntry = _config.File.Bind(
+                        BindSection,
+                        id,
+                        "None",
+                        "Keyboard key for \"" + mod.Name + "\" (Input System name, e.g. F6). None = unbound.");
 
-                ConfigEntry<string> pressEntry = _config.File.Bind(
-                    BindSection,
-                    id + " Press",
-                    "Single",
-                    "Press type for \"" + mod.Name + "\": Single or Double.");
+                    ConfigEntry<string> pressEntry = _config.File.Bind(
+                        BindSection,
+                        id + " Press",
+                        "Single",
+                        "Press type for \"" + mod.Name + "\": Single or Double.");
 
-                mod.Key = Keybinds.Parse(keyEntry.Value, Key.None);
-                mod.PressType = ParsePressType(pressEntry.Value);
+                    mod.Key = Keybinds.Parse(keyEntry.Value, Key.None);
+                    mod.PressType = ParsePressType(pressEntry.Value);
 
-                KeyEntries[mod] = keyEntry;
-                PressEntries[mod] = pressEntry;
+                    KeyEntries[mod] = keyEntry;
+                    PressEntries[mod] = pressEntry;
 
-                ApplySettings(mod);
+                    ApplySettings(mod);
 
-                Plugin.Log?.LogInfo("Cascade bind: " + mod.Name + " = " +
-                                    Keybinds.Name(mod.Key) + " (" + PressName(mod.PressType) + ").");
+                    if (mod.isToggle)
+                    {
+                        ConfigEntry<bool> enabledEntry = _config.File.Bind(
+                            EnabledSection,
+                            id,
+                            false,
+                            "Whether \"" + mod.Name + "\" starts enabled when Cascade loads.");
+                        EnabledEntries[mod] = enabledEntry;
+                        if (enabledEntry.Value && PendingRestoreSet.Add(mod))
+                        {
+                            PendingRestore.Enqueue(mod);
+                            queuedRestore++;
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                _config.File.SaveOnConfigSet = previousSaveOnSet;
+                try { _config.File.Save(); } catch { }
+            }
+
+            Plugin.Log?.LogInfo("Cascade binds ready for " + All.Count + " mod(s)" +
+                (queuedRestore > 0 ? " (" + queuedRestore + " saved mod(s) queued to restore once world loads)." : "."));
+        }
+
+        private static void ProcessPendingRestore()
+        {
+            if (PendingRestore.Count == 0) return;
+
+            bool worldReady = GTPlayer.Instance != null && GorillaTagger.Instance != null && Camera.main != null;
+            if (!worldReady) return;
+
+            if (_worldReadyAt < 0f)
+            {
+                _worldReadyAt = Time.unscaledTime;
+                return;
+            }
+
+            // Wait briefly for Gorilla Tag's own scene scripts & local rig to settle.
+            if (Time.unscaledTime - _worldReadyAt < 0.6f) return;
+
+            // Restore up to 2 mods per frame to keep frame times completely smooth.
+            int budget = 2;
+            while (budget-- > 0 && PendingRestore.Count > 0)
+            {
+                Mod mod = PendingRestore.Dequeue();
+                PendingRestoreSet.Remove(mod);
+                if (mod == null) continue;
+
+                // Respect if the user manually turned the mod off before restore ran.
+                if (EnabledEntries.TryGetValue(mod, out ConfigEntry<bool> entry) && !entry.Value)
+                    continue;
+
+                try
+                {
+                    // Clean cycle ensures OnEnable() executes fresh against the live world.
+                    mod.SetEnabled(false);
+                    mod.SetEnabled(true);
+                    mod.SetActive(true);
+                }
+                catch (Exception ex)
+                {
+                    Plugin.Log?.LogWarning("Cascade could not restore enabled state for \"" + mod.Name + "\": " + ex.Message);
+                }
             }
         }
 
@@ -256,17 +346,77 @@ namespace CascadeMenu.Mods
             if (mod != null) DirtySettings.Add(mod);
         }
 
+        internal static bool HasDirtySettings => DirtySettings.Count > 0;
+
         /// <summary>Writes pending option changes at most once a second.</summary>
         private static void FlushSettings()
         {
             if (DirtySettings.Count == 0 || Time.unscaledTime < _nextSettingsFlush) return;
+            if (_config != null && !_config.AutoSave.Value) return;
             _nextSettingsFlush = Time.unscaledTime + 1f;
+            FlushSettingsImmediate();
+        }
+
+        /// <summary>Immediately writes all pending mod setting changes to disk.</summary>
+        internal static void FlushSettingsImmediate()
+        {
+            if (DirtySettings.Count == 0) return;
 
             foreach (Mod mod in DirtySettings)
             {
                 SaveSettings(mod);
             }
             DirtySettings.Clear();
+        }
+
+        /// <summary>Forces saving all settings and enabled states for every discovered mod.</summary>
+        internal static void SaveAll()
+        {
+            if (_config == null) return;
+            bool previousSaveOnSet = _config.File.SaveOnConfigSet;
+            _config.File.SaveOnConfigSet = false;
+            try
+            {
+                for (int i = 0; i < All.Count; i++)
+                {
+                    Mod mod = All[i];
+                    if (mod == null) continue;
+                    if (mod.isToggle && EnabledEntries.TryGetValue(mod, out ConfigEntry<bool> entry))
+                    {
+                        bool shouldStayEnabled = (mod.Enabled && mod.IsActive) || PendingRestoreSet.Contains(mod);
+                        entry.Value = shouldStayEnabled;
+                    }
+                    SaveSettingsNoFlush(mod);
+                }
+                DirtySettings.Clear();
+            }
+            finally
+            {
+                _config.File.SaveOnConfigSet = previousSaveOnSet;
+                try { _config.File.Save(); } catch { }
+            }
+        }
+
+        private static void SaveSettingsNoFlush(Mod mod)
+        {
+            if (_config == null || mod == null || mod.Settings == null) return;
+
+            string id = mod.GetType().Name;
+            for (int i = 0; i < mod.Settings.Count; i++)
+            {
+                ModSetting setting = mod.Settings[i];
+                if (setting == null) continue;
+                try
+                {
+                    ConfigEntry<string> entry = _config.File.Bind(
+                        SettingsSection,
+                        id + "." + setting.Key,
+                        setting.Serialize(),
+                        setting.Title + " for \"" + mod.Name + "\".");
+                    entry.Value = setting.Serialize();
+                }
+                catch { }
+            }
         }
 
         /// <summary>Page name for a mod, from its attribute or its namespace.</summary>
@@ -461,9 +611,32 @@ namespace CascadeMenu.Mods
             if (section == null || mod == null) return;
 
             Mod captured = mod;
+
+            // One-shot action mods (especially keyboard-driven mods like Change Name,
+            // Join Room Code, Custom Property) render their text fields / options inline
+            // with a clean action Button instead of a toggle switch or hidden settings page.
+            if (!captured.isToggle)
+            {
+                IReadOnlyList<ModSetting> settings = captured.Settings;
+                for (int i = 0; i < settings.Count; i++)
+                {
+                    AddSettingRow(section, captured, settings[i]);
+                }
+
+                string btnText = ActionLabel(captured);
+                if (string.IsNullOrEmpty(btnText) || btnText == "Run") btnText = "Apply";
+                section.Button(
+                    captured.Name,
+                    "Click to run " + captured.Name,
+                    btnText,
+                    () => Trigger(captured),
+                    true);
+                return;
+            }
+
             section.Mod(
                 captured.Name,
-                captured.isToggle ? "Toggle mod" : "One-shot action",
+                "Toggle mod",
                 () => captured.Enabled,
                 value => SetEffect(captured, value),
                 () => captured.IsActive,
@@ -506,6 +679,12 @@ namespace CascadeMenu.Mods
                 {
                     if (mod.isToggle) mod.SetActive(false);
                     mod.SetEnabled(false);
+                }
+
+                if (mod.isToggle && EnabledEntries.TryGetValue(mod, out ConfigEntry<bool> enabledEntry))
+                {
+                    enabledEntry.Value = mod.Enabled && mod.IsActive;
+                    MarkSettingsDirty(mod);
                 }
             }
             catch (Exception exception)
@@ -629,7 +808,7 @@ namespace CascadeMenu.Mods
 
                 case ModSettingKind.Text:
                     section.TextField(setting.Title, setting.Description,
-                        "all", 96,
+                        "Type here...", 96,
                         () => setting.GetText(),
                         value =>
                         {
@@ -808,13 +987,19 @@ namespace CascadeMenu.Mods
             {
                 try
                 {
+                    All[i].SetActive(false);
                     All[i].SetEnabled(false);
+                    if (EnabledEntries.TryGetValue(All[i], out ConfigEntry<bool> entry))
+                    {
+                        entry.Value = false;
+                    }
                 }
                 catch (Exception exception)
                 {
                     Plugin.Log?.LogWarning("Cascade mod disable failed: " + exception.Message);
                 }
             }
+            try { _config?.File?.Save(); } catch { }
         }
 
         /// <summary>
@@ -825,6 +1010,7 @@ namespace CascadeMenu.Mods
         internal static void UpdateInput()
         {
             EnsureLoaded();
+            ProcessPendingRestore();
             FlushSettings();
             if (All.Count == 0 || Keyboard.current == null) return;
 

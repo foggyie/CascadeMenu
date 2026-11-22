@@ -1,9 +1,23 @@
 using System.Collections.Generic;
 using CascadeMenu.UI;
-using CascadeMenu.Mods;
 using UnityEngine;
+using CascadeMenu.Mods.Sandbox;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Desktop;
+using CascadeMenu.Mods.Flight;
+using CascadeMenu.Mods.Fun;
+using CascadeMenu.Mods.Game;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Performance;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Snake;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Visual;
 
-namespace CascadeMenu
+namespace CascadeMenu.Menu
 {
     /// <summary>
     /// Builds the page tree. Every open rebuilds it so live data (players, room)
@@ -20,6 +34,7 @@ namespace CascadeMenu
             pages.Add(PlayerActions.BuildPlayersPage(menu));
             pages.Add(BuildNotifications(menu, config));
             pages.Add(BuildFun(menu, config));
+            pages.Add(SandboxPage.Build(menu));
             pages.Add(BuildMovement(menu, config));
             pages.Add(BuildVisual(menu, config));
             pages.Add(CosmeticBrowser.BuildCategoriesPage(menu));
@@ -391,9 +406,30 @@ namespace CascadeMenu
         // -----------------------------------------------------------------
         private static CascadePage BuildSettings(CascadeMenuBehaviour menu, MenuConfig config)
         {
-            var settings = new CascadePage("Settings", "Appearance, placement and behavior", CascadeIcon.Gear);
+            var settings = new CascadePage("Settings", "Menu preferences, appearance, backgrounds and config", CascadeIcon.Gear);
 
-            settings.Section("Placement", "The menu is a world object: it spawns in front of you and stays level.")
+            // 1. General (Save, Window & World Placement)
+            settings.Section("General", "Auto-save, window controls, and world-space placement")
+                .Toggle("Auto-save settings", "Automatically save menu, theme, and mod settings whenever changes occur",
+                    () => config.AutoSave.Value,
+                    value =>
+                    {
+                        config.AutoSave.Value = value;
+                        if (value) menu.SaveAllSettings();
+                    })
+                .Slider("Auto-save interval", "Seconds between automatic saves when changes are pending",
+                    2f, 60f,
+                    () => config.AutoSaveInterval.Value,
+                    value => config.AutoSaveInterval.Value = value,
+                    value => Mathf.RoundToInt(value) + " s")
+                .LiveLabel("Auto-save status", "Shows when your config was last auto-saved",
+                    () => menu.AutoSaveStatusText(),
+                    () => config.AutoSave.Value)
+                .AddDual("Config actions", "Immediately save all settings or reset everything to defaults",
+                    "Save Now", "Restore Defaults",
+                    menu.SaveAllSettings, menu.RestoreDefaults, true)
+                .Button("Re-center window", "Snap the menu level in front of you",
+                    "Recenter", menu.RecenterMenu, false)
                 .Slider("Distance", "Spawn distance in front of your head",
                     0.4f, 1.6f,
                     () => config.Distance.Value,
@@ -418,30 +454,232 @@ namespace CascadeMenu
                     () => config.FollowHead.Value,
                     value => config.FollowHead.Value = value);
 
-            settings.Section("Appearance")
-                .Slider("UI scale", "Size of the entire window",
+            // 2. Appearance (Style, Scale, Sliders, RGB Rainbow)
+            settings.Section("Appearance", "Menu layout, UI scale, big sliders, animations and RGB mode")
+                .Dropdown("Menu style", "Switch between the macOS Cascade Window and the Glass Handheld Wrist & Dot menu",
+                    new[] { "Cascade Window (macOS)", "Glass Handheld (Wrist & Dot)" },
+                    () => config.MenuStyle.Value,
+                    index => menu.SetMenuStyle(index))
+                .Dropdown("Handheld mount", "Where the Glass Handheld menu attaches in VR",
+                    new[] { "Wrist / Hand", "Floating In Front", "Wrist-Tap Toggle" },
+                    () => config.HandheldAttach.Value,
+                    index => config.HandheldAttach.Value = index)
+                .Toggle("Handheld aura glow", "Soft glowing halo behind the Glass Handheld menu",
+                    () => config.HandheldAura.Value,
+                    value => config.HandheldAura.Value = value)
+                .Slider("UI scale", "Scale the entire window smaller or larger",
                     0.8f, 1.3f,
                     () => config.Scale.Value,
                     value => config.Scale.Value = value,
                     value => value.ToString("0.00") + "x")
-                .Toggle("Animations", "Sidebar, page fades and notifications",
+                .Toggle("Big sliders", "Use full-width chunky sliders that are easy to grab in VR & PC",
+                    () => config.BigSliders.Value,
+                    value =>
+                    {
+                        config.BigSliders.Value = value;
+                        menu.QueueRebuild();
+                    })
+                .Toggle("Animations", "Sidebar transitions, page fades, orb drift and notifications",
                     () => config.Animations.Value,
                     value => config.Animations.Value = value)
-                .Button("Collapse sidebar", "Hide the navigation rail",
-                    "Collapse", menu.ToggleSidebar, false);
+                .Toggle("RGB Rainbow Mode", "Animate menu accent, outer glow, and sub-tab bar through the RGB spectrum",
+                    () => menu.RgbAccentEnabled,
+                    menu.SetRgbAccentEnabled)
+                .Slider("RGB cycle speed", "Speed of the live RGB rainbow animation",
+                    0.05f, 2.0f,
+                    () => menu.RgbAccentSpeed,
+                    menu.SetRgbAccentSpeed,
+                    value => value.ToString("0.00") + "x")
+                .Button("Collapse sidebar", "Toggle the left navigation rail (expands content area)",
+                    "Toggle", menu.ToggleSidebar, false);
 
-            settings.Section("Notifications", "Join, leave, master and room alerts")
-                .Button("Notification settings", "Choose every event and where the card appears", "Open",
-                    () => menu.OpenPage("cascade.notifications", "Notifications"), false);
+            // 3. Background (Custom PNG/JPG Upload via PowerShell + Clear / Frosted / Solid)
+            string[] bgOptions = CascadeBackgroundManager.ListImageNames(config.BackgroundImagePath.Value);
+            settings.Section("Background", "Upload PNG/JPG wallpapers from BepInEx/config/CascadeMenu/Backgrounds and adjust Clear, Frosted & Solid")
+                .Dropdown("Surface preset", "Quick presets for window & background glass style (moving the slider switches to Custom Blend)",
+                    new[] { "Frosted Glass", "Clear Transparent", "Solid Opaque", "Custom Blend" },
+                    () => config.WindowSurfaceStyle.Value,
+                    index =>
+                    {
+                        config.WindowSurfaceStyle.Value = index;
+                        if (index == 0) config.WindowSolidness.Value = 0.55f;
+                        else if (index == 1) config.WindowSolidness.Value = 0.10f;
+                        else if (index == 2) config.WindowSolidness.Value = 1.00f;
+                    })
+                .Slider("Clear ↔ Solid", "Smoothly dial how clear, frosted, or solid both the window and background picture are",
+                    0f, 1f,
+                    () => config.WindowSolidness.Value,
+                    value =>
+                    {
+                        config.WindowSolidness.Value = value;
+                        config.WindowSurfaceStyle.Value = 3;
+                    },
+                    value =>
+                    {
+                        int pct = Mathf.RoundToInt(value * 100f);
+                        string tag = value < 0.25f ? "Clear" : (value <= 0.80f ? "Frosted" : "Solid");
+                        return pct + "% · " + tag;
+                    })
+                .Button("Upload background image", "Opens Windows File Explorer dialog via PowerShell to load any PNG/JPG into memory",
+                    "Browse...", menu.BrowseBackgroundImage, true)
+                .Dropdown("Background image", "Images stored in BepInEx/config/CascadeMenu/Backgrounds",
+                    bgOptions,
+                    () => CascadeBackgroundManager.IndexOfImage(bgOptions, config.BackgroundImagePath.Value),
+                    index =>
+                    {
+                        if (index >= 0 && index < bgOptions.Length)
+                            menu.SelectBackgroundImage(bgOptions[index]);
+                    })
+                .AddDual("Backgrounds folder", "Open BepInEx/config/CascadeMenu/Backgrounds in Explorer or refresh the list",
+                    "Open Folder", "Refresh",
+                    () => CascadeBackgroundManager.OpenFolderInExplorer(),
+                    () =>
+                    {
+                        CascadeBackgroundManager.SyncFromConfig(config, true);
+                        menu.QueueRebuild();
+                        menu.ShowToast("Backgrounds", "Refreshed image list.");
+                    }, false)
+                .Button("Clear background", "Remove the custom background image",
+                    "Clear", menu.ClearBackgroundImage, false)
+                .LiveLabel("Loaded in memory", "Currently active background texture",
+                    () => CascadeBackgroundManager.CurrentName,
+                    () => CascadeBackgroundManager.CurrentTexture != null)
+                .Slider("Background opacity", "Visibility of your uploaded PNG/JPG wallpaper inside the window",
+                    0f, 1f,
+                    () => config.BackgroundImageOpacity.Value,
+                    value => config.BackgroundImageOpacity.Value = value,
+                    value => Mathf.RoundToInt(value * 100f) + "%")
+                .Slider("Panel & card opacity", "Transparency of the sidebar, backdrop, and cards over your background",
+                    0.05f, 1f,
+                    () => config.WindowPanelOpacity.Value,
+                    value => config.WindowPanelOpacity.Value = value,
+                    value => Mathf.RoundToInt(value * 100f) + "%")
+                .Toggle("Dim top bar", "Keep a soft backdrop behind the titlebar for readability over bright images",
+                    () => config.DimTopBar.Value,
+                    value => config.DimTopBar.Value = value)
+                .Toggle("Dim sidebar", "Keep a soft backdrop behind the left sidebar over bright images",
+                    () => config.DimSidebar.Value,
+                    value => config.DimSidebar.Value = value);
 
-            settings.Section("Window")
-                .Button("Re-center window", "Snap level in front of you",
-                    "Recenter", menu.RecenterMenu, true)
-                .Button("Restore defaults", "Reset every setting in this menu",
-                    "Restore", menu.RestoreDefaults, false)
-                .Label("Close", "Menu hand button, or the menu key", "Toggle menu");
+            // 4. Orb Glow (Shader-like Multi-Orb Aura Controls)
+            settings.Section("Orb Glow", "Shader-like animated multi-orb glow aura behind the Cascade window")
+                .Toggle("Orb aura glow", "Show the smooth multi-orb glow aura behind the main window",
+                    () => config.WindowGlow.Value,
+                    value => config.WindowGlow.Value = value)
+                .Slider("Orb size", "Size and spread of the glowing shader orbs behind the window",
+                    0.35f, 2.5f,
+                    () => config.WindowGlowSize.Value,
+                    value => config.WindowGlowSize.Value = value,
+                    value => Mathf.RoundToInt(value * 100f) + "%")
+                .Slider("Orb intensity", "Brightness of the glowing orb aura",
+                    0f, 2.5f,
+                    () => config.WindowGlowIntensity.Value,
+                    value => config.WindowGlowIntensity.Value = value,
+                    value => Mathf.RoundToInt(value * 100f) + "%")
+                .Toggle("Orb follows theme accent", "Match orb aura color to your theme accent (turn off for custom orb color)",
+                    () => config.WindowGlowUseAccent.Value,
+                    value => config.WindowGlowUseAccent.Value = value)
+                .Swatches("Orb aura color", "Pick a custom color for the glowing orb aura",
+                    new[]
+                    {
+                        new Color(0.39f, 0.40f, 0.95f, 1f),
+                        new Color(0.22f, 0.74f, 0.97f, 1f),
+                        new Color(1f, 0.42f, 0.42f, 1f),
+                        new Color(0.93f, 0.28f, 0.60f, 1f),
+                        new Color(0.06f, 0.73f, 0.51f, 1f),
+                        new Color(0.96f, 0.62f, 0.04f, 1f),
+                        new Color(0.23f, 0.51f, 0.96f, 1f),
+                        new Color(1f, 1f, 1f, 1f)
+                    },
+                    index =>
+                    {
+                        string[] hexes = { "#6366F1", "#38BDF8", "#FF6B6B", "#EC4899", "#10B981", "#F59E0B", "#3B82F6", "#FFFFFF" };
+                        config.WindowGlowUseAccent.Value = false;
+                        config.WindowGlowColor.Value = hexes[Mathf.Clamp(index, 0, hexes.Length - 1)];
+                    })
+                .ColorWheel("Orb color wheel", "Drag on the circle to pick any custom orb aura color",
+                    () =>
+                    {
+                        string hex = config.WindowGlowColor.Value ?? "#6366F1";
+                        if (!hex.StartsWith("#")) hex = "#" + hex;
+                        return ColorUtility.TryParseHtmlString(hex, out Color c) ? c : new Color(0.39f, 0.40f, 0.95f, 1f);
+                    },
+                    color =>
+                    {
+                        config.WindowGlowUseAccent.Value = false;
+                        config.WindowGlowColor.Value = CascadeThemePalette.ToHex(color);
+                    },
+                    () => "Orb Aura Color");
 
-            settings.Section("Module settings", "Every tuning control lives on its module's own page")
+            // 5. Sub-Tabs (Icon + Color Underline Bar Customization)
+            settings.Section("Sub-Tabs", "Customize the sub-tab bar style, icons, and underline color line")
+                .Dropdown("Sub-tab bar style", "Choose sleek icon + color underline bar or classic pills",
+                    new[] { "Icon + Color Bar Line", "Classic Pills" },
+                    () => config.SubTabStyle.Value,
+                    index =>
+                    {
+                        config.SubTabStyle.Value = index;
+                        menu.QueueRebuild();
+                    })
+                .Toggle("Sub-tab icons", "Show a matching icon next to each sub-tab name",
+                    () => config.SubTabShowIcons.Value,
+                    value =>
+                    {
+                        config.SubTabShowIcons.Value = value;
+                        menu.QueueRebuild();
+                    })
+                .Toggle("Sub-tab line follows theme accent", "Match the active sub-tab bar line to your theme accent (turn off for custom color)",
+                    () => config.SubTabLineUseAccent.Value,
+                    value => config.SubTabLineUseAccent.Value = value)
+                .Swatches("Sub-tab line color", "Pick a custom color for the active sub-tab underline bar",
+                    new[]
+                    {
+                        new Color(1f, 0.42f, 0.42f, 1f),
+                        new Color(0.22f, 0.74f, 0.97f, 1f),
+                        new Color(0.66f, 0.33f, 0.97f, 1f),
+                        new Color(0.20f, 0.83f, 0.60f, 1f),
+                        new Color(0.98f, 0.75f, 0.15f, 1f),
+                        new Color(0.96f, 0.45f, 0.71f, 1f),
+                        new Color(0.23f, 0.51f, 0.96f, 1f),
+                        new Color(1f, 1f, 1f, 1f)
+                    },
+                    index =>
+                    {
+                        string[] hexes = { "#FF6B6B", "#38BDF8", "#A855F7", "#34D399", "#FBBF24", "#F472B6", "#3B82F6", "#FFFFFF" };
+                        config.SubTabLineUseAccent.Value = false;
+                        config.SubTabLineColor.Value = hexes[Mathf.Clamp(index, 0, hexes.Length - 1)];
+                    })
+                .TextField("Sub-tab line hex", "Custom #RRGGBB color for the sub-tab underline bar",
+                    "#FF6B6B", 7,
+                    () => config.SubTabLineColor.Value,
+                    value =>
+                    {
+                        if (string.IsNullOrEmpty(value)) return;
+                        string clean = value.StartsWith("#") ? value : "#" + value;
+                        if (ColorUtility.TryParseHtmlString(clean, out _))
+                        {
+                            config.SubTabLineUseAccent.Value = false;
+                            config.SubTabLineColor.Value = clean.ToUpperInvariant();
+                        }
+                    })
+                .ColorWheel("Sub-tab line color wheel", "Drag on the circle to pick any custom color for the active sub-tab bar line",
+                    () =>
+                    {
+                        string hex = config.SubTabLineColor.Value ?? "#FF6B6B";
+                        if (!hex.StartsWith("#")) hex = "#" + hex;
+                        return ColorUtility.TryParseHtmlString(hex, out Color c) ? c : new Color(1f, 0.42f, 0.42f, 1f);
+                    },
+                    color =>
+                    {
+                        config.SubTabLineUseAccent.Value = false;
+                        config.SubTabLineColor.Value = CascadeThemePalette.ToHex(color);
+                    },
+                    () => "Sub-Tab Bar Line");
+
+            // 6. Modules & Alerts
+            settings.Section("Modules", "Dedicated settings pages for built-in modules and room notifications")
+                .Button("Notification settings", "Choose join, leave, master and room alerts plus toast position", "Open",
+                    () => menu.OpenPage("cascade.notifications", "Notifications"), false)
                 .Button("Flight settings", "Speed, direction and stick mapping", "Open",
                     () => menu.OpenModuleSettings("fly"), false)
                 .Button("Acrobatics settings", "Smoothing and rotation controls", "Open",
@@ -463,6 +701,7 @@ namespace CascadeMenu
                 () => menu.OpenModuleSettings("hud"));
             ModuleSettings.AddHudModRow(hudMods, menu, "Player HUD", "3D telemetry card floating above each player");
             ModuleSettings.AddHudModRow(hudMods, menu, "Frosted Glass HUD", "Head or wrist frosted glass HUD with hand-to-target tracer beam");
+            ModuleSettings.AddHudModRow(hudMods, menu, "Windows VR Overlay", "Bring Windows 10/11 apps into VR (HUD docked or stationary, laser, mouse & keyboard)");
             ModuleSettings.AddHudModRow(hudMods, menu, "Name Tags", "Clean overhead nameplate above each player");
             ModuleSettings.AddHudModRow(hudMods, menu, "Talking Players", "Live speaker list with player-colored badges");
             ModuleSettings.AddHudModRow(hudMods, menu, "Proximity Radar", "360° circular radar scanner with player blips");
@@ -487,11 +726,20 @@ namespace CascadeMenu
                             ? "Only the left controller opens the menu now."
                             : "Only the right controller opens the menu now.");
                     })
+                .Dropdown("Open menu button", "Choose B/Y, Joystick Press (stick click), A/X, or both",
+                    new[] { "Secondary (B / Y)", "Joystick Press (Stick Click)", "Primary (A / X)", "B/Y or Joystick Press", "Extra VR Bind Only" },
+                    () => config.MenuOpenMode.Value,
+                    index =>
+                    {
+                        config.MenuOpenMode.Value = index;
+                        string[] labels = { "Secondary (B/Y)", "Joystick Press", "Primary (A/X)", "B/Y or Joystick Press", "Extra VR Bind Only" };
+                        menu.ShowToast("Menu button", "Menu opens with " + labels[Mathf.Clamp(index, 0, labels.Length - 1)] + ".");
+                    })
                 .Button("Menu key",
                     "Keyboard or controller bind (currently " +
                     Keybinds.Name(Keybinds.Parse(config.MenuKey.Value, UnityEngine.InputSystem.Key.F1)) + ")",
                     "Rebind", () => menu.BeginRebind("menu"), false)
-                .Dropdown("Menu button", "VR button that also toggles the menu",
+                .Dropdown("Extra VR bind", "Optional second VR button that also toggles the menu",
                     VrInput.ButtonNames,
                     () => VrInput.IndexOf(config.MenuButton.Value),
                     index => config.MenuButton.Value = VrInput.Format(VrInput.FromIndex(index)))

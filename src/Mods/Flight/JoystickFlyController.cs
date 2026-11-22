@@ -3,8 +3,19 @@ using GorillaLocomotion;
 using GorillaTag.Gravity;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using CascadeMenu.Menu;
+using CascadeMenu.Patches;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Game;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Flight
 {
     /// <summary>
     /// Runs the real gameplay features:
