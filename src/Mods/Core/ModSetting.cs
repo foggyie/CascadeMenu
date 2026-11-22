@@ -1,7 +1,15 @@
 using System;
 using System.Globalization;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Overlays;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Core
 {
     /// <summary>How a mod-authored option is rendered and stored.</summary>
     public enum ModSettingKind

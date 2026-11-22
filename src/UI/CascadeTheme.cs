@@ -1,6 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
 
 namespace CascadeMenu.UI
 {
@@ -395,17 +401,17 @@ namespace CascadeMenu.UI
             Set(CascadeRole.TextSecondary, WithAlpha(secondary, secondaryAlpha));
             Set(CascadeRole.TextTertiary, WithAlpha(text, dark ? 0.40f : 0.38f));
 
-            Set(CascadeRole.ContentBg, WithAlpha(background, dark ? 0.97f : 0.99f));
-            Set(CascadeRole.SidebarBg, WithAlpha(panel, dark ? 0.90f : 0.94f));
-            Set(CascadeRole.TitlebarBg, WithAlpha(header, dark ? 0.97f : 0.99f));
-            Set(CascadeRole.ViewBg, WithAlpha(panel, dark ? 0.98f : 0.99f));
-            Set(CascadeRole.WindowBorder, WithAlpha(border, 0.10f));
-            Set(CascadeRole.TitlebarHairline, dark ? Hex("#000000", 0.38f) : Hex("#000000", 0.08f));
-            Set(CascadeRole.ViewBorder, WithAlpha(border, dark ? 0.06f : 0.07f));
-            Set(CascadeRole.Separator, WithAlpha(border, dark ? 0.065f : 0.07f));
-            Set(CascadeRole.RowHover, WithAlpha(border, dark ? 0.05f : 0.035f));
-            Set(CascadeRole.TabHover, WithAlpha(border, dark ? 0.07f : 0.05f));
-            Set(CascadeRole.HoverTint, WithAlpha(border, dark ? 0.07f : 0.06f));
+            Set(CascadeRole.ContentBg, WithAlpha(Darken(background, dark ? 0.04f : 0f), dark ? 0.76f : 0.82f));
+            Set(CascadeRole.SidebarBg, WithAlpha(panel, dark ? 0.62f : 0.72f));
+            Set(CascadeRole.TitlebarBg, WithAlpha(header, dark ? 0.74f : 0.82f));
+            Set(CascadeRole.ViewBg, WithAlpha(dark ? Lighten(panel, 0.05f) : panel, dark ? 0.62f : 0.86f));
+            Set(CascadeRole.WindowBorder, WithAlpha(dark ? Color.white : border, dark ? 0.36f : 0.28f));
+            Set(CascadeRole.TitlebarHairline, dark ? Hex("#FFFFFF", 0.16f) : Hex("#000000", 0.10f));
+            Set(CascadeRole.ViewBorder, WithAlpha(dark ? Color.white : border, dark ? 0.18f : 0.16f));
+            Set(CascadeRole.Separator, WithAlpha(dark ? Color.white : border, dark ? 0.15f : 0.14f));
+            Set(CascadeRole.RowHover, dark ? Hex("#FFFFFF", 0.09f) : WithAlpha(border, 0.06f));
+            Set(CascadeRole.TabHover, dark ? Hex("#FFFFFF", 0.12f) : WithAlpha(border, 0.08f));
+            Set(CascadeRole.HoverTint, dark ? Hex("#FFFFFF", 0.12f) : WithAlpha(border, 0.08f));
 
             Set(CascadeRole.Accent, accent);
             Set(CascadeRole.AccentSoft, toggleOn);
@@ -429,8 +435,8 @@ namespace CascadeMenu.UI
             Set(CascadeRole.ButtonSecondaryHover, buttonHover);
             Set(CascadeRole.ButtonPressed, buttonPressed);
 
-            Set(CascadeRole.FieldBg, WithAlpha(field, dark ? 0.06f : 0.035f));
-            Set(CascadeRole.FieldBorder, WithAlpha(border, dark ? 0.10f : 0.09f));
+            Set(CascadeRole.FieldBg, dark ? Hex("#FFFFFF", 0.08f) : WithAlpha(field, 0.04f));
+            Set(CascadeRole.FieldBorder, dark ? Hex("#FFFFFF", 0.20f) : WithAlpha(border, 0.10f));
             Set(CascadeRole.FieldFocus, accent);
             Set(CascadeRole.Scrollbar, WithAlpha(border, dark ? 0.26f : 0.28f));
 
@@ -439,8 +445,8 @@ namespace CascadeMenu.UI
             Set(CascadeRole.TrafficZoom, Hex("#28C840"));
             Set(CascadeRole.TrafficGlyph, Hex("#000000", 0.55f));
 
-            Set(CascadeRole.ToastBg, WithAlpha(panel, 0.98f));
-            Set(CascadeRole.ToastBorder, WithAlpha(border, 0.10f));
+            Set(CascadeRole.ToastBg, WithAlpha(panel, dark ? 0.76f : 0.84f));
+            Set(CascadeRole.ToastBorder, WithAlpha(border, 0.30f));
             Set(CascadeRole.IconNormal, WithAlpha(text, dark ? 0.55f : 0.50f));
             Set(CascadeRole.ShadowColor, WithAlpha(Color.black, dark ? 0.55f : 0.35f));
 
@@ -515,6 +521,44 @@ namespace CascadeMenu.UI
 
                 binding.Gradient.Refresh();
             }
+        }
+
+        /// <summary>
+        /// Ultra-fast live RGB accent mutation (zero allocations) used when
+        /// RGB Rainbow Mode is enabled. Mode 0 = Accent + Glow + Sub-Tab Bar,
+        /// Mode 1 = Full Neon (Accent + Borders + Active Dots),
+        /// Mode 2 = Subtle (Accent + Glow + Sub-Tab Bar softly tinted).
+        /// </summary>
+        public void ApplyRgbAccent(Color rgb, int mode)
+        {
+            rgb.a = 1f;
+            Color soft = new Color(rgb.r, rgb.g, rgb.b, 0.90f);
+            Color top = Lighten(rgb, 0.14f);
+            Color bottom = Darken(rgb, 0.14f);
+
+            _colors[(int)CascadeRole.Accent] = rgb;
+            _colors[(int)CascadeRole.AccentSoft] = soft;
+            _colors[(int)CascadeRole.Pointer] = rgb;
+
+            if (mode != 2)
+            {
+                _colors[(int)CascadeRole.SliderFill] = rgb;
+                _colors[(int)CascadeRole.ToggleOn] = rgb;
+                _colors[(int)CascadeRole.ButtonPrimaryTop] = top;
+                _colors[(int)CascadeRole.ButtonPrimaryBottom] = bottom;
+                _colors[(int)CascadeRole.FieldFocus] = rgb;
+            }
+
+            if (mode == 1)
+            {
+                _colors[(int)CascadeRole.WindowBorder] = new Color(rgb.r, rgb.g, rgb.b, 0.65f);
+                _colors[(int)CascadeRole.ViewBorder] = new Color(rgb.r, rgb.g, rgb.b, 0.42f);
+                _colors[(int)CascadeRole.Active] = rgb;
+                _colors[(int)CascadeRole.ActiveSoft] = new Color(rgb.r, rgb.g, rgb.b, 0.22f);
+            }
+
+            Version++;
+            RecolorAll();
         }
 
         // -----------------------------------------------------------------

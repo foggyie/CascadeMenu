@@ -2,6 +2,12 @@ using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
 
 namespace CascadeMenu.UI
 {
@@ -271,6 +277,261 @@ namespace CascadeMenu.UI
             {
                 CascadeTheme.SetGraphicColor(Label, highlighted ? Theme.ActiveColor : Theme.TextSecondary);
             }
+        }
+    }
+
+    /// <summary>
+    /// Live right-side callout card in the Themes Custom Color editor.
+    /// Shows a color swatch, role name, live #RRGGBB hex, and plain-English
+    /// description of which UI elements the selected color role changes.
+    /// </summary>
+    internal sealed class CascadeColorTargetInfoView : MonoBehaviour
+    {
+        private CascadeMenuBehaviour _menu;
+        private Image _swatch;
+        private TMP_Text _title;
+        private TMP_Text _hex;
+        private TMP_Text _desc;
+
+        private int _lastIndex = -1;
+        private string _lastHex = string.Empty;
+        private float _nextPoll;
+
+        public void Configure(
+            CascadeMenuBehaviour menu,
+            Image swatch,
+            TMP_Text title,
+            TMP_Text hex,
+            TMP_Text desc)
+        {
+            _menu = menu;
+            _swatch = swatch;
+            _title = title;
+            _hex = hex;
+            _desc = desc;
+            Refresh(true);
+        }
+
+        private void Update()
+        {
+            if (Time.unscaledTime < _nextPoll) return;
+            _nextPoll = Time.unscaledTime + 0.08f;
+            Refresh(false);
+        }
+
+        private void Refresh(bool force)
+        {
+            if (_menu == null) return;
+            int idx = Mathf.Clamp(_menu.CustomColorIndex, 0, CascadeThemePalette.Count - 1);
+            string hex = _menu.CustomHex(idx);
+            if (!force && idx == _lastIndex && string.Equals(hex, _lastHex, StringComparison.Ordinal))
+                return;
+
+            _lastIndex = idx;
+            _lastHex = hex;
+
+            Color c = _menu.CustomColor(idx);
+            c.a = 1f;
+
+            if (_swatch != null) _swatch.color = c;
+            if (_title != null) _title.text = "Editing: " + CascadeThemePalette.Names[idx];
+            if (_hex != null) _hex.text = hex;
+            if (_desc != null) _desc.text = CascadeThemePalette.Describe(idx);
+        }
+    }
+
+    /// <summary>
+    /// Interactive circular HSV/RGB color wheel + vertical brightness bar.
+    /// Supports both PC mouse drag and VR laser drag through CascadeInteractable.
+    /// </summary>
+    internal sealed class CascadeColorWheelView : MonoBehaviour
+    {
+        private RectTransform _wheelRect;
+        private RectTransform _wheelKnob;
+        private Image _wheelKnobFill;
+        private Image _wheelTint;
+
+        private RectTransform _valueRect;
+        private Image _valueBarImg;
+        private RectTransform _valueKnob;
+
+        private Image _previewSwatch;
+        private TMP_Text _hexText;
+        private TMP_Text _rgbText;
+        private TMP_Text _hsvText;
+        private TMP_Text _roleText;
+
+        private Func<Color> _get;
+        private Action<Color> _set;
+        private Func<string> _getRole;
+
+        private float _h;
+        private float _s;
+        private float _v = 1f;
+        private Color _lastSynced = new Color(-1f, -1f, -1f, -1f);
+        private string _lastRole = string.Empty;
+        private float _nextPoll;
+
+        public void Configure(
+            RectTransform wheelRect,
+            RectTransform wheelKnob,
+            Image wheelKnobFill,
+            Image wheelTint,
+            RectTransform valueRect,
+            Image valueBarImg,
+            RectTransform valueKnob,
+            Image previewSwatch,
+            TMP_Text hexText,
+            TMP_Text rgbText,
+            TMP_Text hsvText,
+            TMP_Text roleText,
+            Func<Color> get,
+            Action<Color> set,
+            Func<string> getRole)
+        {
+            _wheelRect = wheelRect;
+            _wheelKnob = wheelKnob;
+            _wheelKnobFill = wheelKnobFill;
+            _wheelTint = wheelTint;
+            _valueRect = valueRect;
+            _valueBarImg = valueBarImg;
+            _valueKnob = valueKnob;
+            _previewSwatch = previewSwatch;
+            _hexText = hexText;
+            _rgbText = rgbText;
+            _hsvText = hsvText;
+            _roleText = roleText;
+            _get = get;
+            _set = set;
+            _getRole = getRole;
+
+            SyncFromExternal(true);
+        }
+
+        public void DragWheelWorld(Vector3 worldPoint)
+        {
+            if (_wheelRect == null) return;
+            Rect rect = _wheelRect.rect;
+            float radius = Mathf.Min(rect.width, rect.height) * 0.5f;
+            if (radius <= 0.01f) return;
+
+            Vector3 local = _wheelRect.InverseTransformPoint(worldPoint);
+            Vector2 center = rect.center;
+            float dx = local.x - center.x;
+            float dy = local.y - center.y;
+            float dist = Mathf.Sqrt(dx * dx + dy * dy);
+
+            float sat = Mathf.Clamp01(dist / radius);
+            float angle = Mathf.Atan2(dy, dx);
+            if (angle < 0f) angle += Mathf.PI * 2f;
+            float hue = angle / (Mathf.PI * 2f);
+
+            _h = hue;
+            _s = sat;
+            // If brightness was 0 (pure black), lift it slightly so picking on the wheel is immediately visible
+            if (_v < 0.05f) _v = 1f;
+
+            EmitColor();
+        }
+
+        public void DragValueWorld(Vector3 worldPoint)
+        {
+            if (_valueRect == null) return;
+            Rect rect = _valueRect.rect;
+            if (rect.height <= 0.01f) return;
+
+            Vector3 local = _valueRect.InverseTransformPoint(worldPoint);
+            _v = Mathf.Clamp01((local.y - rect.yMin) / rect.height);
+            EmitColor();
+        }
+
+        private void EmitColor()
+        {
+            Color rgb = Color.HSVToRGB(_h, _s, _v);
+            rgb.a = 1f;
+            _lastSynced = rgb;
+            _set?.Invoke(rgb);
+            UpdateVisuals(rgb);
+        }
+
+        private void Update()
+        {
+            if (Time.unscaledTime < _nextPoll) return;
+            _nextPoll = Time.unscaledTime + 0.07f;
+            SyncFromExternal(false);
+        }
+
+        private void SyncFromExternal(bool force)
+        {
+            string role = _getRole != null ? (_getRole() ?? string.Empty) : string.Empty;
+            if (_roleText != null && (force || !string.Equals(role, _lastRole, StringComparison.Ordinal)))
+            {
+                _lastRole = role;
+                _roleText.text = role;
+            }
+
+            if (_get == null) return;
+            Color current = _get();
+            current.a = 1f;
+
+            if (!force &&
+                Mathf.Abs(current.r - _lastSynced.r) < 0.002f &&
+                Mathf.Abs(current.g - _lastSynced.g) < 0.002f &&
+                Mathf.Abs(current.b - _lastSynced.b) < 0.002f)
+            {
+                return;
+            }
+
+            _lastSynced = current;
+            float h, s, v;
+            Color.RGBToHSV(current, out h, out s, out v);
+            // Keep prior hue when saturation or value hits 0 so the wheel doesn't jump to 0°
+            if (s > 0.005f && v > 0.005f) _h = h;
+            if (v > 0.005f) _s = s;
+            _v = v;
+
+            UpdateVisuals(current);
+        }
+
+        private void UpdateVisuals(Color rgb)
+        {
+            if (_wheelRect != null && _wheelKnob != null)
+            {
+                float radius = Mathf.Min(_wheelRect.rect.width, _wheelRect.rect.height) * 0.5f;
+                if (radius < 1f) radius = 64f;
+                float angle = _h * Mathf.PI * 2f;
+                float r = Mathf.Clamp01(_s) * (radius - 2f);
+                _wheelKnob.anchoredPosition = new Vector2(Mathf.Cos(angle) * r, Mathf.Sin(angle) * r);
+            }
+
+            if (_wheelKnobFill != null) _wheelKnobFill.color = rgb;
+            if (_wheelTint != null)
+            {
+                // Dim the wheel slightly as brightness lowers so the wheel reflects live value
+                float visV = Mathf.Lerp(0.28f, 1f, _v);
+                _wheelTint.color = new Color(visV, visV, visV, 1f);
+            }
+
+            if (_valueBarImg != null)
+            {
+                _valueBarImg.color = Color.HSVToRGB(_h, _s, 1f);
+            }
+
+            if (_valueRect != null && _valueKnob != null)
+            {
+                float h = _valueRect.rect.height;
+                if (h < 1f) h = 128f;
+                float y = Mathf.Lerp(5f, Mathf.Max(5f, h - 5f), Mathf.Clamp01(_v));
+                _valueKnob.anchoredPosition = new Vector2(0f, y);
+            }
+
+            if (_previewSwatch != null) _previewSwatch.color = rgb;
+
+            Color32 c32 = rgb;
+            if (_hexText != null) _hexText.text = "#" + c32.r.ToString("X2") + c32.g.ToString("X2") + c32.b.ToString("X2");
+            if (_rgbText != null) _rgbText.text = "R " + c32.r + "  ·  G " + c32.g + "  ·  B " + c32.b;
+            if (_hsvText != null)
+                _hsvText.text = "H " + Mathf.RoundToInt(_h * 360f) + "°  ·  S " + Mathf.RoundToInt(_s * 100f) + "%  ·  V " + Mathf.RoundToInt(_v * 100f) + "%";
         }
     }
 
@@ -582,35 +843,40 @@ namespace CascadeMenu.UI
             Func<float> get,
             Action<float> set,
             Func<float, string> format,
-            out TMP_Text valueLabel)
+            out TMP_Text valueLabel,
+            bool bigSlider = true)
         {
             RectTransform hit = CascadeUI.Rect("Slider", parent);
             var view = hit.gameObject.AddComponent<CascadeSliderView>();
             view.Hit = hit;
 
+            float trackHalf = bigSlider ? 4f : 2f;
+            float thumbSize = bigSlider ? 19f : 14f;
+            int trackRadius = bigSlider ? 4 : 2;
+
             RectTransform track = CascadeUI.Rect("Track", hit);
             track.anchorMin = new Vector2(0f, 0.5f);
             track.anchorMax = new Vector2(1f, 0.5f);
             track.pivot = new Vector2(0.5f, 0.5f);
-            track.offsetMin = new Vector2(0f, -2f);
-            track.offsetMax = new Vector2(0f, 2f);
-            CascadeUI.Image(track, CascadeSprites.Rounded(2), theme.SliderTrack, Image.Type.Simple);
+            track.offsetMin = new Vector2(0f, -trackHalf);
+            track.offsetMax = new Vector2(0f, trackHalf);
+            CascadeUI.Image(track, CascadeSprites.Rounded(trackRadius), theme.SliderTrack, Image.Type.Sliced);
 
             RectTransform fill = CascadeUI.Rect("Fill", hit);
             fill.anchorMin = fill.anchorMax = new Vector2(0f, 0.5f);
             fill.pivot = new Vector2(0f, 0.5f);
             fill.anchoredPosition = new Vector2(0f, 0f);
-            fill.sizeDelta = new Vector2(0f, 4f);
-            view.Fill = CascadeUI.Image(fill, CascadeSprites.Rounded(2), theme.SliderFill, Image.Type.Simple);
+            fill.sizeDelta = new Vector2(0f, trackHalf * 2f);
+            view.Fill = CascadeUI.Image(fill, CascadeSprites.Rounded(trackRadius), theme.SliderFill, Image.Type.Sliced);
 
             RectTransform thumb = CascadeUI.Rect("Thumb", hit);
             thumb.anchorMin = thumb.anchorMax = new Vector2(0f, 0.5f);
             thumb.pivot = new Vector2(0.5f, 0.5f);
-            thumb.sizeDelta = new Vector2(14f, 14f);
+            thumb.sizeDelta = new Vector2(thumbSize, thumbSize);
             view.Thumb = thumb;
 
             RectTransform thumbShadow = CascadeUI.Rect("Shadow", thumb);
-            CascadeUI.Stretch(thumbShadow, -1f, -1f, -1f, -1f);
+            CascadeUI.Stretch(thumbShadow, -1.5f, -1.5f, -1.5f, -1.5f);
             CascadeUI.Image(thumbShadow, CascadeSprites.Circle(), theme.ThumbShadow, Image.Type.Simple);
 
             RectTransform thumbFace = CascadeUI.Rect("Face", thumb);
@@ -619,14 +885,14 @@ namespace CascadeMenu.UI
 
             RectTransform thumbRing = CascadeUI.Rect("Ring", thumb);
             CascadeUI.Stretch(thumbRing);
-            CascadeUI.Image(thumbRing, CascadeSprites.CircleRing(5f), theme.SliderThumbBorder, Image.Type.Simple);
+            CascadeUI.Image(thumbRing, CascadeSprites.CircleRing(bigSlider ? 4f : 5f), theme.SliderThumbBorder, Image.Type.Simple);
 
             RectTransform valueRect = CascadeUI.Rect("Value", parent);
             valueRect.anchorMin = valueRect.anchorMax = new Vector2(1f, 1f);
             valueRect.pivot = new Vector2(1f, 1f);
-            valueRect.anchoredPosition = new Vector2(-12f, -9f);
-            valueRect.sizeDelta = new Vector2(74f, 18f);
-            valueLabel = CascadeUI.Text(valueRect, string.Empty, 11f, theme.TextSecondary, TextAlignmentOptions.Right);
+            valueRect.anchoredPosition = new Vector2(-12f, -7f);
+            valueRect.sizeDelta = new Vector2(118f, 20f);
+            valueLabel = CascadeUI.Text(valueRect, string.Empty, bigSlider ? 11.5f : 11f, theme.TextPrimary, TextAlignmentOptions.Right, bigSlider);
 
             view.ValueLabel = valueLabel;
             view.Configure(theme, min, max, get, set, format);

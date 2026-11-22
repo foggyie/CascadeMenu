@@ -1,8 +1,9 @@
 using GorillaLocomotion;
 using GorillaTag.Gravity;
 using HarmonyLib;
+using CascadeMenu.Mods.Flight;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Patches
 {
     /// <summary>
     /// Stops <see cref="GTPlayer.TakeMyHand_ProcessMovement"/> from moving the local

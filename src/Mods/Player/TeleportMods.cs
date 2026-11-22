@@ -1,7 +1,15 @@
 using UnityEngine;
 using System.Collections.Generic;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Player
 {
     /// <summary>Teleport gun with configurable distance from target.</summary>
     [PluginToggleable]
@@ -50,17 +58,31 @@ namespace CascadeMenu.Mods
             GunLib.Update((hit, rig, player) =>
             {
                 Vector3 targetPos;
+                Vector3 hitNormal = hit.normal.sqrMagnitude > 0.01f ? hit.normal.normalized : Vector3.up;
 
                 if (_teleportNearPlayer && rig != null)
                 {
-                    // Teleport near the player
-                    Vector3 toPlayer = (rig.transform.position - hit.point).normalized;
-                    targetPos = rig.transform.position - toPlayer * _distanceFromTarget;
+                    // Teleport near the player with safe vertical & horizontal clearance
+                    Vector3 toPlayer = rig.transform.position - hit.point;
+                    toPlayer.y = 0f;
+                    if (toPlayer.sqrMagnitude < 0.01f) toPlayer = Vector3.forward;
+                    float dist = Mathf.Max(1.1f, _distanceFromTarget);
+                    targetPos = rig.transform.position - toPlayer.normalized * dist + Vector3.up * 0.45f;
                 }
                 else
                 {
-                    // Teleport to hit point with offset
-                    targetPos = hit.point + hit.normal * _distanceFromTarget;
+                    // Keep the player capsule cleanly outside walls and above floors
+                    // so GTPlayer collision never blocks or snaps the teleport back.
+                    float clearance = Mathf.Max(0.55f, _distanceFromTarget);
+                    targetPos = hit.point + hitNormal * clearance;
+                    if (hitNormal.y > 0.5f)
+                    {
+                        targetPos.y = Mathf.Max(targetPos.y, hit.point.y + 0.75f);
+                    }
+                    else
+                    {
+                        targetPos.y += 0.35f;
+                    }
                 }
 
                 TeleportPlayer(targetPos);
@@ -72,8 +94,11 @@ namespace CascadeMenu.Mods
             GunLib.Cleanup();
         }
 
-        private void TeleportPlayer(Vector3 position)
+        internal static void TeleportPlayer(Vector3 position)
         {
+            if (PlayerActions.TeleportToPosition(position))
+                return;
+
             if (GorillaTagger.Instance == null) return;
 
             Transform player = GorillaTagger.Instance.transform;
@@ -84,11 +109,11 @@ namespace CascadeMenu.Mods
                 GorillaTagger.Instance.offlineVRRig.transform.position = position;
             }
 
-            // Reset velocity
             if (GorillaTagger.Instance.rigidbody != null)
             {
                 GorillaTagger.Instance.rigidbody.linearVelocity = Vector3.zero;
             }
+            Physics.SyncTransforms();
         }
     }
 
@@ -144,13 +169,10 @@ namespace CascadeMenu.Mods
             if (nearest != null)
             {
                 Vector3 direction = (localPlayer.position - nearest.transform.position).normalized;
-                Vector3 targetPos = nearest.transform.position + direction * _offset;
+                if (direction.sqrMagnitude < 0.01f) direction = Vector3.forward;
+                Vector3 targetPos = nearest.transform.position + direction * _offset + Vector3.up * 0.45f;
                 
-                localPlayer.position = targetPos;
-                if (GorillaTagger.Instance.offlineVRRig != null)
-                {
-                    GorillaTagger.Instance.offlineVRRig.transform.position = targetPos;
-                }
+                TeleportGunEnhanced.TeleportPlayer(targetPos);
 
                 ModKit.Notify("Teleport", $"Teleported to nearest player ({nearestDist:0.0}m away)");
             }
@@ -207,14 +229,10 @@ namespace CascadeMenu.Mods
             if (rig != null)
             {
                 Vector3 randomOffset = Random.onUnitSphere * _offset;
-                randomOffset.y = Mathf.Abs(randomOffset.y); // Keep above ground
+                randomOffset.y = Mathf.Abs(randomOffset.y) + 0.4f; // Keep above ground
                 Vector3 targetPos = rig.transform.position + randomOffset;
 
-                localPlayer.position = targetPos;
-                if (GorillaTagger.Instance.offlineVRRig != null)
-                {
-                    GorillaTagger.Instance.offlineVRRig.transform.position = targetPos;
-                }
+                TeleportGunEnhanced.TeleportPlayer(targetPos);
 
                 string playerName = PlayerActions.SafeName(randomPlayer);
                 ModKit.Notify("Teleport", $"Teleported to {playerName}");
@@ -276,13 +294,9 @@ namespace CascadeMenu.Mods
                 Vector3 direction = (localPlayer.position - rig.transform.position).normalized;
                 if (direction.magnitude < 0.1f) direction = Vector3.forward;
                 
-                Vector3 targetPos = rig.transform.position + direction * _offset;
+                Vector3 targetPos = rig.transform.position + direction * _offset + Vector3.up * 0.45f;
 
-                localPlayer.position = targetPos;
-                if (GorillaTagger.Instance.offlineVRRig != null)
-                {
-                    GorillaTagger.Instance.offlineVRRig.transform.position = targetPos;
-                }
+                TeleportGunEnhanced.TeleportPlayer(targetPos);
 
                 string playerName = PlayerActions.SafeName(targetPlayer);
                 ModKit.Notify("Teleport", $"→ {playerName} ({_currentIndex + 1}/{players.Count})");
@@ -361,13 +375,10 @@ namespace CascadeMenu.Mods
             if (_targetRig != null)
             {
                 Vector3 direction = (localPlayer.position - _targetRig.transform.position).normalized;
-                Vector3 targetPos = _targetRig.transform.position + direction * _followDistance;
+                if (direction.sqrMagnitude < 0.01f) direction = Vector3.forward;
+                Vector3 targetPos = _targetRig.transform.position + direction * _followDistance + Vector3.up * 0.4f;
 
-                localPlayer.position = targetPos;
-                if (GorillaTagger.Instance.offlineVRRig != null)
-                {
-                    GorillaTagger.Instance.offlineVRRig.transform.position = targetPos;
-                }
+                TeleportGunEnhanced.TeleportPlayer(targetPos);
             }
         }
     }

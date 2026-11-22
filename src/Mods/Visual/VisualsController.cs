@@ -8,8 +8,16 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.XR;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Movement;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Visual
 {
     /// <summary>
     /// Visual player overlay: ESP boxes (3D, Corner, 2D), bone skeletons,
@@ -49,15 +57,22 @@ namespace CascadeMenu.Mods
             public string CosmeticText;
             public SpriteRenderer CosmeticIcon;
             public Sprite CosmeticIconSprite;
-            public Material ChamMaterial;
-            public Color LastChamColor;
-            public readonly Dictionary<Renderer, Material[]> OriginalMaterials = new Dictionary<Renderer, Material[]>();
         }
 
         private MenuConfig _config;
         private Shader _overlayShader;
+        private Shader _chamShader;
         private Material _lineMaterial;
         private Material _highlightMaterial;
+
+        // Per-VRRig / per-Renderer chams tracking (immune to slot reshuffling when players leave)
+        private readonly Dictionary<VRRig, Material> _rigChamMaterials = new Dictionary<VRRig, Material>();
+        private readonly Dictionary<Renderer, Material[]> _chamSavedOriginals = new Dictionary<Renderer, Material[]>();
+        private readonly Dictionary<Renderer, VRRig> _chamRendererOwners = new Dictionary<Renderer, VRRig>();
+        private readonly HashSet<Material> _ownedChamMaterials = new HashSet<Material>();
+        private readonly HashSet<VRRig> _frameChammedRigs = new HashSet<VRRig>();
+        private readonly List<VRRig> _staleChamRigs = new List<VRRig>();
+        private readonly List<Renderer> _staleChamRenderers = new List<Renderer>();
         private static readonly Color[] HighlightColors =
         {
             new Color(0.1f, 0.85f, 1f, 0.68f),
@@ -110,9 +125,12 @@ namespace CascadeMenu.Mods
             }
 
             _overlayShader = shader;
+            _chamShader = Shader.Find("Hidden/Internal-Colored")
+                ?? Shader.Find("GUI/Text Shader")
+                ?? shader;
             _lineMaterial = CreateOverlayMaterial(shader, Color.white);
             _highlightMaterial = CreateOverlayMaterial(shader, HighlightColors[0]);
-            Plugin.Log?.LogInfo("Cascade ESP ready (" + shader.name + "). Enabled=" + config.EspEnabled.Value);
+            Plugin.Log?.LogInfo("Cascade ESP ready (" + shader.name + ", chams=" + (_chamShader != null ? _chamShader.name : "none") + "). Enabled=" + config.EspEnabled.Value);
         }
 
         private void LateUpdate()
@@ -159,8 +177,10 @@ namespace CascadeMenu.Mods
                 _roomName = room;
                 _announcedCosmetics.Clear();
                 _cosmeticMeta.Clear();
+                RestoreAllChams();
             }
 
+            _frameChammedRigs.Clear();
             Vector3 tracerOrigin = GetTracerOrigin(camera, _config.EspTracerOrigin.Value);
             int used = 0;
             _presentCosmeticIds.Clear();
@@ -239,10 +259,10 @@ namespace CascadeMenu.Mods
                 if (drawThis && _config.EspChams.Value)
                 {
                     Color chamCol = activeColor;
-                    chamCol.a = 0.58f;
-                    ApplyChams(slot, chamCol);
+                    chamCol.a = Mathf.Clamp(PlayerChamsEspMod.Opacity, 0.15f, 1.0f);
+                    ApplyChams(rig, slot.Renderers, chamCol);
+                    _frameChammedRigs.Add(rig);
                 }
-                else RestoreChams(slot);
 
                 if (drawThis && _config.EspMarker.Value)
                 {
@@ -308,6 +328,15 @@ namespace CascadeMenu.Mods
                 _announcedCosmetics.RemoveWhere(key => !_presentCosmeticIds.Contains(key));
             }
 
+            if (!_config.EspChams.Value)
+            {
+                RestoreAllChams();
+            }
+            else
+            {
+                PruneUnchammedRigs();
+            }
+
             RemoveSlotsFrom(used);
         }
 
@@ -366,7 +395,6 @@ namespace CascadeMenu.Mods
         private void EnsureRigRenderers(Slot slot, VRRig rig)
         {
             if (slot.Rig == rig && slot.Renderers != null) return;
-            RestoreChams(slot);
             slot.Rig = rig;
             slot.SkinnedBody = null;
             slot.BonePairs.Clear();
@@ -786,65 +814,188 @@ namespace CascadeMenu.Mods
             slot.Marker = null;
         }
 
-        private void ApplyChams(Slot slot, Color color)
+        private Material CreateChamMaterial(Color color)
         {
-            if (_overlayShader == null) return;
-            if (slot.ChamMaterial == null)
-            {
-                slot.ChamMaterial = CreateOverlayMaterial(_overlayShader, color);
-                slot.LastChamColor = color;
-            }
-            else if (slot.LastChamColor != color)
-            {
-                slot.ChamMaterial.color = color;
-                slot.LastChamColor = color;
-            }
+            Shader sh = _chamShader ?? _overlayShader;
+            var mat = new Material(sh) { color = color };
+            mat.renderQueue = 4000;
+            mat.SetOverrideTag("RenderType", "Transparent");
 
-            for (int i = 0; i < slot.Renderers.Length; i++)
-            {
-                Renderer renderer = slot.Renderers[i];
-                if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy ||
-                    renderer is LineRenderer || slot.OriginalMaterials.ContainsKey(renderer)) continue;
-
-                WhitenVertexColors(renderer);
-
-                Material[] originals = renderer.sharedMaterials;
-                slot.OriginalMaterials.Add(renderer, originals);
-                var replacement = new Material[originals.Length];
-                for (int materialIndex = 0; materialIndex < replacement.Length; materialIndex++)
-                    replacement[materialIndex] = slot.ChamMaterial;
-                renderer.sharedMaterials = replacement;
-            }
+            if (mat.HasProperty("_ZTest")) mat.SetFloat("_ZTest", (float)CompareFunction.Always);
+            if (mat.HasProperty("_ZTestMode")) mat.SetFloat("_ZTestMode", (float)CompareFunction.Always);
+            if (mat.HasProperty("_ZWrite")) mat.SetFloat("_ZWrite", 0f);
+            if (mat.HasProperty("_Cull")) mat.SetFloat("_Cull", (float)CullMode.Back);
+            if (mat.HasProperty("_CullMode")) mat.SetFloat("_CullMode", (float)CullMode.Back);
+            if (mat.HasProperty("_SrcBlend")) mat.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            if (mat.HasProperty("_DstBlend")) mat.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f);
+            if (mat.HasProperty("_Blend")) mat.SetFloat("_Blend", 0f);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", color);
+            return mat;
         }
 
-        private static readonly HashSet<Mesh> WhitenedMeshes = new HashSet<Mesh>();
-
-        private static void WhitenVertexColors(Renderer renderer)
+        private bool IsOwnedChamArray(Material[] mats)
         {
-            Mesh mesh = null;
-            if (renderer is SkinnedMeshRenderer skinned) mesh = skinned.sharedMesh;
+            if (mats == null || mats.Length == 0) return false;
+            for (int i = 0; i < mats.Length; i++)
+            {
+                if (mats[i] != null && _ownedChamMaterials.Contains(mats[i])) return true;
+            }
+            return false;
+        }
+
+        private void ApplyChams(VRRig rig, Renderer[] renderers, Color color)
+        {
+            if (rig == null || renderers == null || (_chamShader == null && _overlayShader == null)) return;
+
+            if (!_rigChamMaterials.TryGetValue(rig, out Material chamMat) || chamMat == null)
+            {
+                chamMat = CreateChamMaterial(color);
+                _rigChamMaterials[rig] = chamMat;
+                _ownedChamMaterials.Add(chamMat);
+            }
             else
             {
-                MeshFilter filter = renderer.GetComponent<MeshFilter>();
-                if (filter != null) mesh = filter.sharedMesh;
+                chamMat.color = color;
+                if (chamMat.HasProperty("_BaseColor")) chamMat.SetColor("_BaseColor", color);
+                if (chamMat.HasProperty("_Color")) chamMat.SetColor("_Color", color);
             }
 
-            if (mesh == null || WhitenedMeshes.Contains(mesh)) return;
-            WhitenedMeshes.Add(mesh);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer renderer = renderers[i];
+                if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy ||
+                    renderer is LineRenderer) continue;
 
-            Color32[] colors = mesh.colors32;
-            if (colors == null || colors.Length == 0) return;
+                Material[] current = renderer.sharedMaterials;
+                if (current == null || current.Length == 0) continue;
 
-            var white = new Color32(255, 255, 255, 255);
-            for (int i = 0; i < colors.Length; i++) colors[i] = white;
-            mesh.colors32 = colors;
+                // Only ever snapshot genuine non-cham materials! If Gorilla Tag changed the player's
+                // fur/lava material mid-game, capture that new genuine material cleanly before re-applying.
+                if (!IsOwnedChamArray(current))
+                {
+                    Material[] copy = new Material[current.Length];
+                    Array.Copy(current, copy, current.Length);
+                    _chamSavedOriginals[renderer] = copy;
+                    _chamRendererOwners[renderer] = rig;
+
+                    var replacement = new Material[current.Length];
+                    for (int m = 0; m < replacement.Length; m++) replacement[m] = chamMat;
+                    renderer.sharedMaterials = replacement;
+                }
+                else
+                {
+                    // Ensure all slots still point to this rig's current cham material
+                    bool mismatch = false;
+                    for (int m = 0; m < current.Length; m++)
+                    {
+                        if (current[m] != chamMat) { mismatch = true; break; }
+                    }
+                    if (mismatch)
+                    {
+                        var replacement = new Material[current.Length];
+                        for (int m = 0; m < replacement.Length; m++) replacement[m] = chamMat;
+                        renderer.sharedMaterials = replacement;
+                    }
+                    _chamRendererOwners[renderer] = rig;
+                }
+            }
         }
 
-        private static void RestoreChams(Slot slot)
+        private void PruneUnchammedRigs()
         {
-            foreach (KeyValuePair<Renderer, Material[]> item in slot.OriginalMaterials)
-                if (item.Key != null) item.Key.sharedMaterials = item.Value;
-            slot.OriginalMaterials.Clear();
+            if (_rigChamMaterials.Count == 0 && _chamSavedOriginals.Count == 0) return;
+
+            _staleChamRigs.Clear();
+            foreach (var kv in _rigChamMaterials)
+            {
+                VRRig rig = kv.Key;
+                if (rig == null || !rig.gameObject.activeInHierarchy || !_frameChammedRigs.Contains(rig))
+                {
+                    _staleChamRigs.Add(rig);
+                }
+            }
+
+            for (int i = 0; i < _staleChamRigs.Count; i++)
+            {
+                RestoreChamsForRig(_staleChamRigs[i]);
+            }
+            _staleChamRigs.Clear();
+        }
+
+        private void RestoreChamsForRig(VRRig rig)
+        {
+            _staleChamRenderers.Clear();
+            foreach (var kv in _chamRendererOwners)
+            {
+                if (kv.Key == null || kv.Value == rig || kv.Value == null)
+                {
+                    _staleChamRenderers.Add(kv.Key);
+                }
+            }
+
+            for (int i = 0; i < _staleChamRenderers.Count; i++)
+            {
+                Renderer r = _staleChamRenderers[i];
+                if (r != null && _chamSavedOriginals.TryGetValue(r, out Material[] originals) && originals != null)
+                {
+                    try { r.sharedMaterials = originals; } catch { }
+                }
+                _chamSavedOriginals.Remove(r);
+                _chamRendererOwners.Remove(r);
+            }
+            _staleChamRenderers.Clear();
+
+            if (rig != null && _rigChamMaterials.TryGetValue(rig, out Material mat))
+            {
+                _ownedChamMaterials.Remove(mat);
+                if (mat != null) Destroy(mat);
+            }
+            if (rig != null)
+            {
+                _rigChamMaterials.Remove(rig);
+                try
+                {
+                    if (rig.mainSkin != null && IsOwnedChamArray(rig.mainSkin.sharedMaterials))
+                    {
+                        rig.ChangeMaterialLocal(rig.setMatIndex);
+                    }
+                }
+                catch { }
+            }
+        }
+
+        private void RestoreAllChams()
+        {
+            if (_chamSavedOriginals.Count > 0)
+            {
+                foreach (var kv in _chamSavedOriginals)
+                {
+                    if (kv.Key != null && kv.Value != null)
+                    {
+                        try { kv.Key.sharedMaterials = kv.Value; } catch { }
+                    }
+                }
+                _chamSavedOriginals.Clear();
+            }
+            _chamRendererOwners.Clear();
+
+            if (_rigChamMaterials.Count > 0)
+            {
+                foreach (var kv in _rigChamMaterials)
+                {
+                    if (kv.Value != null) Destroy(kv.Value);
+                    if (kv.Key != null)
+                    {
+                        try { kv.Key.ChangeMaterialLocal(kv.Key.setMatIndex); } catch { }
+                    }
+                }
+                _rigChamMaterials.Clear();
+            }
+
+            _ownedChamMaterials.Clear();
+            _frameChammedRigs.Clear();
         }
 
         private void UpdateMarker(Slot slot, VRRig rig, Color color, float width)
@@ -1082,8 +1233,6 @@ namespace CascadeMenu.Mods
             for (int i = _slots.Count - 1; i >= first; i--)
             {
                 Slot slot = _slots[i];
-                RestoreChams(slot);
-                if (slot.ChamMaterial != null) Destroy(slot.ChamMaterial);
                 if (slot.Root != null) Destroy(slot.Root);
                 _slots.RemoveAt(i);
             }
@@ -1091,6 +1240,7 @@ namespace CascadeMenu.Mods
 
         private void ClearSlots()
         {
+            RestoreAllChams();
             RemoveSlotsFrom(0);
         }
 
@@ -1305,6 +1455,11 @@ namespace CascadeMenu.Mods
                     slot.Name.transform.rotation = Quaternion.LookRotation(look, Vector3.up);
                 }
             }
+        }
+
+        private void OnDisable()
+        {
+            RestoreAllChams();
         }
 
         private void OnDestroy()

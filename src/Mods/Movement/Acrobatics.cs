@@ -1,6 +1,14 @@
 using UnityEngine;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Overlays;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Movement
 {
     /// <summary>
     /// One-switch wrapper around the existing body-rotation controller. The mod

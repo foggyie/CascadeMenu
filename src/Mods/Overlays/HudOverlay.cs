@@ -5,8 +5,19 @@ using CascadeMenu.UI;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using CascadeMenu.Menu;
+using CascadeMenu.Patches;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Flight;
+using CascadeMenu.Mods.Game;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Overlays
 {
     /// <summary>
     /// Small camera-parented HUD in the top-left of the view.

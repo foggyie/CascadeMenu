@@ -1,8 +1,16 @@
 using CascadeMenu.UI;
 using GorillaLocomotion;
 using UnityEngine;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Overlays;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Core
 {
     // =========================================================================
     // CASCADE MENU — MOD AUTHORING TEMPLATE (FORK & EXTENSION GUIDE)

@@ -5,8 +5,16 @@ using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 using UnityEngine.XR;
 using CascadeMenu.UI;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Tools
 {
     /// <summary>
     /// Thin, client-side player-targeting "gun".
@@ -390,10 +398,11 @@ namespace CascadeMenu.Mods
 
             if (currentRig != null && !IsRigAlive(currentRig)) currentRig = null;
 
-            if (solidFound || nearRig != null)
+            fireHit.point = hitPoint;
+            fireHit.distance = hitDistance;
+            if (!solidFound && nearRig == null)
             {
-                fireHit.point = hitPoint;
-                fireHit.distance = hitDistance;
+                fireHit.normal = Vector3.up;
             }
 
             _hasHit = solidFound || nearRig != null;
@@ -718,8 +727,15 @@ namespace CascadeMenu.Mods
             bool found = false;
             float nearest = float.MaxValue;
 
+            int mask = _raycastMask;
+            if (GTPlayer.Instance != null && GTPlayer.Instance.locomotionEnabledLayers.value != 0)
+            {
+                mask |= GTPlayer.Instance.locomotionEnabledLayers.value;
+                mask &= ~LayerMask.GetMask("UI", "Ignore Raycast");
+            }
+
             int hitCount = Physics.RaycastNonAlloc(
-                origin, direction, _raycastHits, maxDistance, _raycastMask, QueryTriggerInteraction.Ignore);
+                origin, direction, _raycastHits, maxDistance, mask, QueryTriggerInteraction.Ignore);
 
             for (int i = 0; i < hitCount; i++)
             {

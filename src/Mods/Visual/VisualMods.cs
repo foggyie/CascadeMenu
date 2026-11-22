@@ -3,8 +3,16 @@ using CascadeMenu.UI;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Movement;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Visual
 {
     // -------------------------------------------------------------------------
     // Camera effects
@@ -817,11 +825,19 @@ namespace CascadeMenu.Mods
     [ModCategory("Visual")]
     public sealed class PlayerChamsEspMod : Mod
     {
+        internal static float Opacity = 0.42f;
+
         public PlayerChamsEspMod()
         {
             Name = "Player Chams";
             isToggle = true;
 
+            AddSetting(ModSetting.Slider("opacity", "See-through opacity",
+                "Transparency of chams (lower = more see-through)",
+                0.15f, 1.0f,
+                () => Opacity,
+                v => Opacity = Mathf.Clamp(v, 0.15f, 1.0f),
+                v => Mathf.RoundToInt(v * 100f) + "%"));
             AddSetting(ModSetting.Toggle("matchColor", "Match player color",
                 "Color chams with each player's gorilla color",
                 () => CurrentConfig() != null && CurrentConfig().EspMatchPlayerColor.Value,
@@ -864,6 +880,7 @@ namespace CascadeMenu.Mods
             bool val = config.EspChams.Value;
             if (mod.Enabled != val || mod.IsActive != val)
             {
+                if (!val) mod.SetActive(false);
                 mod.SetEnabled(val);
                 if (val) mod.SetActive(true);
             }

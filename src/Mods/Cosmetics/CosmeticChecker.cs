@@ -4,8 +4,16 @@ using System.IO;
 using System.Text;
 using GorillaNetworking;
 using UnityEngine;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Overlays;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Cosmetics
 {
     /// <summary>
     /// Reads the cosmetics a remote rig is currently wearing and turns them into

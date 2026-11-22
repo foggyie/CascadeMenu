@@ -1,12 +1,20 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using CascadeMenu.UI;
 using GorillaNetworking;
 using UnityEngine;
 using UnityEngine.UI;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Overlays;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Cosmetics
 {
     /// <summary>
     /// In-menu cosmetic catalog, modelled on GorillaShop but integrated into the

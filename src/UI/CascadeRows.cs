@@ -1,6 +1,12 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
 
 namespace CascadeMenu.UI
 {
@@ -253,6 +259,18 @@ namespace CascadeMenu.UI
         public CascadeSection Swatches(string title, string subtitle, Color[] colors, Action<int> pick)
         {
             Rows.Add(new CascadeSwatchRow(title, subtitle, colors, pick));
+            return this;
+        }
+
+        /// <summary>Interactive circular HSV/RGB color wheel with brightness bar.</summary>
+        public CascadeSection ColorWheel(
+            string title,
+            string subtitle,
+            Func<Color> get,
+            Action<Color> set,
+            Func<string> getRoleLabel = null)
+        {
+            Rows.Add(new CascadeColorWheelRow(title, subtitle, get, set, getRoleLabel));
             return this;
         }
 
@@ -799,6 +817,31 @@ namespace CascadeMenu.UI
         }
 
         public override float Height { get { return 38f; } }
+    }
+
+    /// <summary>Interactive circular HSV/RGB color wheel + vertical brightness bar.</summary>
+    internal sealed class CascadeColorWheelRow : CascadeRow
+    {
+        public readonly Func<Color> Get;
+        public readonly Action<Color> Set;
+        public readonly Func<string> GetRoleLabel;
+
+        public CascadeColorWheelRow(
+            string title,
+            string subtitle,
+            Func<Color> get,
+            Action<Color> set,
+            Func<string> getRoleLabel = null) : base(title, subtitle)
+        {
+            Get = get;
+            Set = set;
+            GetRoleLabel = getRoleLabel;
+        }
+
+        public override float Height
+        {
+            get { return 174f; }
+        }
     }
 
     /// <summary>Live preview of every important color role in the current theme.</summary>

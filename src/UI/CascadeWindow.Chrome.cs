@@ -1,12 +1,17 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using CascadeMenu.Mods;
 using GorillaNetworking;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.XR;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
 
 namespace CascadeMenu.UI
 {
@@ -14,14 +19,64 @@ namespace CascadeMenu.UI
     {
         private void BuildFrame()
         {
+            // Organic shader-like multi-orb luminous aura behind the window (zero boxy edges)
+            Sprite orbSprite = CascadeSprites.OrbAura(256);
+
+            _windowGlowCoreRect = CascadeUI.Rect("WindowAuraCore", _root);
+            _windowGlowCoreRect.anchorMin = _windowGlowCoreRect.anchorMax = new Vector2(0.5f, 0.5f);
+            _windowGlowCoreRect.pivot = new Vector2(0.5f, 0.5f);
+            _windowGlowCoreRect.anchoredPosition = Vector2.zero;
+            _windowGlowCoreRect.sizeDelta = new Vector2(CascadeTheme.WindowWidth * 1.48f, CascadeTheme.WindowHeight * 1.66f);
+            _windowGlowCore = CascadeUI.Image(_windowGlowCoreRect, orbSprite, Color.clear, Image.Type.Simple);
+            if (_windowGlowCore != null) _windowGlowCore.raycastTarget = false;
+
+            _windowGlowOrbARect = CascadeUI.Rect("WindowAuraOrbA", _root);
+            _windowGlowOrbARect.anchorMin = _windowGlowOrbARect.anchorMax = new Vector2(0.5f, 0.5f);
+            _windowGlowOrbARect.pivot = new Vector2(0.5f, 0.5f);
+            _windowGlowOrbARect.anchoredPosition = new Vector2(-210f, 120f);
+            _windowGlowOrbARect.sizeDelta = new Vector2(680f, 680f);
+            _windowGlowOrbA = CascadeUI.Image(_windowGlowOrbARect, orbSprite, Color.clear, Image.Type.Simple);
+            if (_windowGlowOrbA != null) _windowGlowOrbA.raycastTarget = false;
+
+            _windowGlowOrbBRect = CascadeUI.Rect("WindowAuraOrbB", _root);
+            _windowGlowOrbBRect.anchorMin = _windowGlowOrbBRect.anchorMax = new Vector2(0.5f, 0.5f);
+            _windowGlowOrbBRect.pivot = new Vector2(0.5f, 0.5f);
+            _windowGlowOrbBRect.anchoredPosition = new Vector2(215f, -120f);
+            _windowGlowOrbBRect.sizeDelta = new Vector2(640f, 640f);
+            _windowGlowOrbB = CascadeUI.Image(_windowGlowOrbBRect, orbSprite, Color.clear, Image.Type.Simple);
+            if (_windowGlowOrbB != null) _windowGlowOrbB.raycastTarget = false;
+
             RectTransform shadow = CascadeUI.Rect("Shadow", _root);
-            CascadeUI.Stretch(shadow, -30f, -30f, -26f, -30f);
+            CascadeUI.Stretch(shadow, -24f, -24f, -22f, -24f);
             CascadeUI.Image(shadow, CascadeSprites.Shadow(22, 28), Theme.ShadowColor, Image.Type.Sliced);
+
+            UpdateWindowGlow(true);
 
             _body = CascadeUI.Rect("Body", _root);
             CascadeUI.Stretch(_body);
-            Image bodyImage = CascadeUI.Panel(_body, Theme.SidebarBg, 10);
-            if (bodyImage != null) bodyImage.raycastTarget = false;
+            _bodyBgImage = CascadeUI.Panel(_body, Theme.SidebarBg.WithAlpha(0.32f), 12);
+            if (_bodyBgImage != null) _bodyBgImage.raycastTarget = false;
+
+            // Custom uploaded PNG/JPG background image loaded in memory with baked rounded corners
+            RectTransform customBgRect = CascadeUI.Rect("CustomBackground", _body);
+            CascadeUI.Stretch(customBgRect);
+            _customBgImage = customBgRect.gameObject.AddComponent<RawImage>();
+            _customBgImage.raycastTarget = false;
+            _customBgImage.color = Color.clear;
+            customBgRect.gameObject.SetActive(false);
+
+            // Frosted glass cool-white vertical sheen layer across the entire window
+            RectTransform glassSheen = CascadeUI.Rect("GlassSheen", _body);
+            CascadeUI.Stretch(glassSheen);
+            _glassSheenImage = CascadeUI.Panel(glassSheen, Color.white, 12);
+            if (_glassSheenImage != null)
+            {
+                _glassSheenImage.raycastTarget = false;
+                CascadeGradient sheenGrad = _glassSheenImage.gameObject.AddComponent<CascadeGradient>();
+                sheenGrad.Top = new Color(0.84f, 0.92f, 1f, 0.16f);
+                sheenGrad.Bottom = new Color(0.75f, 0.85f, 1f, 0.02f);
+                sheenGrad.Refresh();
+            }
 
             _sidebar = CascadeUI.Rect("Sidebar", _body);
             _sidebar.anchorMin = new Vector2(0f, 0f);
@@ -29,7 +84,7 @@ namespace CascadeMenu.UI
             _sidebar.pivot = new Vector2(0f, 0.5f);
             _sidebar.anchoredPosition = Vector2.zero;
             _sidebar.sizeDelta = new Vector2(CascadeTheme.SidebarWidth, 0f);
-            CascadeUI.Panel(_sidebar, Theme.SidebarBg, 10);
+            _sidebarBgImage = CascadeUI.Panel(_sidebar, Theme.SidebarBg, 12);
             _sidebarGroup = _sidebar.gameObject.AddComponent<CanvasGroup>();
 
             _separator = CascadeUI.Rect("SidebarSeparator", _body);
@@ -46,14 +101,14 @@ namespace CascadeMenu.UI
             _contentBody.pivot = new Vector2(0.5f, 0.5f);
             _contentBody.offsetMin = new Vector2(CascadeTheme.SidebarWidth + 1f, 0f);
             _contentBody.offsetMax = Vector2.zero;
-            CascadeUI.Panel(_contentBody, Theme.ContentBg, 10);
+            _contentBgImage = CascadeUI.Panel(_contentBody, Theme.ContentBg, 12);
 
             RectTransform contentBorder = CascadeUI.Rect("Border", _contentBody);
             CascadeUI.Stretch(contentBorder);
-            CascadeUI.Outline(contentBorder, Theme.ViewBorder, 10);
+            CascadeUI.Outline(contentBorder, Theme.ViewBorder, 12);
 
             // The content area meets the sidebar with a straight edge. Cover the
-            // rounded left corners so the 10px radius only appears on the window's
+            // rounded left corners so the 12px radius only appears on the window's
             // outer corners.
             RectTransform contentFlatLeft = CascadeUI.Rect("FlatLeft", _contentBody);
             contentFlatLeft.anchorMin = new Vector2(0f, 0f);
@@ -61,12 +116,32 @@ namespace CascadeMenu.UI
             contentFlatLeft.pivot = new Vector2(0f, 0.5f);
             contentFlatLeft.anchoredPosition = Vector2.zero;
             contentFlatLeft.sizeDelta = new Vector2(12f, 0f);
-            CascadeUI.Image(contentFlatLeft, CascadeSprites.White(), Theme.ContentBg, Image.Type.Simple);
+            _contentFlatLeftImage = CascadeUI.Image(contentFlatLeft, CascadeSprites.White(), Theme.ContentBg, Image.Type.Simple);
             _contentFlatLeft = contentFlatLeft;
+
+            // Specular frosted-glass top rim highlight
+            RectTransform topHighlight = CascadeUI.Rect("GlassTopHighlight", _body);
+            topHighlight.anchorMin = new Vector2(0f, 1f);
+            topHighlight.anchorMax = new Vector2(1f, 1f);
+            topHighlight.pivot = new Vector2(0.5f, 1f);
+            topHighlight.offsetMin = new Vector2(12f, -1.5f);
+            topHighlight.offsetMax = new Vector2(-12f, 0f);
+            _topHighlightImage = CascadeUI.Solid(topHighlight, new Color(0.90f, 0.96f, 1f, 0.42f));
+            if (_topHighlightImage != null) _topHighlightImage.raycastTarget = false;
+
+            // Subtle bottom glass rim reflection
+            RectTransform bottomHighlight = CascadeUI.Rect("GlassBottomHighlight", _body);
+            bottomHighlight.anchorMin = new Vector2(0f, 0f);
+            bottomHighlight.anchorMax = new Vector2(1f, 0f);
+            bottomHighlight.pivot = new Vector2(0.5f, 0f);
+            bottomHighlight.offsetMin = new Vector2(12f, 0f);
+            bottomHighlight.offsetMax = new Vector2(-12f, 1f);
+            _bottomHighlightImage = CascadeUI.Solid(bottomHighlight, new Color(0.85f, 0.92f, 1f, 0.14f));
+            if (_bottomHighlightImage != null) _bottomHighlightImage.raycastTarget = false;
 
             RectTransform windowBorder = CascadeUI.Rect("WindowBorder", _body);
             CascadeUI.Stretch(windowBorder);
-            CascadeUI.Outline(windowBorder, Theme.WindowBorder, 10);
+            CascadeUI.Outline(windowBorder, Theme.WindowBorder, 12);
             windowBorder.SetAsLastSibling();
             _windowBorder = windowBorder;
         }
@@ -111,7 +186,7 @@ namespace CascadeMenu.UI
             _sidebarScroll.content = _sidebarList;
 
             var layout = _sidebarList.gameObject.AddComponent<VerticalLayoutGroup>();
-            layout.padding = new RectOffset(2, 2, 4, 4);
+            layout.padding = new RectOffset(2, 2, 8, 10);
             layout.spacing = 2f;
             layout.childAlignment = TextAnchor.UpperLeft;
             layout.childControlWidth = true;
@@ -194,6 +269,7 @@ namespace CascadeMenu.UI
                 // ---- Main ----
                 case "Home":
                 case "Players":
+                case "Player List":
                 case "Player":
                     return "Main";
 
@@ -344,6 +420,7 @@ namespace CascadeMenu.UI
             _sidebarExpanded = !_sidebarExpanded;
             if (_sidebarExpanded && _sidebar != null) _sidebar.gameObject.SetActive(true);
             UpdateSidebarSelection();
+            RebuildContent();
         }
 
         // -----------------------------------------------------------------
@@ -358,8 +435,8 @@ namespace CascadeMenu.UI
             _titlebar.pivot = new Vector2(0.5f, 1f);
             _titlebar.offsetMin = new Vector2(0f, -CascadeTheme.TitlebarHeight);
             _titlebar.offsetMax = Vector2.zero;
-            Image titlebarImage = CascadeUI.Image(_titlebar, CascadeSprites.RoundedTop(10), Theme.TitlebarBg, Image.Type.Sliced);
-            titlebarImage.raycastTarget = false;
+            _titlebarBgImage = CascadeUI.Image(_titlebar, CascadeSprites.RoundedTop(10), Theme.TitlebarBg, Image.Type.Sliced);
+            if (_titlebarBgImage != null) _titlebarBgImage.raycastTarget = false;
 
             RectTransform titleFlatLeft = CascadeUI.Rect("FlatLeft", _titlebar);
             titleFlatLeft.anchorMin = new Vector2(0f, 0f);
@@ -367,7 +444,7 @@ namespace CascadeMenu.UI
             titleFlatLeft.pivot = new Vector2(0f, 0.5f);
             titleFlatLeft.anchoredPosition = Vector2.zero;
             titleFlatLeft.sizeDelta = new Vector2(12f, 0f);
-            CascadeUI.Image(titleFlatLeft, CascadeSprites.White(), Theme.TitlebarBg, Image.Type.Simple);
+            _titlebarFlatLeftImage = CascadeUI.Image(titleFlatLeft, CascadeSprites.White(), Theme.TitlebarBg, Image.Type.Simple);
             _titlebarFlatLeft = titleFlatLeft;
 
             RectTransform hairline = CascadeUI.Rect("Hairline", _titlebar);
@@ -396,10 +473,10 @@ namespace CascadeMenu.UI
             _forwardIcon = CascadeUI.Image(forwardIconRect, CascadeIcons.Get(CascadeIcon.ChevronRight), Theme.TextSecondary, Image.Type.Simple);
             _forwardInteractable = Register(forward, CascadeLayerGroup.Chrome, GoForward, hover: hovered => forwardHover.gameObject.SetActive(hovered));
 
-            RectTransform titleRect = LineRect("Title", _titlebar, 90f, 166f, 6f, 24f);
+            RectTransform titleRect = LineRect("Title", _titlebar, 90f, 262f, 6f, 24f);
             _titleText = CascadeUI.Text(titleRect, string.Empty, 15.5f, Theme.TextPrimary, TextAlignmentOptions.Left, true);
 
-            RectTransform subtitleRect = LineRect("Subtitle", _titlebar, 90f, 166f, 29f, 18f);
+            RectTransform subtitleRect = LineRect("Subtitle", _titlebar, 90f, 262f, 29f, 18f);
             _subtitleText = CascadeUI.Text(subtitleRect, string.Empty, 10.5f, Theme.TextSecondary, TextAlignmentOptions.Left);
 
             SearchField = CascadeWidgets.Search(this, _titlebar, Theme, OnSearchChanged);
@@ -413,7 +490,45 @@ namespace CascadeMenu.UI
                 this, _titlebar, "Disconnect", false, OpenDisconnectConfirmation, CascadeLayerGroup.Chrome);
             AnchorRightCenter(disconnect.Root, 162f, 88f, 26f);
 
+            // Top-middle local telemetry pill (Name · Actor # · FPS · Room)
+            RectTransform topHudPill = CascadeUI.Rect("TopTelemetryPill", _body);
+            topHudPill.anchorMin = new Vector2(0.5f, 1f);
+            topHudPill.anchorMax = new Vector2(0.5f, 1f);
+            topHudPill.pivot = new Vector2(0.5f, 0f);
+            topHudPill.anchoredPosition = new Vector2(0f, 8f);
+            topHudPill.sizeDelta = new Vector2(360f, 24f);
+            Image pillBg = CascadeUI.Panel(topHudPill, Theme.TitlebarBg.WithAlpha(0.80f), 12);
+            if (pillBg != null) pillBg.raycastTarget = false;
+            RectTransform pillBorder = CascadeUI.Rect("Border", topHudPill);
+            CascadeUI.Stretch(pillBorder);
+            Image pillBorderImg = CascadeUI.Outline(pillBorder, Theme.WindowBorder, 12);
+            if (pillBorderImg != null) pillBorderImg.raycastTarget = false;
+            RectTransform pillTxtRt = CascadeUI.Rect("Label", topHudPill);
+            CascadeUI.Stretch(pillTxtRt, 10f, 10f, 0f, 0f);
+            _topTelemetryText = CascadeUI.Text(pillTxtRt, string.Empty, 10.5f, Theme.TextPrimary, TextAlignmentOptions.Center, true);
+            if (_topTelemetryText != null) _topTelemetryText.raycastTarget = false;
+            RefreshTopTelemetry();
+
             UpdateNavButtons();
+        }
+
+        private void RefreshTopTelemetry()
+        {
+            if (_topTelemetryText == null) return;
+            NetPlayer local = PlayerActions.LocalPlayer();
+            string name = local != null ? PlayerActions.SafeName(local) : "Local";
+            if (local == null && VRRig.LocalRig != null && !string.IsNullOrEmpty(VRRig.LocalRig.playerNameVisible))
+                name = VRRig.LocalRig.playerNameVisible;
+
+            int actor = local != null ? local.ActorNumber : 0;
+            int fps = PlayerActions.LocalFps();
+            string room = "Offline";
+            NetworkSystem sys = NetworkSystem.Instance;
+            if (sys != null && sys.InRoom && !string.IsNullOrEmpty(sys.RoomName))
+                room = sys.RoomName;
+
+            string actorPart = actor > 0 ? " · #" + actor : string.Empty;
+            _topTelemetryText.text = name + actorPart + "  ·  " + fps + " FPS  ·  " + room;
         }
 
         private void UpdateNavButtons()

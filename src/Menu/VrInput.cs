@@ -3,8 +3,22 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 using UnityEngine.InputSystem.XR;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Desktop;
+using CascadeMenu.Mods.Flight;
+using CascadeMenu.Mods.Fun;
+using CascadeMenu.Mods.Game;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Performance;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Snake;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Visual;
 
-namespace CascadeMenu
+namespace CascadeMenu.Menu
 {
     /// <summary>One physical controller button that can be used as a bind.</summary>
     internal enum VrButton
@@ -141,6 +155,16 @@ namespace CascadeMenu
                 return false;
             }
 
+            if (IsStickClick(button))
+            {
+                // OR across Input System + Legacy XR because some OpenXR/SteamVR profiles
+                // expose a stub primary2DAxisClick that stays false while the other backend reports true.
+                bool? inputSys = ReadInputSystem(button);
+                if (inputSys == true) return true;
+                bool? legacy = ReadLegacy(button);
+                return legacy == true;
+            }
+
             bool? value = ReadInputSystem(button);
             if (value.HasValue) return value.Value;
 
@@ -239,11 +263,15 @@ namespace CascadeMenu
 
             if (IsStickClick(button))
             {
+                ButtonControl thumb = controller.TryGetChildControl<ButtonControl>("thumbstickClicked");
+                if (thumb != null && thumb.isPressed) return true;
                 ButtonControl primary = controller.TryGetChildControl<ButtonControl>("primary2DAxisClick");
-                if (primary != null) return primary.isPressed;
+                if (primary != null && primary.isPressed) return true;
                 ButtonControl secondary = controller.TryGetChildControl<ButtonControl>("secondary2DAxisClick");
-                if (secondary != null) return secondary.isPressed;
-                return null;
+                if (secondary != null && secondary.isPressed) return true;
+                ButtonControl joy = controller.TryGetChildControl<ButtonControl>("joystickClicked");
+                if (joy != null && joy.isPressed) return true;
+                return false;
             }
 
             ButtonControl control = controller.TryGetChildControl<ButtonControl>(ControlName(button));

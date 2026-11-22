@@ -3,8 +3,16 @@ using System.Collections.Generic;
 using GorillaNetworking;
 using CascadeMenu.UI;
 using UnityEngine;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Overlays;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Cosmetics
 {
     /// <summary>
     /// A cosmetics browser built from the game's real cosmetic data.

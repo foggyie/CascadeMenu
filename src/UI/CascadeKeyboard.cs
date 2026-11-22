@@ -3,6 +3,12 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
 
 namespace CascadeMenu.UI
 {
@@ -43,10 +49,17 @@ namespace CascadeMenu.UI
         private readonly List<CascadeInteractable> _keys = new List<CascadeInteractable>(48);
         private readonly List<LetterKey> _letters = new List<LetterKey>(26);
 
+        private static bool _hasSavedPosition;
+        private static Vector2 _savedPosition;
+
         private RectTransform _root;
+        private RectTransform _parent;
         private CascadeWindow _window;
         private CascadeTheme _theme;
         private bool _visible;
+
+        private bool _dragging;
+        private Vector2 _dragOffset;
 
         private bool _upper;
         private Image _shiftBackground;
@@ -55,12 +68,13 @@ namespace CascadeMenu.UI
         internal void Build(CascadeWindow window, RectTransform parent)
         {
             _window = window;
+            _parent = parent;
             _theme = window.Theme;
 
             _root = CascadeUI.Rect("Keyboard", parent);
             _root.anchorMin = _root.anchorMax = new Vector2(0.5f, 0f);
             _root.pivot = new Vector2(0.5f, 0f);
-            _root.anchoredPosition = new Vector2(0f, 10f);
+            _root.anchoredPosition = _hasSavedPosition ? _savedPosition : new Vector2(0f, 10f);
             _root.sizeDelta = new Vector2(PanelWidth, PanelHeight);
 
             RectTransform shadow = CascadeUI.Rect("Shadow", _root);
@@ -94,15 +108,22 @@ namespace CascadeMenu.UI
             titlebar.offsetMax = Vector2.zero;
             CascadeUI.Image(titlebar, CascadeSprites.RoundedTop(10), _theme.TitlebarBg, Image.Type.Sliced);
 
+            // Drag the keyboard titlebar to move the keyboard anywhere!
+            _window.Register(titlebar, CascadeLayerGroup.Chrome,
+                press: () => _dragging = false,
+                release: () => _dragging = false,
+                dragWorld: DragKeyboard,
+                slider: true);
+
             AddTrafficDot(titlebar, "Close", 10f, _theme.TrafficClose, () => _window.BlurInput());
             AddTrafficDot(titlebar, "Minimize", 22f, _theme.TrafficMinimize, () => _window.BlurInput());
-            AddTrafficDot(titlebar, "Zoom", 34f, _theme.TrafficZoom, null);
+            AddTrafficDot(titlebar, "Zoom", 34f, _theme.TrafficZoom, ResetPosition);
 
-            RectTransform icon = CascadeUI.Center("Icon", titlebar, -34f, 0f, 13f, 13f);
-            CascadeUI.Image(icon, CascadeIcons.Get(CascadeIcon.Keyboard), _theme.TextSecondary, Image.Type.Simple);
+            RectTransform icon = CascadeUI.Center("Icon", titlebar, -58f, 0f, 13f, 13f);
+            CascadeUI.Image(icon, CascadeIcons.Get(CascadeIcon.Move), _theme.TextSecondary, Image.Type.Simple);
 
-            RectTransform title = CascadeUI.Center("Title", titlebar, 0f, 0f, 90f, 18f);
-            CascadeUI.Text(title, "Keyboard", 10f, _theme.TextPrimary, TextAlignmentOptions.Center, true);
+            RectTransform title = CascadeUI.Center("Title", titlebar, 6f, 0f, 160f, 18f);
+            CascadeUI.Text(title, "Keyboard · Drag", 10f, _theme.TextPrimary, TextAlignmentOptions.Center, true);
 
             RectTransform hairline = CascadeUI.Rect("Hairline", titlebar);
             hairline.anchorMin = new Vector2(0f, 0f);
@@ -111,6 +132,37 @@ namespace CascadeMenu.UI
             hairline.offsetMin = Vector2.zero;
             hairline.offsetMax = new Vector2(0f, 1f);
             CascadeUI.Solid(hairline, _theme.TitlebarHairline);
+        }
+
+        private void DragKeyboard(Vector3 worldPoint)
+        {
+            if (_root == null || _parent == null) return;
+
+            Vector3 local3 = _parent.InverseTransformPoint(worldPoint);
+            Vector2 pointer = new Vector2(local3.x, local3.y);
+
+            if (!_dragging)
+            {
+                _dragOffset = _root.anchoredPosition - pointer;
+                _dragging = true;
+            }
+
+            Vector2 next = pointer + _dragOffset;
+            Rect bounds = _parent.rect;
+            float halfW = PanelWidth * 0.5f;
+            next.x = Mathf.Clamp(next.x, bounds.xMin + halfW - 120f, bounds.xMax - halfW + 120f);
+            next.y = Mathf.Clamp(next.y, -120f, bounds.height - PanelHeight + 120f);
+
+            _root.anchoredPosition = next;
+            _savedPosition = next;
+            _hasSavedPosition = true;
+        }
+
+        private void ResetPosition()
+        {
+            _savedPosition = new Vector2(0f, 10f);
+            _hasSavedPosition = false;
+            if (_root != null) _root.anchoredPosition = _savedPosition;
         }
 
         private void BuildKeys(RectTransform body)

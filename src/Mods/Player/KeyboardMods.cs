@@ -5,8 +5,16 @@ using System.Reflection;
 using GorillaNetworking;
 using UnityEngine;
 using CascadeMenu.UI;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Overlays;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Player
 {
     // -------------------------------------------------------------------------
     // 1. Change Name Mod (Player)

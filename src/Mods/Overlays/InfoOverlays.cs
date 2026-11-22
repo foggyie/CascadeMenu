@@ -5,8 +5,16 @@ using GorillaLocomotion;
 using GorillaNetworking;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Util;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Overlays
 {
     // -------------------------------------------------------------------------
     // World and rig readouts (each with its own unique HUD design & color)

@@ -3,8 +3,16 @@ using System.Collections.Generic;
 using System.Reflection;
 using GorillaNetworking;
 using UnityEngine;
+using CascadeMenu.Menu;
+using CascadeMenu.Mods.Core;
+using CascadeMenu.Mods.Player;
+using CascadeMenu.Mods.Tools;
+using CascadeMenu.Mods.Cosmetics;
+using CascadeMenu.Mods.Visual;
+using CascadeMenu.Mods.Movement;
+using CascadeMenu.Mods.Overlays;
 
-namespace CascadeMenu.Mods
+namespace CascadeMenu.Mods.Util
 {
     /// <summary>
     /// Owns the reflection lookups into game and Photon members used by the
